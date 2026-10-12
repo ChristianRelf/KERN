@@ -5,7 +5,6 @@ import { useProjectMap, useTasks, useViews } from "@/hooks/data";
 import { useToday } from "@/hooks/useToday";
 import { navigate, useRouter, type TasksView } from "@/stores/router";
 import { useSetting } from "@/stores/settings";
-import { useUi } from "@/stores/ui";
 import { IconButton, Button } from "@/components/ui/Button";
 import { EmptyState, Segmented } from "@/components/ui/Controls";
 import { prompt } from "@/components/ui/Dialog";
@@ -18,6 +17,7 @@ import { invalidate } from "@/lib/query";
 import { toast, toastError } from "@/stores/toast";
 import { addDaysStr } from "@/lib/dates";
 import { resolveBindings } from "@/lib/shortcuts";
+import { openNewTask } from "./creation";
 
 const CalendarView = lazy(() => import("./CalendarView"));
 const StatusBoard = lazy(() => import("@/features/boards/StatusBoard"));
@@ -93,7 +93,7 @@ export function TasksPage({ viewId }: { viewId?: string }) {
               {saved ? "Update view" : "Save view"}
             </Button>
           )}
-          <IconButton icon={Plus} label="New task" shortcut={shortcuts.newTask} onClick={() => useUi.getState().openCapture("task")} />
+          <IconButton icon={Plus} label="New task" shortcut={shortcuts.newTask} onClick={() => openNewTask()} />
         </div>
       </header>
       {view === "list" && <FilterBar filters={filters} onChange={setFilters} />}
@@ -185,7 +185,7 @@ function UpcomingView() {
                   icon={Plus}
                   label="Add task on this day"
                   size="sm"
-                  onClick={() => useUi.getState().openCapture("task", { dueDate: s.key })}
+                  onClick={() => openNewTask({ dueDate: s.key })}
                 />
               ),
             }

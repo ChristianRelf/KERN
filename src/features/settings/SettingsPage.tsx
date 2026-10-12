@@ -19,21 +19,31 @@ import {
   X,
   Pencil,
   Trash,
+  Shield,
+  KeyRound,
+  Blocks,
 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { IntegrationsSection } from "@/features/github/IntegrationsSection";
+import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
-import { navigate, type SettingsSection } from "@/stores/router";
-import { useSetting, setSetting, useSettings } from "@/stores/settings";
+import { navigate, type ApiTab, type SettingsSection } from "@/stores/router";
+import { useSetting, setSetting, useSettings, getSetting } from "@/stores/settings";
+import { pushUndo } from "@/stores/undo";
+import { DEFAULTS } from "./schema";
 import { useAppInfo, useDashboards, useLabels, useProjects } from "@/hooks/data";
 import { api, describeError } from "@/lib/ipc";
 import { invalidate } from "@/lib/query";
 import { toast, toastError } from "@/stores/toast";
 import { Button, IconButton, Kbd } from "@/components/ui/Button";
-import { Checkbox, Select, Switch } from "@/components/ui/Controls";
+import { Checkbox, Select, Skeleton, Switch } from "@/components/ui/Controls";
+
+const ApiPage = lazy(() => import("@/features/ai/ApiPage"));
 import { confirm, prompt } from "@/components/ui/Dialog";
 import { SNumber, SSegmented, SSelect, SSlider, STime, SToggle, type GroupDef, type RowDef } from "./controls";
 import { useDataGroups, StorageStats } from "./DataSection";
+import { useStorageGroups } from "@/features/storage/StorageSection";
 import { KeyboardSection } from "./KeyboardSection";
+import { TrustedFolders } from "./TrustedFolders";
 import { NAV } from "@/components/layout/Sidebar";
 import { STATUS_LABELS } from "@/features/tasks/meta";
 import type { NavItemId, Accent } from "./schema";
@@ -54,7 +64,10 @@ const SECTIONS: { id: SettingsSection; label: string; icon: typeof Settings }[] 
   { id: "rundown", label: "Daily Rundown", icon: Sunrise },
   { id: "focus", label: "Focus", icon: Timer },
   { id: "keyboard", label: "Keyboard & Mouse", icon: Keyboard },
-  { id: "data", label: "Data & Backups", icon: Database },
+  { id: "data", label: "Data & Storage", icon: Database },
+  { id: "privacy", label: "Privacy", icon: Shield },
+  { id: "api", label: "API", icon: KeyRound },
+  { id: "integrations", label: "Integrations", icon: Blocks },
   { id: "performance", label: "Performance", icon: Gauge },
   { id: "about", label: "About", icon: Info },
 ];
@@ -306,10 +319,39 @@ async function testNotification() {
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 const startup = typeof performance !== "undefined" ? Math.round(performance.now()) : 0;
 
+function GroupingToggle() {
+  const grouping = useSetting("projects.grouping");
+  return <Switch checked={grouping === "groups"} onChange={(v) => void setSetting("projects.grouping", v ? "groups" : "none")} label="Allow project grouping" />;
+}
+
+async function restoreNavOrder() {
+  const prev = { items: getSetting("appearance.navItems"), sections: getSetting("sidebar.sectionOrder") };
+  await useSettings.getState().setMany({ "appearance.navItems": DEFAULTS["appearance.navItems"], "sidebar.sectionOrder": DEFAULTS["sidebar.sectionOrder"] });
+  pushUndo("Sidebar order restored", () => useSettings.getState().setMany({ "appearance.navItems": prev.items, "sidebar.sectionOrder": prev.sections }));
+}
+
+async function resetProjectOrder() {
+  if (!(await confirm({ title: "Reset project ordering?", message: "Projects and groups return to creation order. Group membership is kept, and you can undo this.", confirmLabel: "Reset order" }))) return;
+  try {
+    const [projects, groups] = await Promise.all([api.projects.list(true), api.groups.list()]);
+    const placements = [...projects].sort((a, b) => a.sortOrder - b.sortOrder).map((p) => ({ id: p.id, groupId: p.groupId }));
+    const groupOrder = groups.map((g) => g.id);
+    await api.projects.resetOrder();
+    invalidate("projects", "groups");
+    pushUndo("Project order reset", async () => {
+      await api.projects.arrange(placements);
+      await api.groups.reorder(groupOrder);
+      invalidate("projects", "groups");
+    });
+  } catch (e) {
+    toastError(describeError(e));
+  }
+}
+
 // ------------------------------------------------------------ sections
 
-function useSections(): Record<SettingsSection, GroupDef[] | ReactNode> {
-  const data = useDataGroups();
+function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | ReactNode> {
+  const data = [...useStorageGroups(), ...useDataGroups()];
   const { data: info } = useAppInfo();
   const { data: dashboards } = useDashboards();
   const notificationsOn = useSetting("notifications.enabled");
@@ -366,6 +408,31 @@ function useSections(): Record<SettingsSection, GroupDef[] | ReactNode> {
           { label: "System-wide quick capture", hint: "Opens quick capture from any app. Off by default.", keywords: "global hotkey shortcut", control: <GlobalShortcutPicker /> },
         ],
       },
+      {
+        title: "Interactions",
+        rows: [
+          {
+            label: "Close panels on outside click",
+            hint: "Automatically close side panels when clicking the main workspace.",
+            keywords: "inspector dismiss details panel",
+            control: <SToggle k="interaction.closePanelsOnOutsideClick" />,
+          },
+          { label: "Allow pinning the details panel", hint: "A pinned panel stays open while you work elsewhere.", keywords: "inspector pin", control: <SToggle k="interaction.inspectorPinning" /> },
+          { label: "Animate task completion", hint: "A line draws through the title when you tick a task off. Off, or reduced motion, updates instantly.", keywords: "strikethrough checkbox", control: <SToggle k="interaction.completionAnimation" /> },
+          {
+            label: "Completion animation intensity",
+            keywords: "strikethrough speed",
+            control: <SSegmented k="interaction.completionIntensity" options={[{ value: "subtle", label: "Subtle" }, { value: "standard", label: "Standard" }, { value: "pronounced", label: "Pronounced" }]} />,
+          },
+          {
+            label: "New task opens",
+            hint: "Quick capture is always available from its own shortcut.",
+            keywords: "default task creation interface composer",
+            control: <SSegmented k="interaction.createInterface" options={[{ value: "composer", label: "Full composer" }, { value: "quick", label: "Quick capture" }]} />,
+          },
+          { label: "Remember last-used task properties", hint: "New tasks start with the priority and labels you used last.", keywords: "defaults", control: <SToggle k="interaction.rememberTaskProps" /> },
+        ],
+      },
     ],
     appearance: [
       {
@@ -387,6 +454,18 @@ function useSections(): Record<SettingsSection, GroupDef[] | ReactNode> {
           { label: "Width", control: <SSlider k="appearance.sidebarWidth" min={184} max={380} step={4} format={(v) => `${v}px`} /> },
           { label: "Collapsed to icons", hint: "Labels appear as tooltips when collapsed.", keywords: "rail labels", control: <SToggle k="appearance.sidebarCollapsed" /> },
           { label: "Destinations", hint: "Choose and order the items in the sidebar.", keywords: "navigation visible", block: <NavItemsEditor /> },
+          { label: "Enable sidebar reordering", hint: "Drag destinations, views, projects and groups. Alt+↑/↓ moves the focused item.", keywords: "drag drop order", control: <SToggle k="sidebar.reorder" /> },
+          { label: "Show drag handles on hover", keywords: "grip", control: <SToggle k="sidebar.dragHandles" /> },
+          {
+            label: "Flexible layout",
+            hint: "Also rearrange the Views, Pinned and Projects sections by dragging their headers.",
+            keywords: "advanced personalisation sections",
+            control: <SSegmented k="sidebar.layout" options={[{ value: "standard", label: "Standard" }, { value: "flexible", label: "Flexible" }]} />,
+          },
+          { label: "Allow project grouping", keywords: "groups folders", control: <GroupingToggle /> },
+          { label: "Remember collapsed groups", hint: "Otherwise groups and sections open expanded each time.", control: <SToggle k="sidebar.rememberGroups" /> },
+          { label: "Restore default navigation order", keywords: "reset sidebar", control: <Button size="sm" onClick={() => void restoreNavOrder()}>Restore</Button> },
+          { label: "Reset project ordering", hint: "Projects and groups return to the order they were created in.", keywords: "sort", control: <Button size="sm" onClick={() => void resetProjectOrder()}>Reset…</Button> },
         ],
       },
       {
@@ -476,6 +555,22 @@ function useSections(): Record<SettingsSection, GroupDef[] | ReactNode> {
           { label: "Group projects", control: <SSegmented k="projects.grouping" options={[{ value: "groups", label: "By group" }, { value: "none", label: "No grouping" }]} /> },
           { label: "Sidebar order", control: <SSegmented k="projects.sidebarOrder" options={[{ value: "manual", label: "Custom" }, { value: "recent", label: "Recent" }, { value: "name", label: "Name" }]} /> },
           { label: "Count archived tasks in progress", control: <SToggle k="projects.progressIncludeArchived" /> },
+        ],
+      },
+      {
+        title: "Linked folders",
+        rows: [
+          {
+            label: "Folder field in New Project",
+            hint: "Linking a folder is always optional.",
+            keywords: "default folder linking behaviour",
+            control: <SSegmented k="projects.folderField" options={[{ value: "visible", label: "Always shown" }, { value: "more", label: "Under More options" }]} />,
+          },
+          { label: "Open the folder after creating a project", control: <SToggle k="projects.openFolderAfterCreate" /> },
+          { label: "Show linked folder in project overview", control: <SToggle k="projects.showFolderInOverview" /> },
+          { label: "Show the Files tab", keywords: "project files tab", control: <SToggle k="projects.showFilesTab" /> },
+          { label: "Remember trusted folders", hint: "When off, trusted folders return to restricted mode each time Kern starts.", keywords: "workspace trust", control: <SToggle k="projects.rememberTrust" /> },
+          { label: "Trusted folders", hint: "Trust applies to exactly the folder shown, never to its parents or other folders.", keywords: "manage revoke workspace trust restricted", block: <TrustedFolders /> },
         ],
       },
       {
@@ -586,6 +681,41 @@ function useSections(): Record<SettingsSection, GroupDef[] | ReactNode> {
     ],
     keyboard: <KeyboardSection />,
     data,
+    privacy: [
+      {
+        title: "Network",
+        rows: [
+          {
+            label: "Allow external network requests",
+            hint: `When off, ${APP_NAME} makes no network requests at all: no favicons, no link titles and no AI requests.`,
+            keywords: "offline internet",
+            control: <SToggle k="privacy.network" />,
+          },
+          { label: "Fetch website favicons", hint: "Contacts a linked site once to cache its icon locally. No third-party icon services are used.", keywords: "icons links", control: <SToggle k="privacy.favicons" /> },
+          { label: "Fetch link titles", hint: "Reads a linked page's title and description when you add a link.", keywords: "metadata previews", control: <SToggle k="data.linkPreviews" /> },
+          { label: "Telemetry", hint: "None. Nothing is collected or transmitted.", control: <span className="faint" style={{ fontSize: "var(--fs-sm)" }}>Off</span> },
+        ],
+      },
+      {
+        title: "AI",
+        rows: [
+          { label: "AI access to project content", hint: "Allow AI requests to include project names, tasks and notes. Off by default.", keywords: "privacy send", control: <SToggle k="privacy.aiProjectContent" /> },
+          {
+            label: "AI access to linked folders",
+            hint: "Allow AI requests to read files in linked project folders. Each project must also be trusted and allow it individually.",
+            keywords: "files filesystem",
+            control: <SToggle k="privacy.aiLinkedFolders" />,
+          },
+          { label: "Keep AI request history for", hint: "Request metadata only (time, model, tokens); never prompts or responses.", keywords: "usage retention", control: <SNumber k="ai.usageRetentionDays" min={1} max={3650} suffix="days" /> },
+        ],
+      },
+    ],
+    integrations: <IntegrationsSection />,
+    api: (
+      <Suspense fallback={<Skeleton height={120} />}>
+        <ApiPage tab={apiTab} />
+      </Suspense>
+    ),
     performance: [
       {
         rows: [
@@ -651,7 +781,7 @@ function useSections(): Record<SettingsSection, GroupDef[] | ReactNode> {
 
 function Group({ g, highlight }: { g: GroupDef; highlight?: string }) {
   return (
-    <div>
+    <div id={g.id}>
       {g.title && <div className="set-group__title">{g.title}</div>}
       <div className="set-group">
         {g.rows.map((r) => (
@@ -670,13 +800,13 @@ function Row({ r, highlight }: { r: RowDef; highlight: boolean }) {
         {r.hint && <span className="set-row__hint">{r.hint}</span>}
       </div>
       {r.control && <div className="set-row__control">{r.control}</div>}
-      {r.block && <div style={{ flexBasis: "100%", paddingBottom: 4 }}>{r.block}</div>}
+      {r.block && <div style={{ flexBasis: "100%", minWidth: 0, paddingBottom: 4 }}>{r.block}</div>}
     </div>
   );
 }
 
-export default function SettingsPage({ section = "general" }: { section?: SettingsSection }) {
-  const sections = useSections();
+export default function SettingsPage({ section = "general", apiTab }: { section?: SettingsSection; apiTab?: ApiTab }) {
+  const sections = useSections(apiTab);
   const [q, setQ] = useState("");
   const matches = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -721,7 +851,7 @@ export default function SettingsPage({ section = "general" }: { section?: Settin
               data-active={!matches && s.id === section ? true : undefined}
               onClick={() => {
                 setQ("");
-                navigate({ name: "settings", section: s.id }, { replace: true });
+                navigate(s.id === "api" ? { name: "api", tab: "accounts" } : { name: "settings", section: s.id }, { replace: true });
               }}
             >
               <s.icon strokeWidth={1.75} />

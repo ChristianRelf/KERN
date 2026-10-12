@@ -108,6 +108,18 @@
 .kcol__add {
   padding: 0 6px 6px;
   flex-shrink: 0;
+  position: relative;
+}
+.kcol__add .kcol__compose {
+  position: absolute;
+  right: 10px;
+  top: 3px;
+  opacity: 0;
+  transition: opacity var(--t-hover) var(--ease);
+}
+.kcol__add:hover .kcol__compose,
+.kcol__add:focus-within .kcol__compose {
+  opacity: 1;
 }
 .kcol__add-btn {
   display: flex;
@@ -204,10 +216,7 @@
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
-.kcard[data-done="true"] .kcard__title {
-  color: var(--text-3);
-  text-decoration: line-through;
-}
+
 .kcard__title-input {
   flex: 1;
   resize: none;

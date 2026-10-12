@@ -21,8 +21,9 @@ import {
   Trash,
   X,
   Hourglass,
+  Globe,
 } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -43,6 +44,11 @@ import { toastError } from "@/stores/toast";
 import { getSetting, useSetting } from "@/stores/settings";
 import { openTask, startFocusOn } from "./menu";
 import { onBeforeNavigate } from "@/stores/router";
+import { LINK_MIME } from "@/lib/types";
+import { RichLink, extractUrls, normalizeUrl } from "@/features/links/links";
+import { GithubMark } from "@/features/github/shared";
+import { prompt } from "@/components/ui/Dialog";
+import { clearDraft, setDraft, useDrafts } from "@/stores/drafts";
 
 function useAutosize(ref: React.RefObject<HTMLTextAreaElement | null>, value: string) {
   useLayoutEffect(() => {
@@ -53,17 +59,21 @@ function useAutosize(ref: React.RefObject<HTMLTextAreaElement | null>, value: st
   }, [ref, value]);
 }
 
-/** Text that autosaves (debounced) and flushes on blur, unmount and navigation. */
-function useAutosaveText(remote: string, save: (v: string) => void, delay = 600) {
-  const [value, setValue] = useState(remote);
+/**
+ * Text that autosaves (debounced) and flushes on blur, unmount and
+ * navigation. A failed save keeps the text as a draft (see stores/drafts),
+ * which is restored here instead of the stale remote value.
+ */
+function useAutosaveText(remote: string, save: (v: string) => void, draft?: string, delay = 600) {
+  const [value, setValue] = useState(draft ?? remote);
   const dirty = useRef(false);
   const timer = useRef<number | undefined>(undefined);
   const latest = useRef({ value, save });
   latest.current = { value, save };
 
   useEffect(() => {
-    if (!dirty.current) setValue(remote);
-  }, [remote]);
+    if (!dirty.current) setValue(draft ?? remote);
+  }, [remote, draft]);
 
   const flush = () => {
     window.clearTimeout(timer.current);
@@ -115,12 +125,26 @@ function TaskDetailBody({ task }: { task: Task }) {
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const patch = (p: TaskPatch, undoLabel?: string) => void updateTask(task.id, p, { undoLabel, undoable: true });
 
-  const title = useAutosaveText(task.title, (v) => {
-    if (v.trim() && v.trim() !== task.title) patch({ title: v.trim() });
-  });
-  const desc = useAutosaveText(task.description, (v) => {
-    if (v !== task.description) patch({ description: v });
-  });
+  const drafts = useDrafts((s) => s.drafts[task.id]);
+  // Saves outlive this component (the panel may already be closed).
+  const saveText = (field: "title" | "description", value: string, p: TaskPatch) =>
+    void updateTask(task.id, p, { undoable: true }).then((res) => (res ? clearDraft(task.id, field) : setDraft(task.id, field, value)));
+  const title = useAutosaveText(
+    task.title,
+    (v) => {
+      if (v.trim() && v.trim() !== task.title) saveText("title", v, { title: v.trim() });
+      else clearDraft(task.id, "title");
+    },
+    drafts?.title,
+  );
+  const desc = useAutosaveText(
+    task.description,
+    (v) => {
+      if (v !== task.description) saveText("description", v, { description: v });
+      else clearDraft(task.id, "description");
+    },
+    drafts?.description,
+  );
   useAutosize(titleRef, title.value);
   const descRef = useRef<HTMLTextAreaElement>(null);
   useAutosize(descRef, desc.value);
@@ -134,6 +158,20 @@ function TaskDetailBody({ task }: { task: Task }) {
           <ChevronRight style={{ transform: "rotate(180deg)" }} />
           <span className="truncate">{parent.data.title}</span>
         </button>
+      )}
+      {drafts && (
+        <div className="draft-banner" role="alert">
+          <span className="grow">Some changes haven't been saved yet.</span>
+          <Button
+            size="sm"
+            onClick={() => {
+              if (drafts.title !== undefined) saveText("title", drafts.title, { title: drafts.title.trim() || task.title });
+              if (drafts.description !== undefined) saveText("description", drafts.description, { description: drafts.description });
+            }}
+          >
+            Retry
+          </Button>
+        </div>
       )}
       <div className="task-detail__title">
         <TaskCheck checked={done} onToggle={() => void setCompleted(task, !done)} priority={task.priority} size={18} />
@@ -154,6 +192,13 @@ function TaskDetailBody({ task }: { task: Task }) {
         />
       </div>
 
+      {task.issue && (
+        <button type="button" className="issue-link" onClick={() => void api.system.open(task.issue!.url)} title="Open on GitHub">
+          <GithubMark size={13} />
+          {task.issue.repo}#{task.issue.number}
+          <span className="faint">· synced with GitHub</span>
+        </button>
+      )}
       <div className="props">
         <span className="props__label">
           <CircleDashed /> Status
@@ -334,6 +379,7 @@ function TaskDetailBody({ task }: { task: Task }) {
         onBlur={desc.flush}
         aria-label="Notes"
       />
+      <DescriptionLinks text={desc.value} />
 
       <Subtasks task={task} depth={0} />
       <Attachments task={task} />
@@ -515,6 +561,40 @@ function NestedAdd({ parentId, onDone }: { parentId: string; onDone: () => void 
   );
 }
 
+// ------------------------------------------------------------- links
+
+/** Links written in the task's notes, shown with their site icons. */
+function DescriptionLinks({ text }: { text: string }) {
+  const urls = useMemo(() => extractUrls(text).slice(0, 12), [text]);
+  if (!urls.length) return null;
+  return (
+    <div className="rich-link-list">
+      {urls.map((u) => (
+        <RichLink key={u} url={u} size="sm" />
+      ))}
+    </div>
+  );
+}
+
+/** Attaches a web link; fetches its title when allowed in Privacy settings. */
+export async function addLinkAttachment(target: { taskId?: string; projectId?: string }) {
+  const raw = await prompt({ title: "Add link", placeholder: "https://…", confirmLabel: "Add" });
+  if (!raw) return;
+  try {
+    const a = await api.attachments.addLink(normalizeUrl(raw), target);
+    invalidate("attachments", "tasks", "task");
+    if (getSetting("privacy.network") && getSetting("data.linkPreviews")) {
+      const meta = await api.system.linkMetadata(a.path).catch(() => null);
+      if (meta?.title) {
+        await api.attachments.rename(a.id, meta.title.slice(0, 200));
+        invalidate("attachments");
+      }
+    }
+  } catch (e) {
+    toastError(describeError(e, "Couldn't add the link."));
+  }
+}
+
 // ------------------------------------------------------------- attachments
 
 function Attachments({ task }: { task: Task }) {
@@ -542,12 +622,31 @@ function Attachments({ task }: { task: Task }) {
           items={[
             { label: "Attach a copy…", icon: Paperclip, onSelect: () => void add(true) },
             { label: "Link to original…", icon: Link2, onSelect: () => void add(false) },
+            { type: "separator" },
+            { label: "Add web link…", icon: Globe, onSelect: () => void addLinkAttachment({ taskId: task.id }) },
           ]}
         >
           <IconButton icon={Plus} label="Attach file" size="sm" noTooltip />
         </Dropdown>
       </div>
-      {atts?.map((a) => (
+      {atts?.map((a) =>
+        a.mime === LINK_MIME ? (
+          <RichLink
+            key={a.id}
+            url={a.path}
+            title={a.name}
+            onRename={(name) => void api.attachments.rename(a.id, name).then(() => invalidate("attachments"))}
+            onRemove={() => void api.attachments.delete(a.id).then(() => invalidate("attachments", "tasks", "task"))}
+            trailing={
+              <IconButton
+                icon={X}
+                label="Remove link"
+                size="sm"
+                onClick={() => void api.attachments.delete(a.id).then(() => invalidate("attachments", "tasks", "task"))}
+              />
+            }
+          />
+        ) : (
         <div key={a.id} className="attachment" data-missing={!a.exists}>
           {a.exists ? a.managed ? <File /> : <Link2 /> : <FileWarning />}
           <button
@@ -572,7 +671,8 @@ function Attachments({ task }: { task: Task }) {
             }}
           />
         </div>
-      ))}
+        ),
+      )}
     </div>
   );
 }

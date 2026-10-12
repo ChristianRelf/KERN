@@ -90,3 +90,16 @@ pub fn view_delete(state: State<AppState>, id: String) -> AppResult<()> {
         Ok(())
     })
 }
+
+/// Persists the sidebar order of saved views.
+#[tauri::command]
+pub fn views_reorder(state: State<AppState>, ids: Vec<String>) -> AppResult<()> {
+    state.with(|c| {
+        let tx = c.transaction()?;
+        for (i, id) in ids.iter().enumerate() {
+            tx.execute("UPDATE saved_views SET sort_order = ?1 WHERE id = ?2", params![(i + 1) as f64, id])?;
+        }
+        tx.commit()?;
+        Ok(())
+    })
+}

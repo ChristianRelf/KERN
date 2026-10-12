@@ -61,6 +61,9 @@ export function Routes() {
     case "settings":
       page = <SettingsPage section={route.section} />;
       break;
+    case "api":
+      page = <SettingsPage section="api" apiTab={route.tab} />;
+      break;
     case "trash":
       page = <TrashPage />;
       break;

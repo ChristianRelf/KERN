@@ -17,7 +17,8 @@ import {
 import type { WbData, WbNode } from "./model";
 import { useAppInfo, useNotes, useProjectMap, useProjects, useTask } from "@/hooks/data";
 import { api } from "@/lib/ipc";
-import { TaskCheck, Progress, Select } from "@/components/ui/Controls";
+import { TaskCheck, TaskTitle, Progress, Select } from "@/components/ui/Controls";
+import { Favicon, displayUrl } from "@/features/links/links";
 import { toggleComplete, createTask } from "@/features/tasks/actions";
 import { openTask } from "@/features/tasks/menu";
 import { DueLabel } from "@/features/tasks/TaskRow";
@@ -394,9 +395,7 @@ export const TaskNode = memo(function TaskNode({ id, data, selected }: NodeProps
               <span className="nodrag" style={{ display: "flex" }}>
                 <TaskCheck checked={done} onToggle={() => void toggleComplete(task)} priority={task.priority} />
               </span>
-              <span className="truncate" style={done ? { color: "var(--text-3)", textDecoration: "line-through" } : undefined}>
-                {task.title}
-              </span>
+              <TaskTitle title={task.title} done={done} className="grow" />
             </div>
             <div className="wbn__meta">
               {task.priority > 0 && !done && <PriorityIcon priority={task.priority} size={12} />}
@@ -476,7 +475,7 @@ export const LinkNode = memo(function LinkNode({ id, data, selected }: NodeProps
       <Handles />
       <div className="wbn wbn--card" data-locked={data.locked} onDoubleClick={() => !data.locked && (setUrl(data.url ?? ""), setEditing(true))}>
         <div className="wbn__kind">
-          <Globe /> {data.siteName || host || "Link"}
+          {data.url ? <Favicon url={data.url} size={16} /> : <Globe />} {data.siteName || host || "Link"}
           <span className="spacer" />
           {data.url && !editing && (
             <span className="nodrag">
@@ -496,7 +495,8 @@ export const LinkNode = memo(function LinkNode({ id, data, selected }: NodeProps
           />
         ) : (
           <>
-            <div className="wbn__title truncate">{data.title || data.url}</div>
+            <div className="wbn__title truncate">{data.title || displayUrl(data.url)}</div>
+            {data.title && <div className="wbn__url truncate">{displayUrl(data.url)}</div>}
             {data.description && <div className="wbn__body" style={{ WebkitLineClamp: 2, display: "-webkit-box", WebkitBoxOrient: "vertical" }}>{data.description}</div>}
           </>
         )}

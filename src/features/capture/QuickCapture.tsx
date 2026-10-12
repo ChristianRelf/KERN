@@ -6,8 +6,9 @@ import { Segmented } from "@/components/ui/Controls";
 import { Kbd } from "@/components/ui/Button";
 import { useProjects } from "@/hooks/data";
 import { parseQuickTask } from "@/features/tasks/parse";
-import { inputFromParsed, ParsedTokens } from "@/features/tasks/QuickAdd";
-import { createTask, defaultTaskPlacement } from "@/features/tasks/actions";
+import { ParsedTokens } from "@/features/tasks/QuickAdd";
+import { buildTaskInput, contextDefaults } from "@/features/tasks/creation";
+import { createTask } from "@/features/tasks/actions";
 import { ProjectPicker, DuePopover } from "@/features/tasks/pickers";
 import { ProjectGlyph } from "@/features/projects/ProjectGlyph";
 import { api, describeError } from "@/lib/ipc";
@@ -67,10 +68,7 @@ function CaptureBody() {
     setBusy(true);
     try {
       if (mode === "task") {
-        const defaults = projectId ? { projectId, status: "todo" as const } : defaultTaskPlacement();
-        if (dueDate) defaults.dueDate = dueDate;
-        const input = await inputFromParsed(parsed, defaults);
-        if (!input.title.trim()) input.title = value;
+        const input = await buildTaskInput(value, projects ?? [], contextDefaults({ projectId, dueDate }));
         const t = await createTask(input, { quiet: true });
         if (t) toast(t.status === "inbox" ? "Added to Inbox" : t.dueDate ? `Added for ${formatDue(t.dueDate)}` : "Task added");
       } else if (mode === "note") {

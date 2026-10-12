@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { WidgetProps } from "../types";
 import { useRecent } from "@/hooks/data";
 import { api, describeError } from "@/lib/ipc";
+import { Favicon, copyLink, displayUrl } from "@/features/links/links";
 import { invalidate } from "@/lib/query";
 import { toast, toastError } from "@/stores/toast";
 import { navigate } from "@/stores/router";
@@ -11,7 +12,7 @@ import { EmptyState, Segmented } from "@/components/ui/Controls";
 import { Button } from "@/components/ui/Button";
 import { ContextMenu } from "@/components/ui/Menu";
 import { prompt } from "@/components/ui/Dialog";
-import { getSetting, useSetting } from "@/stores/settings";
+import { getSetting } from "@/stores/settings";
 import { createTask } from "@/features/tasks/actions";
 import { parseQuickTask } from "@/features/tasks/parse";
 import { inputFromParsed } from "@/features/tasks/QuickAdd";
@@ -147,22 +148,6 @@ function hostOf(url: string) {
   }
 }
 
-function Favicon({ url }: { url: string }) {
-  const previews = useSetting("data.linkPreviews");
-  const [failed, setFailed] = useState(false);
-  const host = hostOf(url);
-  const letter = (host.replace(/^www\./, "")[0] ?? "?").toUpperCase();
-  return (
-    <span className="favicon">
-      {previews && host && !failed && navigator.onLine ? (
-        <img src={`https://${host}/favicon.ico`} alt="" onError={() => setFailed(true)} loading="lazy" referrerPolicy="no-referrer" />
-      ) : (
-        letter
-      )}
-    </span>
-  );
-}
-
 export function BookmarksWidget({ config, setConfig }: WidgetProps<BookmarksConfig>) {
   const [adding, setAdding] = useState(false);
   const [url, setUrl] = useState("");
@@ -209,6 +194,7 @@ export function BookmarksWidget({ config, setConfig }: WidgetProps<BookmarksConf
                 if (u) setConfig({ items: items.map((x) => (x.id === b.id ? { ...x, url: u } : x)) });
               },
             },
+            { label: "Copy link", onSelect: () => void copyLink(b.url) },
             { type: "separator" },
             { label: "Remove", icon: Trash, danger: true, onSelect: () => setConfig({ items: items.filter((x) => x.id !== b.id) }) },
           ]}
@@ -222,10 +208,10 @@ export function BookmarksWidget({ config, setConfig }: WidgetProps<BookmarksConf
             }}
             title={b.url}
           >
-            <Favicon url={b.url} />
+            <Favicon url={b.url} size={16} />
             <span className="truncate grow">{b.title}</span>
             <span className="faint truncate" style={{ fontSize: "var(--fs-xs)", maxWidth: "40%" }}>
-              {hostOf(b.url)}
+              {displayUrl(b.url, 40)}
             </span>
           </a>
         </ContextMenu>

@@ -62,6 +62,10 @@ function project(p: Partial<Project>): Project {
     taskOverdue: 0,
     taskDueSoon: 0,
     lastActivityAt: Date.now(),
+    folderPath: null,
+    folderTrust: null,
+    aiPrefs: {},
+    githubRepo: null,
     ...p,
   };
 }

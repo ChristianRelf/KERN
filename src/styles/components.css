@@ -455,7 +455,9 @@
   stroke-width: 3;
 }
 
-/* ---------- Task completion control (round) */
+/* ---------- Task completion control (round)
+   Checking: border and fill change crisply, then the tick draws itself in.
+   Timings come from --complete-* (see tokens.css). */
 .task-check {
   --size: 16px;
   width: var(--size);
@@ -468,33 +470,47 @@
   flex-shrink: 0;
   color: transparent;
   position: relative;
-  transition: border-color var(--t-hover) var(--ease), background var(--t-press) var(--ease),
-    color var(--t-press) var(--ease);
+  transition: border-color var(--complete-check) var(--ease), background-color var(--complete-check) var(--ease),
+    transform var(--t-press) var(--ease);
 }
 .task-check svg {
-  width: 10px;
-  height: 10px;
-  stroke-width: 3.5;
-  transform: scale(0.6);
+  width: 72%;
+  height: 72%;
+  fill: none;
+  stroke: var(--text-2);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  overflow: visible;
+}
+.task-check svg path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
   opacity: 0;
-  transition: transform var(--t-panel) var(--ease-out), opacity var(--t-press) var(--ease);
+  transition: stroke-dashoffset var(--complete-check) var(--ease-out), opacity var(--t-hover) var(--ease), stroke var(--complete-check) var(--ease);
 }
 .task-check:hover {
   border-color: var(--text-2);
 }
-.task-check:hover svg {
-  opacity: 0.5;
-  transform: scale(1);
-  color: var(--text-2);
+.task-check:hover svg path {
+  stroke-dashoffset: 0;
+  opacity: 0.45;
+  transition-duration: var(--t-hover);
+}
+.task-check:active {
+  transform: scale(0.9);
 }
 .task-check[data-checked="true"] {
-  background: var(--accent);
+  background-color: var(--accent);
   border-color: var(--accent);
 }
-.task-check[data-checked="true"] svg {
+.task-check[data-checked="true"] svg path {
+  stroke: var(--accent-fg);
+  stroke-dashoffset: 0;
   opacity: 1;
-  transform: scale(1);
-  color: var(--accent-fg);
+  /* Starts as the fill lands, so the tick reads as a second beat. */
+  transition: stroke-dashoffset var(--complete-check) var(--ease-out) calc(var(--complete-check) * 0.35), opacity 0ms,
+    stroke 0ms;
 }
 .task-check[data-priority="4"] {
   border-color: var(--text);
@@ -506,6 +522,64 @@
 }
 .task-check[data-blocked="true"] {
   border-style: dashed;
+}
+
+/* ---------- Animated strikethrough */
+.strike {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  min-width: 0;
+  vertical-align: top;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--complete-color) var(--ease);
+}
+.strike::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(50% + 0.5px);
+  height: var(--complete-line);
+  margin-top: calc(var(--complete-line) / -2);
+  background: currentColor;
+  border-radius: 1px;
+  pointer-events: none;
+  transform: scaleX(0);
+  transform-origin: left center;
+  opacity: 0;
+  /* Unchecking fades the line out rather than reversing the draw. */
+  transition: opacity var(--complete-undo) var(--ease), transform 0ms linear var(--complete-undo);
+}
+.strike[data-done="true"] {
+  color: var(--text-3);
+}
+.strike[data-done="true"]::after {
+  transform: scaleX(1);
+  opacity: 0.85;
+  transition: transform var(--complete-strike) var(--complete-ease), opacity 0ms;
+}
+/* Wrapped titles: the line sweeps across each line in reading order. */
+.strike--wrap {
+  display: inline;
+  overflow: visible;
+  white-space: normal;
+}
+.strike--wrap::after {
+  content: none;
+}
+.strike__text {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: 0 58%;
+  background-size: 0% var(--complete-line);
+  transition: background-size var(--complete-undo) var(--ease);
+}
+.strike--wrap[data-done="true"] .strike__text {
+  background-size: 100% var(--complete-line);
+  transition: background-size calc(var(--complete-strike) * 1.25) var(--complete-ease);
 }
 
 /* ---------- Segmented control */

@@ -1,8 +1,13 @@
 import {
+  ArrowDown,
+  ArrowUp,
   ChevronDown,
   Coffee,
+  EyeOff,
   FolderKanban,
+  GitBranch,
   Inbox,
+  KeyRound,
   LayoutGrid,
   ListFilter,
   PanelLeftClose,
@@ -11,6 +16,7 @@ import {
   Presentation,
   Search,
   Settings,
+  Settings2,
   SquareCheckBig,
   StickyNote,
   Sunrise,
@@ -18,16 +24,19 @@ import {
   Trash,
   type LucideIcon,
 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   DndContext,
-  PointerSensor,
+  DragOverlay,
   closestCenter,
-  useSensor,
-  useSensors,
+  pointerWithin,
+  useDroppable,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
-import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useGroups, useOverview, useProjects, useViews } from "@/hooks/data";
 import { useRouter, navigate, type Route } from "@/stores/router";
@@ -35,21 +44,25 @@ import { useSetting, setSetting } from "@/stores/settings";
 import { useUi } from "@/stores/ui";
 import { IconButton } from "@/components/ui/Button";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { ContextMenu, Dropdown } from "@/components/ui/Menu";
+import { ContextMenu, Dropdown, type MenuItems } from "@/components/ui/Menu";
 import { Ring } from "@/components/ui/Controls";
 import { ProjectGlyph } from "@/features/projects/ProjectGlyph";
 import { newGroup, projectMenu } from "@/features/projects/actions";
+import { importFromGithub } from "@/features/github/shared";
 import { useFocus, remainingOf, KIND_LABEL } from "@/features/focus/store";
 import { useNow } from "@/hooks/useToday";
 import { formatClock } from "@/lib/dates";
-import { api } from "@/lib/ipc";
-import { invalidate } from "@/lib/query";
-import type { NavItemId } from "@/features/settings/schema";
-import type { Project, ProjectGroup } from "@/lib/types";
+import { api, describeError } from "@/lib/ipc";
+import { invalidate, queryClient } from "@/lib/query";
+import { toastError } from "@/stores/toast";
+import { announce } from "@/lib/announce";
+import type { NavItemId, SidebarSectionId } from "@/features/settings/schema";
+import type { Project, ProjectGroup, SavedView } from "@/lib/types";
 import { resolveBindings } from "@/lib/shortcuts";
 import { prompt, confirm } from "@/components/ui/Dialog";
 import { APP_NAME } from "@/app/brand";
 import { BrandMark } from "@/app/BrandMark";
+import { AUTO_SCROLL, DROP_ANIMATION, DragPreview, SORT_TRANSITION, SortableRow, announcements, restrictToVertical, useListSensors } from "./sortable";
 
 export const NAV: Record<NavItemId, { label: string; icon: LucideIcon; route: Route; shortcut?: string }> = {
   dashboard: { label: "Dashboard", icon: LayoutGrid, route: { name: "dashboard" }, shortcut: "goDashboard" },
@@ -61,38 +74,25 @@ export const NAV: Record<NavItemId, { label: string; icon: LucideIcon; route: Ro
   search: { label: "Search", icon: Search, route: { name: "search" } },
   focus: { label: "Focus", icon: Timer, route: { name: "focus" }, shortcut: "focusMode" },
   rundown: { label: "Daily Rundown", icon: Sunrise, route: { name: "rundown" }, shortcut: "rundown" },
+  ai: { label: "AI Accounts", icon: KeyRound, route: { name: "api", tab: "accounts" } },
 };
 
 function isActive(item: NavItemId, r: Route): boolean {
   switch (item) {
-    case "dashboard":
-      return r.name === "dashboard";
-    case "tasks":
-      return r.name === "tasks";
-    case "inbox":
-      return r.name === "inbox";
-    case "projects":
-      return r.name === "projects";
     case "whiteboards":
       return r.name === "whiteboards" || r.name === "whiteboard";
-    case "notes":
-      return r.name === "notes";
-    case "search":
-      return r.name === "search";
-    case "focus":
-      return r.name === "focus";
-    case "rundown":
-      return r.name === "rundown";
+    case "ai":
+      return r.name === "api";
+    default:
+      return r.name === item;
   }
 }
 
 export function Sidebar() {
   const collapsed = useSetting("appearance.sidebarCollapsed");
   const width = useSetting("appearance.sidebarWidth");
-  const navItems = useSetting("appearance.navItems");
   const shortcuts = resolveBindings(useSetting("keyboard.shortcuts"));
   const route = useRouter((s) => s.route);
-  const { data: overview } = useOverview();
   const [liveWidth, setLiveWidth] = useState<number | null>(null);
   const resizing = useRef(false);
 
@@ -115,11 +115,6 @@ export function Sidebar() {
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
-  };
-
-  const counts: Partial<Record<NavItemId, number>> = {
-    inbox: overview?.inbox,
-    tasks: overview ? overview.dueToday + overview.overdue : undefined,
   };
 
   return (
@@ -150,44 +145,19 @@ export function Sidebar() {
       </div>
 
       <div className="sidebar__scroll">
-        <nav className="col" style={{ gap: 1 }}>
-          {navItems.map((id) => {
-            const item = NAV[id];
-            if (!item) return null;
-            const count = counts[id];
-            return (
-              <NavButton
-                key={id}
-                icon={item.icon}
-                label={item.label}
-                active={isActive(id, route)}
-                count={count}
-                collapsed={collapsed}
-                shortcut={item.shortcut ? shortcuts[item.shortcut] : undefined}
-                onClick={() => navigate(item.route)}
-              />
-            );
-          })}
-        </nav>
-        {!collapsed && <ViewsSection />}
-        {!collapsed && <ProjectsSection />}
+        <Destinations collapsed={collapsed} />
+        {!collapsed && <Sections />}
       </div>
 
       <div className="sidebar__bottom">
         <FocusPill collapsed={collapsed} />
-        <NavButton
-          icon={Trash}
-          label="Trash"
-          active={route.name === "trash"}
-          collapsed={collapsed}
-          onClick={() => navigate({ name: "trash" })}
-        />
+        <NavButton icon={Trash} label="Trash" active={route.name === "trash"} collapsed={collapsed} onClick={() => navigate({ name: "trash" })} />
         <div className="row" style={{ gap: 2 }}>
           <div className="grow">
             <NavButton
               icon={Settings}
               label="Settings"
-              active={route.name === "settings"}
+              active={route.name === "settings" || route.name === "api"}
               collapsed={collapsed}
               shortcut={shortcuts.goSettings}
               onClick={() => navigate({ name: "settings" })}
@@ -269,19 +239,143 @@ function NavButton({
   );
 }
 
+/** Up/down entries shared by every reorderable row's context menu. */
+function moveItems(index: number, count: number, move: (delta: -1 | 1) => void): MenuItems {
+  return [
+    { label: "Move up", icon: ArrowUp, shortcut: "Alt+ArrowUp", disabled: index <= 0, onSelect: () => move(-1) },
+    { label: "Move down", icon: ArrowDown, shortcut: "Alt+ArrowDown", disabled: index >= count - 1, onSelect: () => move(1) },
+  ];
+}
+
+// ------------------------------------------------------------ destinations
+
+function Destinations({ collapsed }: { collapsed: boolean }) {
+  const navItems = useSetting("appearance.navItems");
+  const reorder = useSetting("sidebar.reorder");
+  const handles = useSetting("sidebar.dragHandles");
+  const shortcuts = resolveBindings(useSetting("keyboard.shortcuts"));
+  const route = useRouter((s) => s.route);
+  const { data: overview } = useOverview();
+  const sensors = useListSensors();
+  const [activeId, setActiveId] = useState<NavItemId | null>(null);
+  const items = navItems.filter((id) => NAV[id]);
+  const counts: Partial<Record<NavItemId, number>> = {
+    inbox: overview?.inbox,
+    tasks: overview ? overview.dueToday + overview.overdue : undefined,
+  };
+
+  const commit = (next: NavItemId[], moved: NavItemId) => {
+    void setSetting("appearance.navItems", next);
+    announce(`${NAV[moved].label} moved to position ${next.indexOf(moved) + 1} of ${next.length}.`);
+  };
+  const move = (id: NavItemId, delta: -1 | 1) => {
+    const i = items.indexOf(id);
+    const j = i + delta;
+    if (j < 0 || j >= items.length) return;
+    commit(arrayMove(items, i, j), id);
+  };
+  const onDragEnd = (e: DragEndEvent) => {
+    setActiveId(null);
+    if (!e.over || e.active.id === e.over.id) return;
+    const from = items.indexOf(e.active.id as NavItemId);
+    const to = items.indexOf(e.over.id as NavItemId);
+    if (from >= 0 && to >= 0) commit(arrayMove(items, from, to), e.active.id as NavItemId);
+  };
+
+  const row = (id: NavItemId, isCollapsed: boolean) => {
+    const item = NAV[id];
+    return (
+      <NavButton
+        icon={item.icon}
+        label={item.label}
+        active={isActive(id, route)}
+        count={counts[id]}
+        collapsed={isCollapsed}
+        shortcut={item.shortcut ? shortcuts[item.shortcut] : undefined}
+        onClick={() => navigate(item.route)}
+      />
+    );
+  };
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      modifiers={[restrictToVertical]}
+      autoScroll={AUTO_SCROLL}
+      accessibility={{ announcements: announcements((id) => NAV[id as NavItemId]?.label ?? id, () => items.length, (id) => items.indexOf(id as NavItemId)) }}
+      onDragStart={(e) => setActiveId(e.active.id as NavItemId)}
+      onDragEnd={onDragEnd}
+      onDragCancel={() => setActiveId(null)}
+    >
+      <SortableContext items={items} strategy={verticalListSortingStrategy}>
+        <nav className="col" style={{ gap: 1 }} aria-label="Destinations">
+          {items.map((id, i) => (
+            <SortableRow key={id} id={id} disabled={!reorder || collapsed} handle={handles} onMove={reorder ? (d) => move(id, d) : undefined}>
+              <ContextMenu
+                items={() => [
+                  ...(reorder ? moveItems(i, items.length, (d) => move(id, d)) : []),
+                  { type: "separator" },
+                  {
+                    label: "Hide from sidebar",
+                    icon: EyeOff,
+                    disabled: items.length <= 1,
+                    onSelect: () => void setSetting("appearance.navItems", items.filter((x) => x !== id)),
+                  },
+                  { label: "Customise sidebar…", icon: Settings2, onSelect: () => navigate({ name: "settings", section: "appearance" }) },
+                ]}
+              >
+                <div>{row(id, collapsed)}</div>
+              </ContextMenu>
+            </SortableRow>
+          ))}
+        </nav>
+      </SortableContext>
+      <DragOverlay dropAnimation={DROP_ANIMATION} modifiers={[restrictToVertical]}>
+        {activeId && <DragPreview>{row(activeId, false)}</DragPreview>}
+      </DragOverlay>
+    </DndContext>
+  );
+}
+
+// ------------------------------------------------------------ sections
+
+const SECTION_LABEL: Record<SidebarSectionId, string> = { views: "Views", pinned: "Pinned", projects: "Projects" };
+
+/** Collapse state of a section: persisted when "Remember collapsed groups" is on. */
+function useSectionOpen(id: SidebarSectionId): [boolean, () => void] {
+  const remember = useSetting("sidebar.rememberGroups");
+  const stored = useSetting("sidebar.collapsedSections");
+  const [local, setLocal] = useState(false);
+  const collapsed = remember ? stored.includes(id) : local;
+  const toggle = () => {
+    if (remember) void setSetting("sidebar.collapsedSections", collapsed ? stored.filter((x) => x !== id) : [...stored, id]);
+    else setLocal(!local);
+  };
+  return [!collapsed, toggle];
+}
+
+interface HeaderDrag {
+  /** Listeners that make the header the drag handle of its section. */
+  listeners?: Record<string, unknown>;
+  draggable: boolean;
+}
+
 function SectionHead({
   label,
   collapsed,
   onToggle,
   actions,
+  drag,
 }: {
   label: string;
   collapsed: boolean;
   onToggle: () => void;
   actions?: React.ReactNode;
+  drag?: HeaderDrag;
 }) {
   return (
-    <div className="sidebar__section-head" data-collapsed={collapsed}>
+    <div className="sidebar__section-head" data-collapsed={collapsed} data-draggable={drag?.draggable || undefined} {...(drag?.draggable ? drag.listeners : {})}>
       <button type="button" className="sidebar__section-toggle" onClick={onToggle} aria-expanded={!collapsed}>
         {label}
         <ChevronDown />
@@ -291,55 +385,152 @@ function SectionHead({
   );
 }
 
-function ViewsSection() {
-  const { data: views } = useViews();
-  const route = useRouter((s) => s.route);
-  const [open, setOpen] = useState(true);
-  if (!views?.length) return null;
+/** Sections in the user's order; draggable by their headers in the flexible layout. */
+function Sections() {
+  const order = useSetting("sidebar.sectionOrder");
+  const layout = useSetting("sidebar.layout");
+  const reorder = useSetting("sidebar.reorder");
+  const sensors = useListSensors();
+  const flexible = layout === "flexible" && reorder;
+  // Tolerate stale or partial stored orders.
+  const ids = useMemo(() => {
+    const all: SidebarSectionId[] = ["views", "pinned", "projects"];
+    return [...order.filter((x) => all.includes(x)), ...all.filter((x) => !order.includes(x))];
+  }, [order]);
+
+  const onDragEnd = (e: DragEndEvent) => {
+    if (!e.over || e.active.id === e.over.id) return;
+    const next = arrayMove(ids, ids.indexOf(e.active.id as SidebarSectionId), ids.indexOf(e.over.id as SidebarSectionId));
+    void setSetting("sidebar.sectionOrder", next);
+    announce(`${SECTION_LABEL[e.active.id as SidebarSectionId]} section moved.`);
+  };
+
   return (
-    <div className="sidebar__section">
-      <SectionHead label="Views" collapsed={!open} onToggle={() => setOpen(!open)} />
-      {open &&
-        views.map((v) => (
-          <ContextMenu
-            key={v.id}
-            items={() => [
-              {
-                label: "Rename",
-                onSelect: async () => {
-                  const name = await prompt({ title: "Rename view", initial: v.name });
-                  if (name) {
-                    await api.views.update(v.id, { name });
-                    invalidate("views");
-                  }
-                },
-              },
-              {
-                label: "Delete view",
-                danger: true,
-                onSelect: async () => {
-                  if (await confirm({ title: `Delete "${v.name}"?`, message: "Only the saved filter is removed; tasks are unaffected.", confirmLabel: "Delete", danger: true })) {
-                    await api.views.delete(v.id);
-                    invalidate("views");
-                    if (route.name === "view" && route.id === v.id) navigate({ name: "tasks" }, { replace: true });
-                  }
-                },
-              },
-            ]}
-          >
-            <div>
-              <NavButton
-                icon={ListFilter}
-                label={v.name}
-                active={route.name === "view" && route.id === v.id}
-                onClick={() => navigate({ name: "view", id: v.id })}
-              />
-            </div>
-          </ContextMenu>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      modifiers={[restrictToVertical]}
+      autoScroll={AUTO_SCROLL}
+      accessibility={{ announcements: announcements((id) => `${SECTION_LABEL[id as SidebarSectionId]} section`, () => ids.length, (id) => ids.indexOf(id as SidebarSectionId)) }}
+      onDragEnd={onDragEnd}
+    >
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        {ids.map((id) => (
+          <SortableSection key={id} id={id} draggable={flexible} />
         ))}
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+function SortableSection({ id, draggable }: { id: SidebarSectionId; draggable: boolean }) {
+  const { setNodeRef, listeners, transform, transition, isDragging } = useSortable({ id, disabled: !draggable, transition: SORT_TRANSITION });
+  const drag: HeaderDrag = { listeners: listeners as Record<string, unknown>, draggable };
+  return (
+    <div ref={setNodeRef} className="sortable" data-ghost={isDragging || undefined} style={{ transform: CSS.Translate.toString(transform), transition }}>
+      {id === "views" && <ViewsSection drag={drag} />}
+      {id === "pinned" && <PinnedSection drag={drag} />}
+      {id === "projects" && <ProjectsSection drag={drag} />}
     </div>
   );
 }
+
+// ------------------------------------------------------------ views
+
+function ViewsSection({ drag }: { drag: HeaderDrag }) {
+  const { data: views } = useViews();
+  const route = useRouter((s) => s.route);
+  const reorder = useSetting("sidebar.reorder");
+  const handles = useSetting("sidebar.dragHandles");
+  const [open, toggle] = useSectionOpen("views");
+  const sensors = useListSensors();
+  const [activeId, setActiveId] = useState<string | null>(null);
+  if (!views?.length) return null;
+  const ids = views.map((v) => v.id);
+  const byId = new Map(views.map((v) => [v.id, v]));
+
+  const commit = (next: string[], moved: string) => {
+    const sorted = next.map((id, i) => ({ ...byId.get(id)!, sortOrder: i + 1 }));
+    queryClient.setQueryData<SavedView[]>(["views"], sorted);
+    void api.views
+      .reorder(next)
+      .catch((e) => toastError(describeError(e)))
+      .finally(() => invalidate("views"));
+    announce(`${byId.get(moved)?.name} moved to position ${next.indexOf(moved) + 1} of ${next.length}.`);
+  };
+  const move = (id: string, delta: -1 | 1) => {
+    const i = ids.indexOf(id);
+    if (i + delta < 0 || i + delta >= ids.length) return;
+    commit(arrayMove(ids, i, i + delta), id);
+  };
+
+  const row = (v: SavedView) => (
+    <NavButton icon={ListFilter} label={v.name} active={route.name === "view" && route.id === v.id} onClick={() => navigate({ name: "view", id: v.id })} />
+  );
+
+  return (
+    <div className="sidebar__section">
+      <SectionHead label="Views" collapsed={!open} onToggle={toggle} drag={drag} />
+      {open && (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVertical]}
+          autoScroll={AUTO_SCROLL}
+          accessibility={{ announcements: announcements((id) => byId.get(id)?.name ?? id, () => ids.length, (id) => ids.indexOf(id)) }}
+          onDragStart={(e) => setActiveId(String(e.active.id))}
+          onDragCancel={() => setActiveId(null)}
+          onDragEnd={(e) => {
+            setActiveId(null);
+            if (!e.over || e.active.id === e.over.id) return;
+            commit(arrayMove(ids, ids.indexOf(String(e.active.id)), ids.indexOf(String(e.over.id))), String(e.active.id));
+          }}
+        >
+          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+            {views.map((v, i) => (
+              <SortableRow key={v.id} id={v.id} disabled={!reorder} handle={handles} onMove={reorder ? (d) => move(v.id, d) : undefined}>
+                <ContextMenu
+                  items={() => [
+                    ...(reorder ? moveItems(i, ids.length, (d) => move(v.id, d)) : []),
+                    { type: "separator" },
+                    {
+                      label: "Rename",
+                      onSelect: async () => {
+                        const name = await prompt({ title: "Rename view", initial: v.name });
+                        if (name) {
+                          await api.views.update(v.id, { name });
+                          invalidate("views");
+                        }
+                      },
+                    },
+                    {
+                      label: "Delete view",
+                      danger: true,
+                      onSelect: async () => {
+                        if (await confirm({ title: `Delete "${v.name}"?`, message: "Only the saved filter is removed; tasks are unaffected.", confirmLabel: "Delete", danger: true })) {
+                          await api.views.delete(v.id);
+                          invalidate("views");
+                          if (route.name === "view" && route.id === v.id) navigate({ name: "tasks" }, { replace: true });
+                        }
+                      },
+                    },
+                  ]}
+                >
+                  <div>{row(v)}</div>
+                </ContextMenu>
+              </SortableRow>
+            ))}
+          </SortableContext>
+          <DragOverlay dropAnimation={DROP_ANIMATION} modifiers={[restrictToVertical]}>
+            {activeId && byId.get(activeId) && <DragPreview>{row(byId.get(activeId)!)}</DragPreview>}
+          </DragOverlay>
+        </DndContext>
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------ projects
 
 function sortProjects(list: Project[], order: "manual" | "recent" | "name") {
   const copy = [...list];
@@ -349,118 +540,411 @@ function sortProjects(list: Project[], order: "manual" | "recent" | "name") {
   return copy;
 }
 
-function ProjectsSection() {
+const UNGROUPED = "__ungrouped";
+type Containers = Record<string, string[]>;
+
+/**
+ * Persists a full arrangement. The project list cache is updated first so
+ * the dropped item stays where it was released (no snap-back while saving).
+ */
+async function saveArrangement(placements: { id: string; groupId: string | null }[]) {
+  const rank = new Map(placements.map((p, i) => [p.id, { sortOrder: i + 1, groupId: p.groupId }]));
+  for (const [key, data] of queryClient.getQueriesData<Project[]>({ queryKey: ["projects"] })) {
+    if (!Array.isArray(data)) continue;
+    queryClient.setQueryData<Project[]>(
+      key,
+      data.map((p) => (rank.has(p.id) ? { ...p, ...rank.get(p.id)! } : p)),
+    );
+  }
+  try {
+    await api.projects.arrange(placements);
+  } catch (e) {
+    toastError(describeError(e, "Couldn't save the new order."));
+  } finally {
+    invalidate("projects", "project");
+  }
+}
+
+function useProjectLayout() {
   const { data: projects } = useProjects(false);
   const { data: groups } = useGroups();
   const grouping = useSetting("projects.grouping");
   const order = useSetting("projects.sidebarOrder");
-  const showProgress = useSetting("projects.showProgress");
+  const list = useMemo(() => projects ?? [], [projects]);
+  const pinned = useMemo(() => sortProjects(list.filter((p) => p.pinned), order), [list, order]);
+  const rest = useMemo(() => sortProjects(list.filter((p) => !p.pinned), order), [list, order]);
+  const grouped = grouping === "groups" && (groups?.length ?? 0) > 0;
+  const containers = useMemo<Containers>(() => {
+    const c: Containers = { [UNGROUPED]: [] };
+    if (grouped) for (const g of groups!) c[g.id] = [];
+    for (const p of rest) c[grouped && p.groupId && c[p.groupId] ? p.groupId : UNGROUPED].push(p.id);
+    return c;
+  }, [rest, groups, grouped]);
+  const byId = useMemo(() => new Map(list.map((p) => [p.id, p])), [list]);
+  return { projects: list, groups: groups ?? [], pinned, rest, grouped, containers, byId, manual: order === "manual" };
+}
+
+/** Pinned (favourite) projects, in their own order above the project tree. */
+function PinnedSection({ drag }: { drag: HeaderDrag }) {
+  const { pinned, containers, groups, byId, manual } = useProjectLayout();
   const route = useRouter((s) => s.route);
-  const [open, setOpen] = useState(true);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-
-  const pinned = useMemo(() => sortProjects((projects ?? []).filter((p) => p.pinned), order), [projects, order]);
-  const rest = useMemo(() => sortProjects((projects ?? []).filter((p) => !p.pinned), order), [projects, order]);
-  const useGroupsLayout = grouping === "groups" && (groups?.length ?? 0) > 0;
-
-  // Flat order used for drag & drop: ungrouped first, then each group.
-  const sections = useMemo(() => {
-    if (!useGroupsLayout) return [{ group: null, items: rest }];
-    const out: { group: ProjectGroup | null; items: Project[] }[] = [
-      { group: null, items: rest.filter((p) => !p.groupId || !groups!.some((g) => g.id === p.groupId)) },
-    ];
-    for (const g of groups!) out.push({ group: g, items: rest.filter((p) => p.groupId === g.id) });
-    return out;
-  }, [rest, groups, useGroupsLayout]);
-
-  const onDragEnd = useCallback(
-    async (e: DragEndEvent) => {
-      if (!e.over || e.active.id === e.over.id) return;
-      const flat = sections.flatMap((s) => s.items);
-      const from = flat.findIndex((p) => p.id === e.active.id);
-      const to = flat.findIndex((p) => p.id === e.over!.id);
-      if (from < 0 || to < 0) return;
-      const moved = arrayMove(flat, from, to);
-      const target = flat[to];
-      const dragged = flat[from];
-      const ids = [...pinned.map((p) => p.id), ...moved.map((p) => p.id)];
-      if (useGroupsLayout && (target.groupId ?? null) !== (dragged.groupId ?? null)) {
-        await api.projects.update(dragged.id, { groupId: target.groupId ?? null });
-      }
-      await api.projects.reorder(ids);
-      invalidate("projects");
-    },
-    [sections, pinned, useGroupsLayout],
-  );
-
+  const reorder = useSetting("sidebar.reorder");
+  const handles = useSetting("sidebar.dragHandles");
+  const showProgress = useSetting("projects.showProgress");
+  const [open, toggle] = useSectionOpen("pinned");
+  const sensors = useListSensors();
+  const [activeId, setActiveId] = useState<string | null>(null);
+  if (!pinned.length) return null;
+  const ids = pinned.map((p) => p.id);
+  const draggable = reorder && manual;
   const activeProjectId = route.name === "project" ? route.id : null;
-  const item = (p: Project) => (
-    <SortableProject key={p.id} project={p} active={activeProjectId === p.id} showProgress={showProgress} groups={groups ?? []} draggable={order === "manual"} />
-  );
+
+  const commit = (next: string[], moved: string) => {
+    const tail = Object.entries(containers).flatMap(([k, list]) => list.map((id) => ({ id, groupId: k === UNGROUPED ? null : k })));
+    void saveArrangement([...next.map((id) => ({ id, groupId: byId.get(id)?.groupId ?? null })), ...tail]);
+    announce(`${byId.get(moved)?.name} moved to position ${next.indexOf(moved) + 1} of ${next.length}.`);
+  };
+  const move = (id: string, delta: -1 | 1) => {
+    const i = ids.indexOf(id);
+    if (i + delta < 0 || i + delta >= ids.length) return;
+    commit(arrayMove(ids, i, i + delta), id);
+  };
 
   return (
-    <>
-      {pinned.length > 0 && (
-        <div className="sidebar__section">
-          <SectionHead label="Pinned" collapsed={false} onToggle={() => undefined} />
-          {pinned.map((p) => (
-            <ProjectItem key={p.id} project={p} active={activeProjectId === p.id} showProgress={showProgress} groups={groups ?? []} />
-          ))}
-        </div>
+    <div className="sidebar__section">
+      <SectionHead label="Pinned" collapsed={!open} onToggle={toggle} drag={drag} />
+      {open && (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVertical]}
+          autoScroll={AUTO_SCROLL}
+          accessibility={{ announcements: announcements((id) => byId.get(id)?.name ?? id, () => ids.length, (id) => ids.indexOf(id)) }}
+          onDragStart={(e) => setActiveId(String(e.active.id))}
+          onDragCancel={() => setActiveId(null)}
+          onDragEnd={(e) => {
+            setActiveId(null);
+            if (!e.over || e.active.id === e.over.id) return;
+            commit(arrayMove(ids, ids.indexOf(String(e.active.id)), ids.indexOf(String(e.over.id))), String(e.active.id));
+          }}
+        >
+          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+            {pinned.map((p, i) => (
+              <SortableRow key={p.id} id={p.id} disabled={!draggable} handle={handles} onMove={draggable ? (d) => move(p.id, d) : undefined}>
+                <ProjectItem project={p} active={activeProjectId === p.id} showProgress={showProgress} groups={groups} extraMenu={draggable ? moveItems(i, ids.length, (d) => move(p.id, d)) : []} />
+              </SortableRow>
+            ))}
+          </SortableContext>
+          <DragOverlay dropAnimation={DROP_ANIMATION} modifiers={[restrictToVertical]}>
+            {activeId && byId.get(activeId) && (
+              <DragPreview>
+                <ProjectItem project={byId.get(activeId)!} active={false} showProgress={showProgress} groups={groups} />
+              </DragPreview>
+            )}
+          </DragOverlay>
+        </DndContext>
       )}
-      <div className="sidebar__section">
-        <SectionHead
-          label="Projects"
-          collapsed={!open}
-          onToggle={() => setOpen(!open)}
-          actions={
-            <Dropdown
-              items={[
-                { label: "New project", icon: Plus, onSelect: () => useUi.getState().set({ createProjectOpen: true }) },
-                { label: "New group", icon: FolderKanban, onSelect: () => void newGroup() },
-              ]}
-              align="end"
-            >
-              <IconButton icon={Plus} label="New project or group" size="sm" noTooltip />
-            </Dropdown>
-          }
-        />
-        {open && (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void onDragEnd(e)}>
-            <SortableContext items={sections.flatMap((s) => s.items.map((p) => p.id))} strategy={verticalListSortingStrategy}>
-              {sections.map((s) =>
-                s.group ? (
-                  <GroupBlock key={s.group.id} group={s.group}>
-                    {s.items.map(item)}
-                  </GroupBlock>
-                ) : (
-                  <div key="ungrouped">{s.items.map(item)}</div>
-                ),
-              )}
-            </SortableContext>
-          </DndContext>
-        )}
-        {open && !projects?.length && (
-          <button type="button" className="nav-item" onClick={() => useUi.getState().set({ createProjectOpen: true })}>
-            <Plus strokeWidth={1.75} />
-            <span className="nav-item__label">New project</span>
-          </button>
-        )}
-      </div>
-    </>
+    </div>
   );
 }
 
-function GroupBlock({ group, children }: { group: ProjectGroup; children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(group.collapsed);
+type Active = { type: "project" | "group"; id: string } | null;
+const groupKey = (id: string) => `group:${id}`;
+const dropKey = (container: string) => `drop:${container}`;
+
+/**
+ * The project tree. Projects reorder within a group, move between groups
+ * (hover a project in another group, or drop on a group's header) and
+ * groups reorder as whole blocks by their headers. One drag context with
+ * typed collision detection keeps those operations from mixing.
+ */
+function ProjectsSection({ drag }: { drag: HeaderDrag }) {
+  const layout = useProjectLayout();
+  const { pinned, groups, grouped, byId, manual } = layout;
+  const route = useRouter((s) => s.route);
+  const reorder = useSetting("sidebar.reorder");
+  const handles = useSetting("sidebar.dragHandles");
+  const showProgress = useSetting("projects.showProgress");
+  const [open, toggle] = useSectionOpen("projects");
+  const sensors = useListSensors();
+  const [active, setActive] = useState<Active>(null);
+  const [live, setLive] = useState<Containers | null>(null);
+  const [liveGroups, setLiveGroups] = useState<string[] | null>(null);
+  const containers = live ?? layout.containers;
+  const groupIds = liveGroups ?? (grouped ? groups.map((g) => g.id) : []);
+  const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
+  const draggable = reorder && manual;
+  const activeProjectId = route.name === "project" ? route.id : null;
+
+  const containerOf = (c: Containers, id: string) => Object.keys(c).find((k) => c[k].includes(id));
+  const flatten = (c: Containers, order: string[]) => [
+    ...pinned.map((p) => ({ id: p.id, groupId: p.groupId })),
+    ...c[UNGROUPED].map((id) => ({ id, groupId: null })),
+    ...order.flatMap((g) => (c[g] ?? []).map((id) => ({ id, groupId: g }))),
+  ];
+
+  const collision: CollisionDetection = (args) => {
+    if (!active) return closestCenter(args);
+    const typed = (pred: (id: string) => boolean) => args.droppableContainers.filter((c) => pred(String(c.id)));
+    if (active.type === "group") return closestCenter({ ...args, droppableContainers: typed((id) => id.startsWith("group:")) });
+    // Group headers (and the empty "no group" slot) take priority under the pointer.
+    const headers = pointerWithin({ ...args, droppableContainers: typed((id) => id.startsWith("drop:")) });
+    if (headers.length) return headers;
+    return closestCenter({ ...args, droppableContainers: typed((id) => !id.startsWith("drop:") && !id.startsWith("group:")) });
+  };
+
+  const onDragStart = (e: DragStartEvent) => {
+    const id = String(e.active.id);
+    setActive(id.startsWith("group:") ? { type: "group", id: id.slice(6) } : { type: "project", id });
+  };
+
+  // Live cross-group move while hovering projects of another group.
+  const onDragOver = (e: DragOverEvent) => {
+    if (active?.type !== "project" || !e.over) return;
+    const overId = String(e.over.id);
+    if (overId.startsWith("drop:")) return; // applied on release
+    setLive((prev) => {
+      const c = prev ?? layout.containers;
+      const from = containerOf(c, active.id);
+      const to = containerOf(c, overId);
+      if (!from || !to || from === to) return prev;
+      const next: Containers = { ...c, [from]: c[from].filter((x) => x !== active.id) };
+      const target = [...c[to]];
+      target.splice(target.indexOf(overId), 0, active.id);
+      next[to] = target;
+      return next;
+    });
+  };
+
+  const reset = () => {
+    setActive(null);
+    setLive(null);
+    setLiveGroups(null);
+  };
+
+  const onDragEnd = (e: DragEndEvent) => {
+    const a = active;
+    const c = live ?? layout.containers;
+    if (!a || !e.over) return reset();
+    const overId = String(e.over.id);
+    if (a.type === "group") {
+      const ids = groupIds;
+      const to = ids.indexOf(overId.slice(6));
+      const from = ids.indexOf(a.id);
+      if (to < 0 || from === to) return reset();
+      const next = arrayMove(ids, from, to);
+      setLiveGroups(next);
+      queryClient.setQueryData<ProjectGroup[]>(["groups"], next.map((id, i) => ({ ...groupById.get(id)!, sortOrder: i + 1 })));
+      void api.groups
+        .reorder(next)
+        .catch((err) => toastError(describeError(err)))
+        .finally(() => {
+          invalidate("groups");
+          setLiveGroups(null);
+        });
+      announce(`Group ${groupById.get(a.id)?.name} moved to position ${to + 1} of ${ids.length}.`);
+      setActive(null);
+      return;
+    }
+    const next: Containers = { ...c };
+    const from = containerOf(next, a.id);
+    if (!from) return reset();
+    if (overId.startsWith("drop:")) {
+      const target = overId.slice(5);
+      if (target !== from) {
+        next[from] = next[from].filter((x) => x !== a.id);
+        next[target] = [...(next[target] ?? []), a.id];
+      }
+    } else if (overId !== a.id) {
+      const list = next[from];
+      if (list.includes(overId)) next[from] = arrayMove(list, list.indexOf(a.id), list.indexOf(overId));
+    }
+    const landed = containerOf(next, a.id)!;
+    void saveArrangement(flatten(next, groupIds)).finally(() => setLive(null));
+    setLive(next);
+    setActive(null);
+    const groupName = landed === UNGROUPED ? "no group" : groupById.get(landed)?.name;
+    announce(`${byId.get(a.id)?.name} moved to position ${next[landed].indexOf(a.id) + 1} in ${groupName}.`);
+  };
+
+  const moveWithin = (id: string, delta: -1 | 1) => {
+    const c = layout.containers;
+    const k = containerOf(c, id);
+    if (!k) return;
+    const i = c[k].indexOf(id);
+    if (i + delta < 0 || i + delta >= c[k].length) return;
+    const next = { ...c, [k]: arrayMove(c[k], i, i + delta) };
+    void saveArrangement(flatten(next, groupIds));
+    announce(`${byId.get(id)?.name} moved to position ${i + delta + 1} of ${c[k].length}.`);
+  };
+  const moveGroup = (id: string, delta: -1 | 1) => {
+    const i = groupIds.indexOf(id);
+    if (i + delta < 0 || i + delta >= groupIds.length) return;
+    const next = arrayMove(groupIds, i, i + delta);
+    queryClient.setQueryData<ProjectGroup[]>(["groups"], next.map((g, j) => ({ ...groupById.get(g)!, sortOrder: j + 1 })));
+    void api.groups.reorder(next).finally(() => invalidate("groups"));
+    announce(`Group ${groupById.get(id)?.name} moved to position ${i + delta + 1} of ${groupIds.length}.`);
+  };
+
+  const item = (id: string) => {
+    const p = byId.get(id);
+    if (!p) return null;
+    const k = containerOf(containers, id) ?? UNGROUPED;
+    const list = containers[k];
+    const i = list.indexOf(id);
+    return (
+      <SortableRow key={id} id={id} disabled={!draggable} handle={handles} onMove={draggable ? (d) => moveWithin(id, d) : undefined}>
+        <ProjectItem
+          project={p}
+          active={activeProjectId === id}
+          showProgress={showProgress}
+          groups={groups}
+          extraMenu={draggable ? moveItems(i, list.length, (d) => moveWithin(id, d)) : []}
+        />
+      </SortableRow>
+    );
+  };
+
+  const total = Object.values(containers).reduce((n, l) => n + l.length, 0);
+  const allNames = (id: string) => (id.startsWith("group:") ? `Group ${groupById.get(id.slice(6))?.name}` : (byId.get(id)?.name ?? id));
+
+  return (
+    <div className="sidebar__section">
+      <SectionHead
+        label="Projects"
+        collapsed={!open}
+        onToggle={toggle}
+        drag={drag}
+        actions={
+          <Dropdown
+            items={[
+              { label: "New project", icon: Plus, onSelect: () => useUi.getState().set({ createProjectOpen: true }) },
+              { label: "New group", icon: FolderKanban, onSelect: () => void newGroup() },
+              { type: "separator" },
+              { label: "Import from GitHub…", icon: GitBranch, onSelect: () => void importFromGithub() },
+            ]}
+            align="end"
+          >
+            <IconButton icon={Plus} label="New project or group" size="sm" noTooltip />
+          </Dropdown>
+        }
+      />
+      {open && (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={collision}
+          modifiers={[restrictToVertical]}
+          autoScroll={AUTO_SCROLL}
+          accessibility={{
+            announcements: announcements(allNames, () => (active?.type === "group" ? groupIds.length : total), (id) =>
+              id.startsWith("group:") ? groupIds.indexOf(id.slice(6)) : (containers[containerOf(containers, id) ?? UNGROUPED]?.indexOf(id) ?? 0),
+            ),
+          }}
+          onDragStart={onDragStart}
+          onDragOver={onDragOver}
+          onDragEnd={onDragEnd}
+          onDragCancel={reset}
+        >
+          <SortableContext id={UNGROUPED} items={containers[UNGROUPED]} strategy={verticalListSortingStrategy}>
+            <div>{containers[UNGROUPED].map(item)}</div>
+          </SortableContext>
+          {grouped && active?.type === "project" && containers[UNGROUPED].length === 0 && <UngroupedDrop />}
+          <SortableContext items={groupIds.map(groupKey)} strategy={verticalListSortingStrategy}>
+            {groupIds.map((gid, gi) => {
+              const g = groupById.get(gid);
+              if (!g) return null;
+              return (
+                <GroupBlock
+                  key={gid}
+                  group={g}
+                  count={containers[gid]?.length ?? 0}
+                  draggable={reorder}
+                  extraMenu={reorder ? moveItems(gi, groupIds.length, (d) => moveGroup(gid, d)) : []}
+                  onMove={reorder ? (d) => moveGroup(gid, d) : undefined}
+                >
+                  <SortableContext id={gid} items={containers[gid] ?? []} strategy={verticalListSortingStrategy}>
+                    {(containers[gid] ?? []).map(item)}
+                  </SortableContext>
+                </GroupBlock>
+              );
+            })}
+          </SortableContext>
+          <DragOverlay dropAnimation={DROP_ANIMATION} modifiers={[restrictToVertical]}>
+            {active?.type === "project" && byId.get(active.id) && (
+              <DragPreview>
+                <ProjectItem project={byId.get(active.id)!} active={false} showProgress={showProgress} groups={groups} />
+              </DragPreview>
+            )}
+            {active?.type === "group" && groupById.get(active.id) && (
+              <DragPreview>
+                <SectionHead label={groupById.get(active.id)!.name} collapsed onToggle={() => undefined} />
+              </DragPreview>
+            )}
+          </DragOverlay>
+        </DndContext>
+      )}
+      {open && !layout.projects.length && (
+        <button type="button" className="nav-item" onClick={() => useUi.getState().set({ createProjectOpen: true })}>
+          <Plus strokeWidth={1.75} />
+          <span className="nav-item__label">New project</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Drop target shown during a drag when no project is ungrouped. */
+function UngroupedDrop() {
+  const { setNodeRef, isOver } = useDroppable({ id: dropKey(UNGROUPED) });
+  return (
+    <div ref={setNodeRef} className="sidebar__drop-slot" data-over={isOver || undefined}>
+      Remove from group
+    </div>
+  );
+}
+
+function GroupBlock({
+  group,
+  count,
+  draggable,
+  extraMenu,
+  onMove,
+  children,
+}: {
+  group: ProjectGroup;
+  count: number;
+  draggable: boolean;
+  extraMenu: MenuItems;
+  onMove?: (delta: -1 | 1) => void;
+  children: ReactNode;
+}) {
+  const remember = useSetting("sidebar.rememberGroups");
+  const [localCollapsed, setLocalCollapsed] = useState(false);
+  const collapsed = remember ? group.collapsed : localCollapsed;
+  const sortable = useSortable({ id: groupKey(group.id), disabled: !draggable, transition: SORT_TRANSITION });
+  const drop = useDroppable({ id: dropKey(group.id) });
   const toggle = () => {
-    setCollapsed(!collapsed);
-    void api.groups.update(group.id, { collapsed: !collapsed }).then(() => invalidate("groups"));
+    if (!remember) return setLocalCollapsed(!localCollapsed);
+    queryClient.setQueryData<ProjectGroup[]>(["groups"], (gs) => gs?.map((g) => (g.id === group.id ? { ...g, collapsed: !collapsed } : g)));
+    void api.groups.update(group.id, { collapsed: !collapsed }).finally(() => invalidate("groups"));
   };
   return (
-    <div style={{ marginTop: 4 }}>
+    <div
+      ref={sortable.setNodeRef}
+      className="sortable"
+      data-ghost={sortable.isDragging || undefined}
+      style={{ marginTop: 4, transform: CSS.Translate.toString(sortable.transform), transition: sortable.transition }}
+      onKeyDown={(e) => {
+        if (!onMove || !e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+        if (!(e.target as HTMLElement).closest(".sidebar__section-head")) return;
+        e.preventDefault();
+        onMove(e.key === "ArrowUp" ? -1 : 1);
+      }}
+    >
       <ContextMenu
         items={() => [
+          ...extraMenu,
+          { type: "separator" },
           {
             label: "Rename group",
             onSelect: async () => {
@@ -483,30 +967,17 @@ function GroupBlock({ group, children }: { group: ProjectGroup; children: React.
           },
         ]}
       >
-        <div>
-          <SectionHead label={group.name} collapsed={collapsed} onToggle={toggle} />
+        <div ref={drop.setNodeRef} className="sidebar__group-head" data-drop={drop.isOver || undefined}>
+          <SectionHead
+            label={group.name}
+            collapsed={collapsed}
+            onToggle={toggle}
+            drag={{ listeners: sortable.listeners as Record<string, unknown>, draggable }}
+            actions={collapsed && count > 0 ? <span className="sidebar__group-count">{count}</span> : undefined}
+          />
         </div>
       </ContextMenu>
       {!collapsed && children}
-    </div>
-  );
-}
-
-function SortableProject(props: { project: Project; active: boolean; showProgress: boolean; groups: ProjectGroup[]; draggable: boolean }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: props.project.id,
-    disabled: !props.draggable,
-  });
-  const style: CSSProperties = {
-    transform: CSS.Translate.toString(transform),
-    transition,
-    opacity: isDragging ? 0.6 : 1,
-    position: "relative",
-    zIndex: isDragging ? 2 : undefined,
-  };
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} tabIndex={-1}>
-      <ProjectItem {...props} />
     </div>
   );
 }
@@ -516,16 +987,18 @@ function ProjectItem({
   active,
   showProgress,
   groups,
+  extraMenu = [],
 }: {
   project: Project;
   active: boolean;
   showProgress: boolean;
   groups: ProjectGroup[];
+  extraMenu?: MenuItems;
 }) {
   const progress = p.taskTotal ? p.taskDone / p.taskTotal : 0;
   const open = p.taskTotal - p.taskDone;
   return (
-    <ContextMenu items={() => projectMenu(p, groups)}>
+    <ContextMenu items={() => [...extraMenu, ...(extraMenu.length ? [{ type: "separator" as const }] : []), ...projectMenu(p, groups)]}>
       <div>
         <NavButton
           label={p.name}

@@ -21,6 +21,23 @@ impl Paths {
             data_dir,
         }
     }
+
+    /// Disposable data (favicons, previews). Safe to clear at any time.
+    pub fn cache_dir(&self) -> PathBuf {
+        self.data_dir.join("cache")
+    }
+
+    pub fn favicons_dir(&self) -> PathBuf {
+        self.cache_dir().join("favicons")
+    }
+
+    pub fn tmp_dir(&self) -> PathBuf {
+        self.data_dir.join("tmp")
+    }
+
+    pub fn logs_dir(&self) -> PathBuf {
+        self.data_dir.join("logs")
+    }
 }
 
 pub struct AppState {
@@ -30,6 +47,10 @@ pub struct AppState {
     pub focus_generation: AtomicU64,
     /// Set once the window has been hidden to the tray so it can be restored.
     pub quitting: std::sync::atomic::AtomicBool,
+    /// Storage scan progress/cancellation and its directory memo.
+    pub storage: crate::domain::storage::ScanControl,
+    /// AI credential vault, transport and in-flight request cancellation.
+    pub ai: crate::domain::ai::router::AiService,
 }
 
 impl AppState {
@@ -39,6 +60,8 @@ impl AppState {
             paths,
             focus_generation: AtomicU64::new(0),
             quitting: std::sync::atomic::AtomicBool::new(false),
+            storage: Default::default(),
+            ai: crate::domain::ai::default_service(),
         }
     }
 

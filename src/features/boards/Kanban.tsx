@@ -29,9 +29,9 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS as DndCSS } from "@dnd-kit/utilities";
-import { ChevronsLeftRight, Ellipsis, ListChecks, Paperclip, Plus, Repeat, TriangleAlert } from "lucide-react";
+import { ChevronsLeftRight, Ellipsis, Maximize2, ListChecks, Paperclip, Plus, Repeat, TriangleAlert } from "lucide-react";
 import type { Label, Project, Task, TaskStatus } from "@/lib/types";
-import { TaskCheck } from "@/components/ui/Controls";
+import { TaskCheck, TaskTitle } from "@/components/ui/Controls";
 import { IconButton } from "@/components/ui/Button";
 import { ContextMenu, Dropdown, type MenuItems } from "@/components/ui/Menu";
 import { DueLabel } from "@/features/tasks/TaskRow";
@@ -39,6 +39,7 @@ import { PriorityIcon, PRIORITY_LABELS } from "@/features/tasks/meta";
 import { toggleComplete, updateTask } from "@/features/tasks/actions";
 import { openTask, taskMenu } from "@/features/tasks/menu";
 import { ProjectGlyph } from "@/features/projects/ProjectGlyph";
+import { GithubMark } from "@/features/github/shared";
 
 export interface KanbanColumn {
   id: string;
@@ -143,7 +144,9 @@ const KanbanCard = memo(function KanbanCard({
             }}
           />
         ) : (
-          <span className="kcard__title">{task.title}</span>
+          <span className="kcard__title">
+            <TaskTitle title={task.title} done={done} wrap />
+          </span>
         )}
       </div>
       {desc && <div className="kcard__desc">{desc}</div>}
@@ -153,6 +156,7 @@ const KanbanCard = memo(function KanbanCard({
         (show("subtasks") && task.subtaskCount > 0) ||
         task.attachmentCount > 0 ||
         task.recurrence ||
+        task.issue ||
         project) && (
         <div className="kcard__meta">
           {show("priority") && task.priority > 0 && !done && (
@@ -176,6 +180,11 @@ const KanbanCard = memo(function KanbanCard({
           {task.recurrence && (
             <span>
               <Repeat />
+            </span>
+          )}
+          {task.issue && (
+            <span title={`${task.issue.repo}#${task.issue.number}`}>
+              <GithubMark size={11} />#{task.issue.number}
             </span>
           )}
           {project && (
@@ -227,9 +236,23 @@ function SortableCard({ task, ctx }: { task: Task; ctx: CardContext }) {
 
 // ---------------------------------------------------------------- column
 
-function AddCard({ onAdd }: { onAdd: (title: string) => Promise<void> | void }) {
+function AddCard({ onAdd, onCompose }: { onAdd: (title: string) => Promise<void> | void; onCompose?: (title: string) => void }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
+  const compose = onCompose && (
+    <IconButton
+      icon={Maximize2}
+      label="New card with details"
+      size="sm"
+      className="kcol__compose"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => {
+        onCompose(text.trim());
+        setText("");
+        setOpen(false);
+      }}
+    />
+  );
   if (!open)
     return (
       <div className="kcol__add">
@@ -237,6 +260,7 @@ function AddCard({ onAdd }: { onAdd: (title: string) => Promise<void> | void }) 
           <Plus strokeWidth={1.75} />
           Add card
         </button>
+        {compose}
       </div>
     );
   return (
@@ -261,6 +285,7 @@ function AddCard({ onAdd }: { onAdd: (title: string) => Promise<void> | void }) 
           }
         }}
       />
+      {compose}
     </div>
   );
 }
@@ -273,6 +298,7 @@ function ColumnView({
   onToggleCollapse,
   onRename,
   onAdd,
+  onCompose,
   onResize,
   lanes,
   defaultWidth,
@@ -284,6 +310,7 @@ function ColumnView({
   onToggleCollapse?: () => void;
   onRename?: (name: string) => void;
   onAdd?: (title: string) => Promise<void> | void;
+  onCompose?: (title: string) => void;
   onResize?: (width: number) => void;
   lanes: boolean;
   defaultWidth: number;
@@ -396,7 +423,7 @@ function ColumnView({
           })}
         </SortableContext>
       </div>
-      {onAdd && <AddCard onAdd={onAdd} />}
+      {onAdd && <AddCard onAdd={onAdd} onCompose={onCompose} />}
       {onResize && <div className="resize-handle kcol-resize" onPointerDown={startResize} onDoubleClick={() => onResize(defaultWidth)} />}
     </div>
   );
@@ -416,6 +443,7 @@ export function Kanban({
   onToggleCollapse,
   onRenameColumn,
   onAddCard,
+  onComposeCard,
   onResizeColumn,
   sortMode = "manual",
   groupBy = "none",
@@ -435,6 +463,8 @@ export function Kanban({
   onToggleCollapse?: (col: KanbanColumn) => void;
   onRenameColumn?: (col: KanbanColumn, name: string) => void;
   onAddCard?: (col: KanbanColumn, title: string) => Promise<void> | void;
+  /** Opens the full composer for a column (placement comes from the column). */
+  onComposeCard?: (col: KanbanColumn, title: string) => void;
   onResizeColumn?: (col: KanbanColumn, width: number) => void;
   sortMode?: "manual" | "due" | "priority" | "created" | "title";
   groupBy?: "none" | "priority";
@@ -616,6 +646,7 @@ export function Kanban({
               onToggleCollapse={onToggleCollapse ? () => onToggleCollapse(c) : undefined}
               onRename={onRenameColumn ? (n) => onRenameColumn(c, n) : undefined}
               onAdd={onAddCard ? (title) => onAddCard(c, title) : undefined}
+              onCompose={onComposeCard ? (title) => onComposeCard(c, title) : undefined}
               onResize={onResizeColumn ? (w) => onResizeColumn(c, w) : undefined}
               lanes={groupBy === "priority"}
               defaultWidth={defaultWidth}

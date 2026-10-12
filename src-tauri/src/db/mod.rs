@@ -75,3 +75,41 @@ pub fn open_memory() -> Connection {
     migrate(&conn).unwrap();
     conn
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn v1_data_survives_upgrade() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("kern.db");
+        {
+            // A database as the first release left it.
+            let conn = Connection::open(&path).unwrap();
+            configure(&conn).unwrap();
+            let tx = conn.unchecked_transaction().unwrap();
+            tx.execute_batch(migrations::MIGRATIONS[0]).unwrap();
+            tx.execute_batch("PRAGMA user_version = 1").unwrap();
+            tx.commit().unwrap();
+            conn.execute_batch(
+                "INSERT INTO projects(id, name, created_at, updated_at) VALUES ('p1', 'Studbase', 1, 1);
+                 INSERT INTO tasks(id, title, project_id, created_at, updated_at) VALUES ('t1', 'Keep me', 'p1', 1, 1);
+                 INSERT INTO settings(key, value, updated_at) VALUES ('data.linkPreviews', 'false', 1);",
+            )
+            .unwrap();
+        }
+        let safety = dir.path().join("backups");
+        let conn = open(&path, &safety).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), SCHEMA_VERSION);
+        let (title, project): (String, String) =
+            conn.query_row("SELECT title, project_id FROM tasks WHERE id = 't1'", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!((title.as_str(), project.as_str()), ("Keep me", "p1"));
+        let prefs: String = conn.query_row("SELECT ai_prefs FROM projects WHERE id = 'p1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(prefs, "{}");
+        let fav: String = conn.query_row("SELECT value FROM settings WHERE key = 'privacy.favicons'", [], |r| r.get(0)).unwrap();
+        assert_eq!(fav, "false", "an existing opt-out carries over to favicons");
+        // A safety copy was written before migrating.
+        assert_eq!(std::fs::read_dir(&safety).unwrap().count(), 1);
+    }
+}

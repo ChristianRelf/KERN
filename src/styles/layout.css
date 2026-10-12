@@ -370,3 +370,105 @@
   gap: 10px;
   padding: 24px;
 }
+
+/* ---------- Sortable lists (sidebar, account priority)
+   The whole row drags after a 4px threshold; a small grip appears in the
+   left gutter on hover so text and icons never shift. */
+.sortable {
+  position: relative;
+}
+.sortable__grip {
+  position: absolute;
+  left: -9px;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-4);
+  opacity: 0;
+  cursor: grab;
+  pointer-events: none;
+  transition: opacity var(--t-hover) var(--ease);
+  z-index: 1;
+}
+.sortable__grip svg {
+  width: 11px;
+  height: 11px;
+}
+.sortable[data-draggable="true"]:hover > .sortable__grip {
+  opacity: 1;
+}
+/* The slot being dropped into: a faint ghost acts as the insertion marker. */
+.sortable[data-ghost="true"] {
+  z-index: 0;
+}
+.sortable[data-ghost="true"] > :not(.sortable__grip) {
+  opacity: 0.3;
+}
+.sortable[data-ghost="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  pointer-events: none;
+}
+.sortable[data-ghost="true"] > .sortable__grip {
+  opacity: 0;
+}
+.sortable-overlay {
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-md), 0 0 0 1px var(--border);
+  cursor: grabbing;
+}
+.sortable-overlay .nav-item,
+.sortable-overlay .nav-item:hover {
+  background: transparent;
+  color: var(--text);
+}
+.sortable-overlay .sidebar__section-head {
+  height: var(--nav-item-h);
+}
+body:has(.sortable-overlay) {
+  cursor: grabbing;
+}
+.sidebar__section-head[data-draggable="true"] {
+  cursor: grab;
+}
+.sidebar__section-head[data-draggable="true"] .sidebar__section-toggle {
+  cursor: inherit;
+}
+.sidebar__group-head {
+  border-radius: var(--r-sm);
+  transition: background var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease);
+}
+.sidebar__group-head[data-drop="true"] {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+.sidebar__group-count {
+  font-size: var(--fs-2xs);
+  color: var(--text-4);
+  padding-right: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.sidebar__drop-slot {
+  margin: 2px 0;
+  height: var(--nav-item-h);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  border: 1px dashed var(--border-strong);
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  transition: background var(--t-hover) var(--ease);
+}
+.sidebar__drop-slot[data-over="true"] {
+  background: var(--accent-soft);
+  color: var(--text);
+}

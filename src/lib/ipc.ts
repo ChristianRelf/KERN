@@ -79,10 +79,77 @@ export const api = {
     /** Reorders projects; pass `group` to also move them into a group (null = ungrouped). */
     reorder: (ids: string[], group?: { groupId: string | null }) =>
       call<void>("projects_reorder", { ids, setGroup: group !== undefined, groupId: group?.groupId ?? null }),
+    /** Full sidebar arrangement: order plus group membership, applied atomically. */
+    arrange: (placements: { id: string; groupId: string | null }[]) => call<void>("projects_arrange", { placements }),
+    resetOrder: () => call<void>("projects_reset_order"),
     duplicate: (id: string) => call<T.Project>("project_duplicate", { id }),
     delete: (id: string) => call<void>("project_delete", { id }),
     restore: (id: string) => call<void>("project_restore", { id }),
     touch: (id: string) => call<void>("project_touch", { id }),
+  },
+  ai: {
+    list: () => call<T.AiAccount[]>("ai_accounts_list"),
+    /** The key is write-only: it goes to the OS credential store and is never returned. */
+    create: (input: T.AiAccountInput) => call<T.AiAccount>("ai_account_create", { input }),
+    update: (id: string, patch: T.AiAccountPatch) => call<T.AiAccount>("ai_account_update", { id, patch }),
+    replaceKey: (id: string, apiKey: string) => call<T.AiAccount>("ai_account_replace_key", { id, apiKey }),
+    remove: (id: string) => call<void>("ai_account_delete", { id }),
+    reorder: (ids: string[]) => call<void>("ai_accounts_reorder", { ids }),
+    test: (id: string) => call<T.AiValidation>("ai_account_test", { id }),
+    /** Validates a key without saving it. */
+    testKey: (provider: T.AiProvider, apiKey: string, organizationId?: string | null, projectRef?: string | null) =>
+      call<T.AiValidation>("ai_key_test", { provider, apiKey, organizationId: organizationId ?? null, projectRef: projectRef ?? null }),
+    request: (request: T.AiRouteRequest) => call<T.AiRouteOutcome>("ai_request", { request }),
+    cancel: (requestId: string) => call<void>("ai_request_cancel", { requestId }),
+    usage: (since: number) => call<T.AiUsageSummary>("ai_usage", { since, tzOffsetMinutes: -new Date().getTimezoneOffset() }),
+    clearHistory: () => call<void>("ai_history_clear"),
+    security: () => call<T.AiSecurityReport>("ai_security_check"),
+  },
+  git: {
+    available: () => call<string | null>("git_available"),
+    remote: (projectId: string) => call<T.GitRemoteInfo>("git_remote", { projectId }),
+    status: (projectId: string) => call<T.GitStatus>("git_status", { projectId }),
+    diff: (projectId: string, path: string, staged: boolean, untracked: boolean) => call<string>("git_diff", { projectId, path, staged, untracked }),
+    log: (projectId: string, limit?: number) => call<T.GitCommit[]>("git_log", { projectId, limit: limit ?? null }),
+    branches: (projectId: string) => call<T.GitBranch[]>("git_branches", { projectId }),
+    switch: (projectId: string, name: string, create = false) => call<void>("git_switch", { projectId, name, create }),
+    sync: (projectId: string, action: "fetch" | "pull" | "push") => call<{ output: string }>("git_sync", { projectId, action }),
+    clone: (repo: string, parent: string) => call<string>("git_clone", { repo, parent }),
+    scanTodos: (projectId: string) => call<T.TodoItem[]>("project_scan_todos", { projectId }),
+  },
+  github: {
+    status: () => call<T.GithubStatus>("github_status"),
+    setToken: (token: string) => call<string>("github_set_token", { token }),
+    clearToken: () => call<void>("github_clear_token"),
+    repos: () => call<T.RepoSummary[]>("github_repos"),
+    project: (projectId: string) => call<T.ProjectRepo | null>("github_project", { projectId }),
+    connect: (projectId: string, repo: string, importClosed = false) => call<T.ProjectRepo>("github_connect", { projectId, repo, importClosed }),
+    disconnect: (projectId: string) => call<void>("github_disconnect", { projectId }),
+    update: (projectId: string, patch: { syncIssues?: boolean; importClosed?: boolean }) =>
+      call<void>("github_update_connection", { projectId, syncIssues: patch.syncIssues ?? null, importClosed: patch.importClosed ?? null }),
+    sync: (projectId: string) => call<T.SyncReport>("github_sync", { projectId }),
+    syncTask: (taskId: string) => call<T.SyncReport>("github_sync_task", { taskId }),
+    createIssue: (taskId: string) => call<string>("github_create_issue", { taskId }),
+    pulls: (projectId: string) => call<T.PullInfo[]>("github_pulls", { projectId }),
+    overview: (projectId: string) => call<T.RepoOverview>("github_overview", { projectId }),
+  },
+  folders: {
+    inspect: (path: string) => call<T.FolderInfo>("folder_inspect", { path }),
+    get: (projectId: string) => call<T.ProjectFolder | null>("project_folder_get", { projectId }),
+    link: (projectId: string, path: string, trust: T.Trust) => call<T.ProjectFolder>("project_folder_link", { projectId, path, trust }),
+    unlink: (projectId: string) => call<void>("project_folder_unlink", { projectId }),
+    setTrust: (projectId: string, trust: T.Trust) => call<T.ProjectFolder>("project_folder_set_trust", { projectId, trust }),
+    list: (projectId: string, rel: string) => call<T.DirListing>("project_files_list", { projectId, rel }),
+    open: (projectId: string, rel: string, confirmedProgram = false) =>
+      call<void>("project_file_open", { projectId, rel, confirmedProgram }),
+    reveal: (projectId: string, rel: string) => call<void>("project_file_reveal", { projectId, rel }),
+    path: (projectId: string, rel: string) => call<string>("project_file_path", { projectId, rel }),
+    createFolder: (projectId: string, parentRel: string, name: string) =>
+      call<string>("project_folder_create", { projectId, parentRel, name }),
+    rename: (projectId: string, rel: string, newName: string) => call<string>("project_file_rename", { projectId, rel, newName }),
+    trusted: () => call<T.TrustRecord[]>("trusted_folders_list"),
+    /** trust = null forgets the decision. */
+    updateTrusted: (path: string, trust: T.Trust | null) => call<void>("trusted_folder_update", { path, trust }),
   },
   groups: {
     list: () => call<T.ProjectGroup[]>("groups_list"),
@@ -95,6 +162,7 @@ export const api = {
         sortOrder: patch.sortOrder ?? null,
       }),
     delete: (id: string) => call<void>("group_delete", { id }),
+    reorder: (ids: string[]) => call<void>("groups_reorder", { ids }),
   },
   boards: {
     list: (projectId?: string) => call<T.Board[]>("boards_list", { projectId: projectId ?? null }),
@@ -167,6 +235,9 @@ export const api = {
         managed,
       }),
     delete: (id: string) => call<void>("attachment_delete", { id }),
+    addLink: (url: string, target: { taskId?: string; projectId?: string }, title?: string | null) =>
+      call<T.Attachment>("attachment_add_link", { url, title: title ?? null, taskId: target.taskId ?? null, projectId: target.projectId ?? null }),
+    rename: (id: string, name: string) => call<void>("attachment_rename", { id, name }),
     importAsset: (sourcePath: string) => call<T.StoredAsset>("asset_import", { sourcePath }),
     importAssetBytes: (name: string, dataBase64: string) =>
       call<T.StoredAsset>("asset_import_bytes", { name, dataBase64 }),
@@ -217,6 +288,7 @@ export const api = {
     update: (id: string, patch: { name?: string; icon?: string; filters?: T.TaskFilters }) =>
       call<void>("view_update", { id, name: patch.name ?? null, icon: patch.icon ?? null, filters: patch.filters ?? null }),
     delete: (id: string) => call<void>("view_delete", { id }),
+    reorder: (ids: string[]) => call<void>("views_reorder", { ids }),
   },
   search: (query: string, limit?: number) => call<T.SearchHit[]>("search", { query, limit: limit ?? null }),
   stats: {
@@ -225,6 +297,14 @@ export const api = {
     completions: (from: number, to: number) => call<number[]>("stats_completions", { from, to }),
     dueCounts: (from: string, to: string) => call<[string, number, number][]>("stats_due_counts", { from, to }),
     storage: () => call<T.StorageStats>("storage_stats"),
+  },
+  storage: {
+    /** Last scan result without scanning. */
+    report: () => call<T.StorageReport | null>("storage_report"),
+    scan: (includeLinked: boolean) => call<T.StorageReport>("storage_scan", { includeLinked }),
+    cancel: () => call<void>("storage_scan_cancel"),
+    /** Returns bytes freed. */
+    cleanup: (what: T.StorageCleanup) => call<number>("storage_cleanup", { what }),
   },
   trash: {
     list: () => call<T.TrashItem[]>("trash_list"),
@@ -253,6 +333,7 @@ export const api = {
     writeBinary: (path: string, dataBase64: string) => call<void>("write_binary_file", { path, dataBase64 }),
     readText: (path: string) => call<string>("read_text_file", { path }),
     linkMetadata: (url: string) => call<T.LinkMetadata>("link_metadata", { url }),
+    favicon: (url: string) => call<T.Favicon>("favicon_get", { url }),
     setTrayVisible: (visible: boolean) => call<void>("tray_set_visible", { visible }),
     quit: () => call<void>("quit_app"),
     showWindow: () => call<void>("show_main_window"),

@@ -20,6 +20,8 @@ export interface RowDef {
 }
 
 export interface GroupDef {
+  /** Anchor for in-page links. */
+  id?: string;
   title?: string;
   rows: RowDef[];
 }

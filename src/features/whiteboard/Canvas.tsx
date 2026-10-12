@@ -952,6 +952,7 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
               data-tool={panWithLeft ? "hand" : tool === "connector" ? "connector" : "select"}
               data-placing={placing || undefined}
               data-effects={limited ? "limited" : undefined}
+              data-lod={transform[2] < 0.4 ? "low" : undefined}
               tabIndex={0}
               onKeyDown={onKeyDown}
               onKeyUp={(e) => e.key === " " && setSpacePan(false)}

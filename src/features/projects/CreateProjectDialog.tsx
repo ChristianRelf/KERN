@@ -8,6 +8,9 @@ import { useGroups } from "@/hooks/data";
 import { Select } from "@/components/ui/Controls";
 import { DuePopover } from "@/features/tasks/pickers";
 import { formatDue } from "@/lib/dates";
+import { useSetting } from "@/stores/settings";
+import { api } from "@/lib/ipc";
+import { FolderField, type PickedFolder } from "./folders";
 
 export function IconAccentPicker({
   icon,
@@ -49,6 +52,8 @@ export function CreateProjectDialog() {
 }
 
 function CreateProjectForm({ onClose }: { onClose: () => void }) {
+  const folderField = useSetting("projects.folderField");
+  const openAfter = useSetting("projects.openFolderAfterCreate");
   const [name, setName] = useState("");
   const [more, setMore] = useState(false);
   const [description, setDescription] = useState("");
@@ -56,8 +61,10 @@ function CreateProjectForm({ onClose }: { onClose: () => void }) {
   const [accent, setAccent] = useState<string | null>(null);
   const [groupId, setGroupId] = useState<string>("none");
   const [targetDate, setTargetDate] = useState<string | null>(null);
+  const [folder, setFolder] = useState<PickedFolder | null>(null);
   const { data: groups } = useGroups();
   const [busy, setBusy] = useState(false);
+  const showFolder = folderField === "visible" || more || !!folder;
 
   const submit = async () => {
     if (!name.trim() || busy) return;
@@ -69,9 +76,12 @@ function CreateProjectForm({ onClose }: { onClose: () => void }) {
       accent,
       targetDate,
       groupId: groupId === "none" ? null : groupId,
+      folder: folder ? { path: folder.info.path, trust: folder.trust } : null,
     });
     setBusy(false);
-    if (p) onClose();
+    if (!p) return;
+    if (folder && openAfter) void api.system.open(folder.info.path).catch(() => undefined);
+    onClose();
   };
 
   return (
@@ -79,6 +89,7 @@ function CreateProjectForm({ onClose }: { onClose: () => void }) {
       open
       onOpenChange={(o) => !o && onClose()}
       title="New project"
+      className="project-dialog"
       footer={
         <>
           {!more && (
@@ -90,15 +101,15 @@ function CreateProjectForm({ onClose }: { onClose: () => void }) {
             Cancel
           </Button>
           <Button variant="primary" onClick={() => void submit()} disabled={!name.trim() || busy}>
-            Create
+            Create project
           </Button>
         </>
       }
     >
-      <div className="row" style={{ gap: 10 }}>
+      <div className="project-dialog__name">
         <ProjectGlyph project={{ name: name || "?", icon, accent }} size={22} />
         <input
-          className="input"
+          className="project-dialog__title"
           autoFocus
           placeholder="Project name"
           value={name}
@@ -112,9 +123,17 @@ function CreateProjectForm({ onClose }: { onClose: () => void }) {
           aria-label="Project name"
         />
       </div>
+      <textarea
+        className="project-dialog__desc"
+        placeholder="Add a description (optional)"
+        value={description}
+        rows={2}
+        onChange={(e) => setDescription(e.target.value)}
+        aria-label="Description"
+      />
+      {showFolder && <FolderField value={folder} onChange={setFolder} />}
       {more && (
         <>
-          <textarea className="textarea" placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
           <IconAccentPicker
             icon={icon}
             accent={accent}

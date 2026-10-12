@@ -21,6 +21,8 @@ import {
   Upload,
   ArrowRight,
   Pin,
+  Globe,
+  GitBranch,
 } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -28,7 +30,6 @@ import type { Activity, Project, ProjectTab } from "@/lib/types";
 import { useActivity, useAttachments, useGroups, useNotes, useProject, useTasks, useWhiteboards } from "@/hooks/data";
 import { useSetting } from "@/stores/settings";
 import { navigate } from "@/stores/router";
-import { useUi } from "@/stores/ui";
 import { api, describeError } from "@/lib/ipc";
 import { invalidate } from "@/lib/query";
 import { toastError } from "@/stores/toast";
@@ -47,6 +48,13 @@ import { useToday } from "@/hooks/useToday";
 import { createWhiteboard, createNote } from "@/features/search/commands";
 import { Popover } from "@/components/ui/Controls";
 import { PageFallback } from "@/components/layout/PageFallback";
+import { openNewTask } from "@/features/tasks/creation";
+import { FolderBrowser, ProjectFolderCard, linkFolder } from "./folders";
+import { ProjectAiSettings } from "@/features/ai/ProjectAiSettings";
+import { RichLink } from "@/features/links/links";
+import { CodeTab } from "@/features/github/CodeTab";
+import { addLinkAttachment } from "@/features/tasks/TaskDetail";
+import { LINK_MIME } from "@/lib/types";
 
 const ProjectWhiteboard = lazy(() => import("@/features/whiteboard/ProjectWhiteboard"));
 const NotesPage = lazy(() => import("@/features/notes/NotesPage"));
@@ -58,6 +66,7 @@ const TABS: { id: ProjectTab; label: string; icon: typeof ListTodo }[] = [
   { id: "whiteboard", label: "Whiteboard", icon: Presentation },
   { id: "notes", label: "Notes", icon: StickyNote },
   { id: "files", label: "Files", icon: File },
+  { id: "code", label: "Code", icon: GitBranch },
   { id: "activity", label: "Activity", icon: ActivityIcon },
 ];
 
@@ -65,6 +74,7 @@ export function ProjectPage({ id, tab, boardId, whiteboardId }: { id: string; ta
   const { data: p, isLoading, isError } = useProject(id);
   const { data: groups } = useGroups();
   const defaultTab = useSetting("projects.defaultTab");
+  const showFilesTab = useSetting("projects.showFilesTab");
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState("");
 
@@ -83,7 +93,7 @@ export function ProjectPage({ id, tab, boardId, whiteboardId }: { id: string; ta
     );
 
   const hidden = new Set(p.hiddenTabs ?? []);
-  const visibleTabs = TABS.filter((t) => t.id === "overview" || !hidden.has(t.id));
+  const visibleTabs = TABS.filter((t) => t.id === "overview" || (!hidden.has(t.id) && (t.id !== "files" || showFilesTab)));
   const active: ProjectTab = tab && visibleTabs.some((t) => t.id === tab) ? tab : (p.defaultView ?? defaultTab);
   const current = visibleTabs.some((t) => t.id === active) ? active : "overview";
   const go = (t: ProjectTab) => navigate({ name: "project", id, tab: t }, { replace: true });
@@ -163,7 +173,7 @@ export function ProjectPage({ id, tab, boardId, whiteboardId }: { id: string; ta
           ))}
         </nav>
         <div className="page-header__actions">
-          <IconButton icon={Plus} label="New task in project" onClick={() => useUi.getState().openCapture("task", { projectId: id })} />
+          <IconButton icon={Plus} label="New task in project" onClick={() => openNewTask({ projectId: id })} />
           <Dropdown items={menu} align="end">
             <IconButton icon={Ellipsis} label="Project actions" noTooltip />
           </Dropdown>
@@ -182,7 +192,8 @@ export function ProjectPage({ id, tab, boardId, whiteboardId }: { id: string; ta
           <NotesPage projectId={id} embedded />
         </Suspense>
       )}
-      {current === "files" && <Files projectId={id} />}
+      {current === "files" && <Files project={p} />}
+      {current === "code" && <CodeTab project={p} />}
       {current === "activity" && <ActivityList projectId={id} full />}
     </div>
   );
@@ -202,11 +213,13 @@ function Overview({ p }: { p: Project }) {
   const pct = p.taskTotal ? p.taskDone / p.taskTotal : 0;
   const open = p.taskTotal - p.taskDone;
   const { data: groups } = useGroups();
+  const showFolder = useSetting("projects.showFolderInOverview");
 
   return (
     <div className="page-body">
       <div className="overview">
         <div className="col" style={{ gap: 16 }}>
+          {showFolder && p.folderPath && <ProjectFolderCard project={p} />}
           <div className="panel">
             <textarea
               className="overview-desc"
@@ -244,7 +257,7 @@ function Overview({ p }: { p: Project }) {
             ) : (
               <EmptyState compact>
                 Nothing outstanding.{" "}
-                <button type="button" className="mini-more" onClick={() => useUi.getState().openCapture("task", { projectId: p.id })}>
+                <button type="button" className="mini-more" onClick={() => openNewTask({ projectId: p.id })}>
                   Add a task
                 </button>
               </EmptyState>
@@ -334,6 +347,17 @@ function Overview({ p }: { p: Project }) {
                   options={[{ value: "none", label: "No group" }, ...(groups ?? []).map((g) => ({ value: g.id, label: g.name }))]}
                 />
               </div>
+              <span className="props__label">Folder</span>
+              <div style={{ minWidth: 0 }}>
+                <button type="button" className="prop-btn" data-empty={!p.folderPath} onClick={() => (p.folderPath ? navigate({ name: "project", id: p.id, tab: "files" }, { replace: true }) : void linkFolder(p))}>
+                  <FolderOpen size={14} />
+                  <span className="truncate">{p.folderPath ? folderName(p.folderPath) : "Link a folder…"}</span>
+                </button>
+              </div>
+              <span className="props__label">AI</span>
+              <div style={{ minWidth: 0 }}>
+                <ProjectAiSettings project={p} />
+              </div>
               <span className="props__label">Appearance</span>
               <div>
                 <Popover
@@ -390,8 +414,11 @@ function ProjectTasks({ projectId }: { projectId: string }) {
 
 // ---------------------------------------------------------------- files tab
 
-function Files({ projectId }: { projectId: string }) {
-  const { data: files } = useAttachments({ projectId });
+function Files({ project }: { project: Project }) {
+  const projectId = project.id;
+  const { data: all } = useAttachments({ projectId });
+  const files = all?.filter((a) => a.mime !== LINK_MIME);
+  const links = all?.filter((a) => a.mime === LINK_MIME) ?? [];
   const add = async () => {
     const picked = await openDialog({ multiple: true, title: "Add files to project" });
     const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
@@ -406,9 +433,46 @@ function Files({ projectId }: { projectId: string }) {
   };
   return (
     <div className="page-body page-body--pad">
+      {project.folderPath ? (
+        <section style={{ marginBottom: 28 }}>
+          <FolderBrowser project={project} />
+        </section>
+      ) : (
+        <button type="button" className="folder-field folder-field--empty" style={{ marginBottom: 24 }} onClick={() => void linkFolder(project)}>
+          <FolderOpen size={15} strokeWidth={1.75} />
+          <span className="grow">Link a folder on this computer to browse its files here…</span>
+        </button>
+      )}
+      <div className="row" style={{ marginBottom: 8 }}>
+        <span className="section-title">
+          Links <span className="count">{links.length}</span>
+        </span>
+        <span className="spacer" />
+        <Button size="sm" icon={Globe} onClick={() => void addLinkAttachment({ projectId })}>
+          Add link
+        </Button>
+      </div>
+      <div className="rich-link-list" style={{ marginBottom: 24 }}>
+        {links.length ? (
+          links.map((l) => (
+            <RichLink
+              key={l.id}
+              url={l.path}
+              title={l.name}
+              size="lg"
+              onRename={(name) => void api.attachments.rename(l.id, name).then(() => invalidate("attachments"))}
+              onRemove={() => void api.attachments.delete(l.id).then(() => invalidate("attachments"))}
+            />
+          ))
+        ) : (
+          <span className="faint" style={{ fontSize: "var(--fs-sm)" }}>
+            Keep the project's important web pages here — docs, repositories, designs.
+          </span>
+        )}
+      </div>
       <div className="row" style={{ marginBottom: 12 }}>
         <span className="section-title">
-          Files <span className="count">{files?.length ?? 0}</span>
+          Attached files <span className="count">{files?.length ?? 0}</span>
         </span>
         <span className="spacer" />
         <Button size="sm" icon={Upload} onClick={() => void add()}>
@@ -449,7 +513,10 @@ function Files({ projectId }: { projectId: string }) {
 
 // ---------------------------------------------------------------- activity
 
+const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+
 const ACTION_ICONS: Record<string, typeof Pencil> = {
+  linked: FolderOpen,
   completed: CircleCheck,
   reopened: CircleCheck,
   moved: ArrowRight,
@@ -462,6 +529,7 @@ const ACTION_ICONS: Record<string, typeof Pencil> = {
 };
 
 const ACTION_TEXT: Record<string, string> = {
+  linked: "Linked folder",
   completed: "Completed",
   reopened: "Reopened",
   moved: "Moved",
@@ -475,7 +543,7 @@ const ACTION_TEXT: Record<string, string> = {
 
 function ActivityRow({ a }: { a: Activity }) {
   const Icon = ACTION_ICONS[a.action] ?? ActivityIcon;
-  const kind = a.entityType === "task" ? "" : ` ${a.entityType}`;
+  const kind = a.entityType === "task" || a.action === "linked" ? "" : ` ${a.entityType}`;
   return (
     <div className="activity-item">
       <span className="activity-item__icon">

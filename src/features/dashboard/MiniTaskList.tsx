@@ -1,5 +1,7 @@
+import { useRef } from "react";
 import type { Task } from "@/lib/types";
-import { TaskCheck } from "@/components/ui/Controls";
+import { useFlip } from "@/hooks/useFlip";
+import { TaskCheck, TaskTitle } from "@/components/ui/Controls";
 import { ContextMenu } from "@/components/ui/Menu";
 import { toggleComplete } from "@/features/tasks/actions";
 import { openTask, taskMenu } from "@/features/tasks/menu";
@@ -28,9 +30,11 @@ export function MiniTask({
   const project = showProject && task.projectId ? projectMap.get(task.projectId) : undefined;
   return (
     <ContextMenu items={() => taskMenu(task, { projects: projects ?? [], labels: labels ?? [] })}>
-      <div className="mini-task" data-done={done} onClick={() => openTask(task.id)} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && openTask(task.id)}>
+      <div className="mini-task" data-done={done} data-flip-id={task.id} onClick={() => openTask(task.id)} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && openTask(task.id)}>
         <TaskCheck checked={done} onToggle={() => void toggleComplete(task)} priority={task.priority} blocked={task.status === "blocked"} />
-        <span className="mini-task__title">{task.title}</span>
+        <span className="mini-task__title">
+          <TaskTitle title={task.title} done={done} />
+        </span>
         <span className="mini-task__meta">
           {project && (
             <span className="row truncate" style={{ gap: 4, maxWidth: 110 }}>
@@ -62,8 +66,10 @@ export function MiniTaskList({
 }) {
   const visible = max ? tasks.slice(0, max) : tasks;
   const more = tasks.length - visible.length;
+  const ref = useRef<HTMLDivElement>(null);
+  useFlip(ref, tasks);
   return (
-    <div className="mini-list">
+    <div className="mini-list" ref={ref}>
       {visible.map((t) => (
         <MiniTask key={t.id} task={t} showDue={showDue} showProject={showProject} />
       ))}

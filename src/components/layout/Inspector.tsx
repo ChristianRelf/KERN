@@ -1,5 +1,6 @@
-import { Maximize2, PanelRightClose } from "lucide-react";
-import { useState, type CSSProperties } from "react";
+import { Maximize2, PanelRightClose, Pin, PinOff } from "lucide-react";
+import { useRef, useState, type CSSProperties } from "react";
+import { useOutsideDismiss } from "@/hooks/useOutsideDismiss";
 import { useUi } from "@/stores/ui";
 import { useSetting, setSetting } from "@/stores/settings";
 import { IconButton } from "@/components/ui/Button";
@@ -16,7 +17,13 @@ export function Inspector() {
   const width = useSetting("appearance.inspectorWidth");
   const shortcuts = resolveBindings(useSetting("keyboard.shortcuts"));
   const [live, setLive] = useState<number | null>(null);
+  const pinned = useUi((s) => s.inspectorPinned);
+  const allowPin = useSetting("interaction.inspectorPinning");
+  const outsideClick = useSetting("interaction.closePanelsOnOutsideClick");
+  const ref = useRef<HTMLElement>(null);
   const { data: task } = useTask(target?.kind === "task" ? target.id : null);
+  // Pinning takes precedence over outside-click dismissal.
+  useOutsideDismiss(ref, !!target && outsideClick && !(allowPin && pinned), close, () => useUi.getState().inspector);
   if (!target) return null;
 
   const startResize = (e: React.PointerEvent) => {
@@ -38,7 +45,7 @@ export function Inspector() {
   };
 
   return (
-    <aside className="inspector" style={{ "--inspector-w": `${live ?? width}px` } as CSSProperties} aria-label="Details">
+    <aside ref={ref} className="inspector" data-pinned={(allowPin && pinned) || undefined} style={{ "--inspector-w": `${live ?? width}px` } as CSSProperties} aria-label="Details">
       <div className="resize-handle inspector-resize" data-dragging={live !== null} onPointerDown={startResize} role="separator" aria-label="Resize details panel" />
       <div className="inspector__head">
         <span className="faint" style={{ fontSize: "var(--fs-sm)" }}>
@@ -54,6 +61,16 @@ export function Inspector() {
               close();
               navigate({ name: "task", id: target.id });
             }}
+          />
+        )}
+        {allowPin && (
+          <IconButton
+            icon={pinned ? PinOff : Pin}
+            label={pinned ? "Unpin panel" : "Pin panel open while you work elsewhere"}
+            size="sm"
+            active={pinned}
+            aria-pressed={pinned}
+            onClick={() => useUi.getState().set({ inspectorPinned: !pinned })}
           />
         )}
         <IconButton icon={PanelRightClose} label="Close panel" shortcut={shortcuts.closeInspector} size="sm" onClick={close} />

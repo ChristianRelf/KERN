@@ -5,6 +5,7 @@ import TaskItem from "@tiptap/extension-task-item";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "tiptap-markdown";
+import { NoteFavicons } from "@/features/links/noteFavicons";
 import {
   Bold,
   Code,
@@ -82,6 +83,7 @@ export function NoteEditor({
       TaskList,
       TaskItem.configure({ nested: true }),
       Link.configure({ openOnClick: false, autolink: true, linkOnPaste: true }),
+      NoteFavicons,
       Placeholder.configure({ placeholder }),
       Markdown.configure({ html: false, tightLists: true, linkify: true, transformPastedText: true, breaks: false }),
     ],

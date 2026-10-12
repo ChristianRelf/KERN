@@ -14,7 +14,7 @@ import { useSetting, setSetting } from "@/stores/settings";
 import { formatBytes, todayStr } from "@/lib/dates";
 import { format } from "date-fns";
 import type { GroupDef } from "./controls";
-import { SNumber, SSegmented, SToggle } from "./controls";
+import { SNumber, SSegmented } from "./controls";
 
 const KIND_LABEL = { auto: "Automatic", manual: "Manual", "pre-restore": "Before restore", export: "Full export" } as const;
 
@@ -199,6 +199,7 @@ export function useDataGroups(): GroupDef[] {
 
   return [
     {
+      id: "settings-backups",
       title: "Backups",
       rows: [
         { label: "Automatic backups", hint: "Consistent snapshots of the database plus attachments.", control: <SSegmented k="backups.frequency" options={[{ value: "off", label: "Off" }, { value: "daily", label: "Daily" }, { value: "weekly", label: "Weekly" }]} /> },
@@ -303,25 +304,11 @@ export function useDataGroups(): GroupDef[] {
       ],
     },
     {
-      title: "Storage",
+      title: "Contents & retention",
       rows: [
-        { label: "Data folder", keywords: "database location path", block: info ? <PathRow path={info.dataDir} /> : null },
-        { label: "Database file", block: info ? <PathRow path={info.dbPath} /> : null },
-        { label: "Usage", keywords: "size statistics", block: <StorageStats /> },
+        { label: "Contents", keywords: "size statistics counts", block: <StorageStats /> },
         { label: "Keep deleted items for", hint: "Trash is emptied automatically after this many days (0 keeps them forever).", control: <SNumber k="data.trashRetentionDays" min={0} max={3650} suffix="days" /> },
         { label: "Keep activity history for", control: <SNumber k="data.activityRetentionDays" min={7} max={3650} suffix="days" /> },
-      ],
-    },
-    {
-      title: "Privacy",
-      rows: [
-        {
-          label: "Fetch link previews and favicons",
-          hint: "Contacts the linked website directly to read its title or icon. Your tasks and notes are never sent anywhere.",
-          keywords: "online network internet metadata",
-          control: <SToggle k="data.linkPreviews" />,
-        },
-        { label: "Telemetry", hint: "None. Nothing is collected or transmitted.", control: <span className="faint" style={{ fontSize: "var(--fs-sm)" }}>Off</span> },
       ],
     },
   ];

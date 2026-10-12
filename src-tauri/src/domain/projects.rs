@@ -34,6 +34,13 @@ pub struct Project {
     pub task_overdue: i64,
     pub task_due_soon: i64,
     pub last_activity_at: Option<i64>,
+    /// Linked folder (canonical path) and its trust, if any. Availability is
+    /// checked separately (folders::project_folder) to keep lists cheap.
+    pub folder_path: Option<String>,
+    pub folder_trust: Option<String>,
+    pub ai_prefs: Value,
+    /// Connected GitHub repository (owner/name), if any.
+    pub github_repo: Option<String>,
 }
 
 /// Columns 0..=16 are the project row; 17.. are statistics. `?1` is
@@ -45,7 +52,11 @@ const PROJECT_SELECT: &str = "SELECT p.id, p.name, p.description, p.icon, p.acce
   (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.deleted_at IS NULL AND t.parent_id IS NULL AND (?2 = 1 OR t.archived_at IS NULL) AND t.status = 'completed'),
   (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.deleted_at IS NULL AND t.archived_at IS NULL AND t.status != 'completed' AND t.due_date < ?1),
   (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.deleted_at IS NULL AND t.archived_at IS NULL AND t.status != 'completed' AND t.due_date >= ?1 AND t.due_date <= date(?1, '+3 day')),
-  (SELECT max(a.created_at) FROM activity a WHERE a.project_id = p.id)
+  (SELECT max(a.created_at) FROM activity a WHERE a.project_id = p.id),
+  (SELECT l.path FROM project_folder_links l WHERE l.project_id = p.id),
+  (SELECT t.trust FROM project_folder_links l JOIN trusted_workspaces t ON t.folder_key = l.folder_key WHERE l.project_id = p.id),
+  p.ai_prefs,
+  (SELECT r.owner || '/' || r.name FROM project_repos r WHERE r.project_id = p.id)
 FROM projects p";
 
 fn map_project(r: &Row) -> rusqlite::Result<Project> {
@@ -73,6 +84,10 @@ fn map_project(r: &Row) -> rusqlite::Result<Project> {
         task_overdue: r.get(19)?,
         task_due_soon: r.get(20)?,
         last_activity_at: r.get(21)?,
+        folder_path: r.get(22)?,
+        folder_trust: r.get(23)?,
+        ai_prefs: serde_json::from_str(&r.get::<_, String>(24)?).unwrap_or(Value::Object(Default::default())),
+        github_repo: r.get(25)?,
     })
 }
 
@@ -113,6 +128,14 @@ pub struct ProjectInput {
     pub target_date: Option<String>,
     pub group_id: Option<String>,
     pub default_view: Option<String>,
+    /// Optional folder to link, with the trust decision made in the dialog.
+    pub folder: Option<FolderLinkInput>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct FolderLinkInput {
+    pub path: String,
+    pub trust: crate::domain::folders::Trust,
 }
 
 pub fn create_project(conn: &Connection, input: &ProjectInput) -> AppResult<Project> {
@@ -148,6 +171,9 @@ pub fn create_project(conn: &Connection, input: &ProjectInput) -> AppResult<Proj
     let board = boards::create_board(conn, &id, "Board", &cols)?;
     conn.execute("UPDATE projects SET default_board_id = ?1 WHERE id = ?2", params![board.id, id])?;
     activity::log(conn, Some(&id), "project", &id, "created", name)?;
+    if let Some(f) = &input.folder {
+        crate::domain::folders::link(conn, &id, &f.path, f.trust)?;
+    }
     get_project(conn, &id)
 }
 
@@ -170,6 +196,7 @@ pub struct ProjectPatch {
     pub hidden_tabs: Option<Value>,
     pub archived: Option<bool>,
     pub sort_order: Option<f64>,
+    pub ai_prefs: Option<Value>,
 }
 
 pub fn update_project(conn: &Connection, id: &str, p: &ProjectPatch) -> AppResult<Project> {
@@ -220,6 +247,12 @@ pub fn update_project(conn: &Connection, id: &str, p: &ProjectPatch) -> AppResul
     }
     if let Some(v) = p.sort_order {
         set("sort_order", &v)?;
+    }
+    if let Some(v) = &p.ai_prefs {
+        if !v.is_object() {
+            return invalid("AI preferences must be an object.");
+        }
+        set("ai_prefs", &serde_json::to_string(v)?)?;
     }
     if let Some(a) = p.archived {
         if a && prev.archived_at.is_none() {
@@ -446,6 +479,70 @@ pub fn projects_reorder(
     })
 }
 
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Placement {
+    pub id: String,
+    pub group_id: Option<String>,
+}
+
+/// Writes a complete sidebar arrangement (order and group membership) in
+/// one transaction, so a drag never leaves a half-applied state. Unknown
+/// group ids are rejected rather than silently creating dangling links.
+pub fn arrange_projects(conn: &Connection, placements: &[Placement]) -> AppResult<()> {
+    for (i, p) in placements.iter().enumerate() {
+        if let Some(g) = &p.group_id {
+            let ok: bool = conn.query_row("SELECT EXISTS (SELECT 1 FROM project_groups WHERE id = ?1)", [g], |r| r.get(0))?;
+            if !ok {
+                return invalid("That group no longer exists.");
+            }
+        }
+        conn.execute(
+            "UPDATE projects SET sort_order = ?1, group_id = ?2 WHERE id = ?3",
+            params![(i + 1) as f64, p.group_id, p.id],
+        )?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn projects_arrange(state: State<AppState>, placements: Vec<Placement>) -> AppResult<()> {
+    state.with(|c| {
+        let tx = c.transaction()?;
+        arrange_projects(&tx, &placements)?;
+        tx.commit()?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn groups_reorder(state: State<AppState>, ids: Vec<String>) -> AppResult<()> {
+    state.with(|c| {
+        let tx = c.transaction()?;
+        for (i, id) in ids.iter().enumerate() {
+            tx.execute("UPDATE project_groups SET sort_order = ?1 WHERE id = ?2", params![(i + 1) as f64, id])?;
+        }
+        tx.commit()?;
+        Ok(())
+    })
+}
+
+/// Restores creation order for projects and groups (group membership is kept).
+#[tauri::command]
+pub fn projects_reset_order(state: State<AppState>) -> AppResult<()> {
+    state.with(|c| {
+        let tx = c.transaction()?;
+        tx.execute_batch(
+            "UPDATE projects SET sort_order = (SELECT count(*) FROM projects p2
+               WHERE p2.created_at < projects.created_at OR (p2.created_at = projects.created_at AND p2.id <= projects.id));
+             UPDATE project_groups SET sort_order = (SELECT count(*) FROM project_groups g2
+               WHERE g2.created_at < project_groups.created_at OR (g2.created_at = project_groups.created_at AND g2.id <= project_groups.id));",
+        )?;
+        tx.commit()?;
+        Ok(())
+    })
+}
+
 #[tauri::command]
 pub fn project_duplicate(state: State<AppState>, id: String) -> AppResult<Project> {
     state.with(|c| {
@@ -528,6 +625,24 @@ mod tests {
         }
         let p = get_project(&c, &p.id).unwrap();
         assert_eq!((p.task_done, p.task_total), (3, 4));
+    }
+
+    #[test]
+    fn arrange_moves_between_groups_atomically() {
+        let c = open_memory();
+        let a = create_project(&c, &ProjectInput { name: "A".into(), ..Default::default() }).unwrap();
+        let b = create_project(&c, &ProjectInput { name: "B".into(), ..Default::default() }).unwrap();
+        c.execute("INSERT INTO project_groups(id, name, created_at, updated_at) VALUES ('g', 'Work', 1, 1)", []).unwrap();
+        arrange_projects(
+            &c,
+            &[Placement { id: b.id.clone(), group_id: None }, Placement { id: a.id.clone(), group_id: Some("g".into()) }],
+        )
+        .unwrap();
+        let (a2, b2) = (get_project(&c, &a.id).unwrap(), get_project(&c, &b.id).unwrap());
+        assert!(b2.sort_order < a2.sort_order);
+        assert_eq!(a2.group_id.as_deref(), Some("g"));
+        // A stale group id is refused instead of leaving a dangling reference.
+        assert!(arrange_projects(&c, &[Placement { id: a.id.clone(), group_id: Some("gone".into()) }]).is_err());
     }
 
     #[test]

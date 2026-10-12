@@ -94,6 +94,14 @@
   --enter-scale: 0.97;
   --enter-shift: 4px;
 
+  /* Task completion (overridden by the intensity setting / reduced motion) */
+  --complete-check: 140ms;
+  --complete-strike: 260ms;
+  --complete-color: 220ms;
+  --complete-undo: 140ms;
+  --complete-line: 1px;
+  --complete-ease: cubic-bezier(0.45, 0, 0.2, 1);
+
   --sidebar-w: 236px;
   --inspector-w: 380px;
 }
@@ -190,6 +198,26 @@
   --t-layout: 140ms;
   --enter-scale: 1;
   --enter-shift: 0px;
+}
+:root[data-complete="subtle"] {
+  --complete-check: 120ms;
+  --complete-strike: 220ms;
+  --complete-color: 180ms;
+}
+:root[data-complete="pronounced"] {
+  --complete-check: 160ms;
+  --complete-strike: 300ms;
+  --complete-color: 250ms;
+  --complete-line: 1.5px;
+}
+/* Animation disabled or reduced motion: completion updates immediately. */
+:root[data-complete="off"],
+:root[data-motion="reduced"],
+:root[data-motion="off"] {
+  --complete-check: 0ms;
+  --complete-strike: 0ms;
+  --complete-color: 0ms;
+  --complete-undo: 0ms;
 }
 :root[data-motion="off"] {
   --t-hover: 0ms;

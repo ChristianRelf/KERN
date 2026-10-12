@@ -151,7 +151,7 @@ fn decode_entities(s: &str) -> String {
         .to_string()
 }
 
-fn attr(tag: &str, name: &str) -> Option<String> {
+pub fn attr(tag: &str, name: &str) -> Option<String> {
     let lower = tag.to_ascii_lowercase();
     let needle = format!("{name}=");
     let idx = lower.find(&needle)? + needle.len();
@@ -209,33 +209,6 @@ pub fn parse_metadata(url: &str, html: &str) -> LinkMetadata {
         }
     }
     m
-}
-
-/// Fetches page metadata (title, description). Opt-in via settings on the
-/// client; fails gracefully offline.
-#[tauri::command]
-pub async fn link_metadata(url: String) -> AppResult<LinkMetadata> {
-    let lower = url.to_ascii_lowercase();
-    if !(lower.starts_with("http://") || lower.starts_with("https://")) {
-        return invalid("Only web links have previews.");
-    }
-    tauri::async_runtime::spawn_blocking(move || {
-        let config = ureq::Agent::config_builder()
-            .timeout_global(Some(std::time::Duration::from_secs(6)))
-            .user_agent("Mozilla/5.0 (compatible; Kern link preview)")
-            .build();
-        let agent: ureq::Agent = config.into();
-        let mut resp = agent.get(&url).call().map_err(|e| AppError::Network(format!("Couldn't reach the page ({e}).")))?;
-        let body = resp
-            .body_mut()
-            .with_config()
-            .limit(2 * 1024 * 1024)
-            .read_to_string()
-            .map_err(|e| AppError::Network(format!("Couldn't read the page ({e}).")))?;
-        Ok(parse_metadata(&url, &body))
-    })
-    .await
-    .map_err(|e| AppError::Other(e.to_string()))?
 }
 
 #[cfg(test)]

@@ -40,7 +40,15 @@ export type Domain =
   | "focus"
   | "snapshots"
   | "backups"
-  | "search";
+  | "search"
+  | "folder"
+  | "files"
+  | "trusted"
+  | "storage"
+  | "ai"
+  | "favicon"
+  | "git"
+  | "github";
 
 export function invalidate(...domains: Domain[]) {
   for (const d of domains) void queryClient.invalidateQueries({ queryKey: [d] });

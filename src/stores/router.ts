@@ -17,8 +17,14 @@ export type SettingsSection =
   | "focus"
   | "keyboard"
   | "data"
+  | "privacy"
+  | "api"
+  | "integrations"
   | "performance"
   | "about";
+
+/** Sub-pages of Settings → API (the account manager lives at /api/accounts). */
+export type ApiTab = "accounts" | "routing" | "usage" | "security";
 
 export type Route =
   | { name: "dashboard"; id?: string }
@@ -33,6 +39,7 @@ export type Route =
   | { name: "label"; id: string }
   | { name: "search"; q?: string }
   | { name: "settings"; section?: SettingsSection }
+  | { name: "api"; tab?: ApiTab }
   | { name: "trash" }
   | { name: "focus" }
   | { name: "rundown"; day?: string; mode?: "morning" | "evening" }
@@ -84,3 +91,34 @@ export const useRouter = create<RouterState>((set, get) => ({
 }));
 
 export const navigate = (r: Route, opts?: { replace?: boolean }) => useRouter.getState().navigate(r, opts);
+
+const API_TABS: ApiTab[] = ["accounts", "routing", "usage", "security"];
+
+/** Internal path for routes that have one (e.g. "/api/accounts"). */
+export function pathOf(r: Route): string | null {
+  switch (r.name) {
+    case "api":
+      return `/api/${r.tab ?? "accounts"}`;
+    case "settings":
+      return `/settings/${r.section ?? "general"}`;
+    default:
+      return null;
+  }
+}
+
+/** Resolves an internal path such as "/api/accounts" to a route. */
+export function routeFromPath(path: string): Route | null {
+  const parts = path.replace(/^\/+|\/+$/g, "").split("/");
+  if (parts[0] === "api") {
+    const tab = (parts[1] ?? "accounts") as ApiTab;
+    return API_TABS.includes(tab) ? { name: "api", tab } : null;
+  }
+  if (parts[0] === "settings") return { name: "settings", section: (parts[1] as SettingsSection) || undefined };
+  return null;
+}
+
+export const navigatePath = (path: string) => {
+  const r = routeFromPath(path);
+  if (r) navigate(r);
+  return !!r;
+};

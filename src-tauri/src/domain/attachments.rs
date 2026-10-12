@@ -139,17 +139,19 @@ fn list(conn: &Connection, root: &Path, task_id: Option<&str>, project_id: Optio
     let rows = stmt.query_map(params![task_id, project_id], |r| {
         let path: String = r.get(4)?;
         let managed = r.get::<_, i64>(5)? != 0;
+        let mime: Option<String> = r.get(6)?;
+        let is_link = mime.as_deref() == Some(LINK_MIME);
         let abs = resolve(root, &path, managed);
         Ok(Attachment {
             id: r.get(0)?,
             task_id: r.get(1)?,
             project_id: r.get(2)?,
             name: r.get(3)?,
-            exists: abs.exists(),
+            exists: is_link || abs.exists(),
             abs_path: abs.to_string_lossy().to_string(),
             path,
             managed,
-            mime: r.get(6)?,
+            mime,
             size: r.get(7)?,
             created_at: r.get(8)?,
         })
@@ -215,6 +217,54 @@ pub fn attachment_delete(state: State<AppState>, id: String) -> AppResult<()> {
         if let Some((path, 1)) = row {
             remove_managed(&root, &path);
         }
+        Ok(())
+    })
+}
+
+/// Web links attached to a task or project are stored as unmanaged
+/// attachments with this type; `path` holds the URL.
+pub const LINK_MIME: &str = "text/uri-list";
+
+#[tauri::command]
+pub fn attachment_add_link(
+    state: State<AppState>,
+    url: String,
+    title: Option<String>,
+    task_id: Option<String>,
+    project_id: Option<String>,
+) -> AppResult<Attachment> {
+    if task_id.is_none() && project_id.is_none() {
+        return invalid("A link needs a task or a project.");
+    }
+    let mut u = url.trim().to_string();
+    if !u.contains("://") && !u.starts_with("mailto:") {
+        u = format!("https://{u}");
+    }
+    let parsed = url::Url::parse(&u).map_err(|_| AppError::Invalid("That isn't a valid web address.".into()))?;
+    if !matches!(parsed.scheme(), "http" | "https" | "mailto") {
+        return invalid("Only web and email links can be attached.");
+    }
+    let name = title.map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).unwrap_or_else(|| parsed.to_string());
+    let root = state.paths.attachments_dir.clone();
+    state.with(|c| {
+        let id = new_id();
+        c.execute(
+            "INSERT INTO attachments(id, task_id, project_id, name, path, managed, mime, size, created_at) VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, 0, ?7)",
+            params![id, task_id, project_id, name.chars().take(300).collect::<String>(), parsed.to_string(), LINK_MIME, now_ms()],
+        )?;
+        let all = list(c, &root, task_id.as_deref(), if task_id.is_some() { None } else { project_id.as_deref() })?;
+        all.into_iter().find(|a| a.id == id).ok_or_else(|| AppError::Other("Attachment vanished".into()))
+    })
+}
+
+#[tauri::command]
+pub fn attachment_rename(state: State<AppState>, id: String, name: String) -> AppResult<()> {
+    let n = name.trim();
+    if n.is_empty() {
+        return invalid("The name can't be empty.");
+    }
+    state.with(|c| {
+        c.execute("UPDATE attachments SET name = ?1 WHERE id = ?2", params![n, id])?;
         Ok(())
     })
 }

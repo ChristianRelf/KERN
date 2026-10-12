@@ -76,8 +76,40 @@ export function TaskCheck({
       }}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <Check />
+      {/* Drawn from the short stroke so the tick "writes" itself in. */}
+      <svg viewBox="0 0 24 24" aria-hidden>
+        <path d="M5 12.5l4.5 4.5L19 7.5" pathLength={1} />
+      </svg>
     </button>
+  );
+}
+
+/**
+ * A task title with an animated strikethrough. Completing draws a fine line
+ * from left to right across the text itself (never the whole card).
+ * Single-line titles use a scaled pseudo-element (compositor-only); wrapped
+ * titles sweep a 1px underline-style background across each line in reading
+ * order, so the line never crosses empty space. No layout is measured.
+ */
+export function TaskTitle({
+  title,
+  done,
+  wrap,
+  className = "",
+}: {
+  title: string;
+  done: boolean;
+  wrap?: boolean;
+  className?: string;
+}) {
+  return wrap ? (
+    <span className={`strike strike--wrap ${className}`} data-done={done}>
+      <span className="strike__text">{title}</span>
+    </span>
+  ) : (
+    <span className={`strike ${className}`} data-done={done}>
+      {title}
+    </span>
   );
 }
 

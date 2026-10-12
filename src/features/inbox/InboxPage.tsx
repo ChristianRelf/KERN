@@ -1,7 +1,8 @@
-import { ExternalLink, FolderInput, Inbox, Lightbulb, Link2, NotebookPen, Pencil, SquareCheckBig, Trash } from "lucide-react";
+import { ExternalLink, FolderInput, Inbox, Lightbulb, NotebookPen, Pencil, SquareCheckBig, Trash } from "lucide-react";
 import type { InboxItem } from "@/lib/types";
 import { useInbox, useTasks } from "@/hooks/data";
 import { api, describeError } from "@/lib/ipc";
+import { Favicon, displayUrl } from "@/features/links/links";
 import { invalidate, invalidateTasks } from "@/lib/query";
 import { toast, toastError } from "@/stores/toast";
 import { pushUndo } from "@/stores/undo";
@@ -50,7 +51,7 @@ async function remove(item: InboxItem) {
 }
 
 function IdeaRow({ item }: { item: InboxItem }) {
-  const Icon = item.kind === "link" ? Link2 : Lightbulb;
+  const Icon = Lightbulb;
   const menu = () => [
     { label: "Convert to task", icon: SquareCheckBig, onSelect: () => void convert(item, "task") },
     { label: "Convert to note", icon: NotebookPen, onSelect: () => void convert(item, "note") },
@@ -72,7 +73,7 @@ function IdeaRow({ item }: { item: InboxItem }) {
   return (
     <ContextMenu items={menu}>
       <div className="inbox-item">
-        <Icon strokeWidth={1.75} />
+        {item.kind === "link" ? <Favicon url={item.content} size={16} style={{ marginTop: 2 }} /> : <Icon strokeWidth={1.75} />}
         <div className="col grow" style={{ gap: 2 }}>
           {item.kind === "link" ? (
             <a
@@ -82,9 +83,9 @@ function IdeaRow({ item }: { item: InboxItem }) {
                 e.preventDefault();
                 void api.system.open(item.content).catch((err) => toastError(describeError(err)));
               }}
-              style={{ textDecoration: "underline", textDecorationColor: "var(--text-4)" }}
+              title={item.content}
             >
-              {item.content}
+              {displayUrl(item.content, 90)}
             </a>
           ) : (
             <span className="inbox-item__content selectable">{item.content}</span>

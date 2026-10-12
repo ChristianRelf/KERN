@@ -14,8 +14,10 @@ import { queryClient } from "@/lib/query";
 import { comboFromEvent, isTextInput, resolveBindings } from "@/lib/shortcuts";
 import { todayStr } from "@/lib/dates";
 import { useFocus } from "@/features/focus/store";
-import { toastError } from "@/stores/toast";
+import { toast, toastError } from "@/stores/toast";
+import { announce } from "@/lib/announce";
 import { setSetting } from "@/stores/settings";
+import { openNewTask } from "@/features/tasks/creation";
 
 const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const prefersDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -34,6 +36,7 @@ export function useAppearance() {
       root.dataset.scrollbars = v["appearance.scrollbars"];
       const motion = v["appearance.motion"] === "system" ? (prefersReducedMotion() ? "reduced" : "full") : v["appearance.motion"];
       root.dataset.motion = motion;
+      root.dataset.complete = v["interaction.completionAnimation"] ? v["interaction.completionIntensity"] : "off";
       root.style.setProperty("--fs", String(v["appearance.fontScale"]));
       document.body.style.background = theme === "light" ? "#f6f6f6" : "#111111";
     };
@@ -126,6 +129,12 @@ export function useBackendEvents() {
       listen("kern://focus-ended", () => useFocus.getState().checkCompletion()),
       listen("kern://data-changed", () => void queryClient.invalidateQueries()),
       listen<string>("kern://backup-failed", (e) => toastError(`Automatic backup failed: ${e.payload}`)),
+      listen<{ from: string; to: string; reason: string }>("kern://ai-switch", (e) => {
+        if (!useSettings.getState().values["ai.notifySwitch"]) return;
+        const msg = `Switched to ${e.payload.to} — ${e.payload.from} unavailable (${e.payload.reason}).`;
+        toast(msg);
+        announce(msg);
+      }),
     ];
     // On launch the scheduler only emits once per day, so check directly too.
     const t = window.setTimeout(() => void maybePromptBriefing(), 1500);
@@ -186,7 +195,10 @@ export function useGlobalShortcuts() {
       if (!combo) return;
       const action = byCombo.get(combo);
       const typing = isTextInput(e.target);
-      if (e.key === "Escape" && !typing && useUi.getState().inspector && !document.querySelector("[role=dialog],[role=menu]")) {
+      const ui0 = useUi.getState();
+      // A pinned panel only closes on Escape when focus is inside it.
+      const pinnedAway = ui0.inspectorPinned && !(e.target instanceof Element && e.target.closest(".inspector"));
+      if (e.key === "Escape" && !typing && ui0.inspector && !pinnedAway && !document.querySelector("[role=dialog],[role=menu]")) {
         useUi.getState().closeInspector();
         return;
       }
@@ -202,7 +214,7 @@ export function useGlobalShortcuts() {
             ui.openCapture(ui.capture.mode);
             return true;
           case "newTask":
-            ui.openCapture("task");
+            openNewTask();
             return true;
           case "newNote":
             ui.openCapture("note");

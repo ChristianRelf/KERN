@@ -46,6 +46,17 @@ pub struct Task {
     pub subtask_count: i64,
     pub subtask_done: i64,
     pub attachment_count: i64,
+    /// Linked GitHub issue, if any.
+    #[serde(default)]
+    pub issue: Option<IssueRef>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueRef {
+    pub repo: String,
+    pub number: i64,
+    pub url: String,
 }
 
 pub const TASK_SELECT: &str = "SELECT t.id, t.title, t.description, t.status, t.priority, t.project_id, t.column_id,
@@ -55,7 +66,8 @@ pub const TASK_SELECT: &str = "SELECT t.id, t.title, t.description, t.status, t.
   (SELECT group_concat(tl.label_id) FROM task_labels tl WHERE tl.task_id = t.id),
   (SELECT count(*) FROM tasks s WHERE s.parent_id = t.id AND s.deleted_at IS NULL),
   (SELECT count(*) FROM tasks s WHERE s.parent_id = t.id AND s.deleted_at IS NULL AND s.status = 'completed'),
-  (SELECT count(*) FROM attachments a WHERE a.task_id = t.id)
+  (SELECT count(*) FROM attachments a WHERE a.task_id = t.id),
+  (SELECT l.repo || char(31) || l.issue_number || char(31) || l.html_url FROM task_issue_links l WHERE l.task_id = t.id)
 FROM tasks t";
 
 pub fn map_task(r: &Row) -> rusqlite::Result<Task> {
@@ -92,6 +104,10 @@ pub fn map_task(r: &Row) -> rusqlite::Result<Task> {
         subtask_count: r.get(25)?,
         subtask_done: r.get(26)?,
         attachment_count: r.get(27)?,
+        issue: r.get::<_, Option<String>>(28)?.and_then(|s| {
+            let mut p = s.split('\u{1f}');
+            Some(IssueRef { repo: p.next()?.to_string(), number: p.next()?.parse().ok()?, url: p.next()?.to_string() })
+        }),
     })
 }
 

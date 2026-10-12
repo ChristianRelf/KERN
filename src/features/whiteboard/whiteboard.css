@@ -429,3 +429,18 @@
 .wb .react-flow__attribution a {
   color: var(--text-3);
 }
+
+/* Level of detail: when zoomed far out, text is unreadable anyway — skip it. */
+.wb[data-lod="low"] .wbn__body,
+.wb[data-lod="low"] .wbn__meta,
+.wb[data-lod="low"] .wbn__kind,
+.wb[data-lod="low"] .react-flow__handle,
+.wb[data-lod="low"] .react-flow__edgelabel-renderer {
+  display: none;
+}
+.wb[data-lod="low"] .wbn {
+  box-shadow: none !important;
+}
+.wb[data-lod="low"] .wbn__title {
+  font-size: 28px;
+}

@@ -1,11 +1,12 @@
 import { memo, type CSSProperties } from "react";
 import { CalendarDays, ClockAlert, Ellipsis, GripVertical, ListChecks, Paperclip, Pin, Repeat, Timer } from "lucide-react";
 import type { Label, Project, Task } from "@/lib/types";
-import { TaskCheck } from "@/components/ui/Controls";
+import { TaskCheck, TaskTitle } from "@/components/ui/Controls";
 import { IconButton } from "@/components/ui/Button";
 import { Dropdown } from "@/components/ui/Menu";
 import { dueState, formatDue, formatDuration } from "@/lib/dates";
 import { PriorityIcon } from "./meta";
+import { GithubMark } from "@/features/github/shared";
 import { ProjectGlyph } from "@/features/projects/ProjectGlyph";
 import { DuePopover } from "./pickers";
 import { taskMenu } from "./menu";
@@ -68,6 +69,7 @@ function TaskRowInner({
       role="option"
       aria-selected={selected}
       data-task-id={t.id}
+      data-flip-id={t.id}
       data-focused={focused || undefined}
       data-selected={selected || undefined}
       data-done={done}
@@ -83,7 +85,9 @@ function TaskRowInner({
       <TaskCheck checked={done} onToggle={() => void toggleComplete(t)} priority={t.priority} blocked={t.status === "blocked"} />
       <div className="task-row__main">
         <div className="task-row__line">
-          <span className="task-row__title">{t.title}</span>
+          <span className="task-row__title">
+            <TaskTitle title={t.title} done={done} />
+          </span>
           {t.pinned && <Pin size={12} className="faint" aria-label="Pinned" />}
           <div className="task-row__meta">
             {labels.slice(0, 2).map((l) => (
@@ -102,6 +106,11 @@ function TaskRowInner({
               <span aria-label={`${t.attachmentCount} attachments`}>
                 <Paperclip />
                 {t.attachmentCount}
+              </span>
+            )}
+            {t.issue && (
+              <span aria-label={`GitHub issue ${t.issue.number}`} title={`${t.issue.repo}#${t.issue.number}`}>
+                <GithubMark size={12} />#{t.issue.number}
               </span>
             )}
             {t.recurrence && (

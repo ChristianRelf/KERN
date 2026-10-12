@@ -9,7 +9,18 @@ export type Density = "compact" | "comfortable" | "relaxed";
 export type Theme = "dark" | "light" | "system";
 export type Accent = "none" | "blue" | "violet" | "green" | "amber" | "rose" | "teal";
 export type MotionPref = "system" | "full" | "reduced" | "off";
-export type NavItemId = "dashboard" | "tasks" | "inbox" | "projects" | "whiteboards" | "notes" | "search" | "focus" | "rundown";
+export type NavItemId = "dashboard" | "tasks" | "inbox" | "projects" | "whiteboards" | "notes" | "search" | "focus" | "rundown" | "ai";
+export type SidebarSectionId = "views" | "pinned" | "projects";
+export type CompletionIntensity = "subtle" | "standard" | "pronounced";
+export type AiRoutingMode = "manual" | "failover" | "priority" | "cost";
+export interface ModelPrice {
+  /** USD per million input tokens. */
+  input: number;
+  /** USD per million output tokens. */
+  output: number;
+  /** USD per million cached input tokens (defaults to the input price). */
+  cached?: number;
+}
 
 export interface ColumnTemplate {
   name: string;
@@ -30,6 +41,13 @@ export interface Settings {
   "general.detailMode": "inspector" | "modal" | "page";
   "general.globalCaptureShortcut": string | null;
   "general.onboarded": boolean;
+  // Interactions
+  "interaction.closePanelsOnOutsideClick": boolean;
+  "interaction.inspectorPinning": boolean;
+  "interaction.completionAnimation": boolean;
+  "interaction.completionIntensity": CompletionIntensity;
+  "interaction.createInterface": "composer" | "quick";
+  "interaction.rememberTaskProps": boolean;
   // Appearance
   "appearance.theme": Theme;
   "appearance.accent": Accent;
@@ -45,6 +63,13 @@ export interface Settings {
   "appearance.taskMeta": { project: boolean; due: boolean; priority: boolean; labels: boolean; subtasks: boolean; estimate: boolean };
   "appearance.scrollbars": "thin" | "hover" | "wide";
   "appearance.inspectorWidth": number;
+  // Sidebar
+  "sidebar.reorder": boolean;
+  "sidebar.dragHandles": boolean;
+  "sidebar.layout": "standard" | "flexible";
+  "sidebar.sectionOrder": SidebarSectionId[];
+  "sidebar.rememberGroups": boolean;
+  "sidebar.collapsedSections": SidebarSectionId[];
   // Dashboard
   "dashboard.refreshOnFocus": boolean;
   "dashboard.showHeader": boolean;
@@ -68,6 +93,11 @@ export interface Settings {
   "projects.grouping": "groups" | "none";
   "projects.sidebarOrder": "manual" | "recent" | "name";
   "projects.progressIncludeArchived": boolean;
+  "projects.folderField": "visible" | "more";
+  "projects.openFolderAfterCreate": boolean;
+  "projects.showFolderInOverview": boolean;
+  "projects.rememberTrust": boolean;
+  "projects.showFilesTab": boolean;
   "boards.defaultCardDensity": "compact" | "expanded";
   "boards.columnWidth": number;
   // Whiteboards
@@ -125,6 +155,24 @@ export interface Settings {
   "data.trashRetentionDays": number;
   "data.activityRetentionDays": number;
   "data.linkPreviews": boolean;
+  "storage.includeLinkedFolders": boolean;
+  // Privacy
+  "privacy.network": boolean;
+  "privacy.favicons": boolean;
+  "privacy.aiProjectContent": boolean;
+  "privacy.aiLinkedFolders": boolean;
+  // AI API accounts
+  "ai.routingMode": AiRoutingMode;
+  "ai.crossProvider": boolean;
+  "ai.maxAttempts": number;
+  "ai.maxRetryWaitSeconds": number;
+  "ai.notifySwitch": boolean;
+  "ai.usageRetentionDays": number;
+  "ai.modelPrices": Record<string, ModelPrice>;
+  // GitHub
+  "github.auth": "auto" | "cli" | "token";
+  "github.autoSync": boolean;
+  "github.pushOnEdit": boolean;
   // Performance
   "performance.reduceBackground": boolean;
   "performance.cacheMinutes": number;
@@ -144,6 +192,13 @@ export const DEFAULTS: Settings = {
   "general.globalCaptureShortcut": null,
   "general.onboarded": false,
 
+  "interaction.closePanelsOnOutsideClick": true,
+  "interaction.inspectorPinning": true,
+  "interaction.completionAnimation": true,
+  "interaction.completionIntensity": "standard",
+  "interaction.createInterface": "composer",
+  "interaction.rememberTaskProps": true,
+
   "appearance.theme": "dark",
   "appearance.accent": "none",
   "appearance.font": "inter",
@@ -158,6 +213,13 @@ export const DEFAULTS: Settings = {
   "appearance.taskMeta": { project: true, due: true, priority: true, labels: true, subtasks: true, estimate: false },
   "appearance.scrollbars": "thin",
   "appearance.inspectorWidth": 380,
+
+  "sidebar.reorder": true,
+  "sidebar.dragHandles": true,
+  "sidebar.layout": "standard",
+  "sidebar.sectionOrder": ["views", "pinned", "projects"],
+  "sidebar.rememberGroups": true,
+  "sidebar.collapsedSections": [],
 
   "dashboard.refreshOnFocus": true,
   "dashboard.showHeader": true,
@@ -186,6 +248,11 @@ export const DEFAULTS: Settings = {
   "projects.grouping": "groups",
   "projects.sidebarOrder": "manual",
   "projects.progressIncludeArchived": false,
+  "projects.folderField": "visible",
+  "projects.openFolderAfterCreate": false,
+  "projects.showFolderInOverview": true,
+  "projects.rememberTrust": true,
+  "projects.showFilesTab": true,
   "boards.defaultCardDensity": "compact",
   "boards.columnWidth": 288,
 
@@ -243,6 +310,24 @@ export const DEFAULTS: Settings = {
   "data.trashRetentionDays": 30,
   "data.activityRetentionDays": 180,
   "data.linkPreviews": true,
+  "storage.includeLinkedFolders": false,
+
+  "privacy.network": true,
+  "privacy.favicons": true,
+  "privacy.aiProjectContent": false,
+  "privacy.aiLinkedFolders": false,
+
+  "ai.routingMode": "failover",
+  "ai.crossProvider": false,
+  "ai.maxAttempts": 3,
+  "ai.maxRetryWaitSeconds": 20,
+  "ai.notifySwitch": true,
+  "ai.usageRetentionDays": 90,
+  "ai.modelPrices": {},
+
+  "github.auth": "auto",
+  "github.autoSync": true,
+  "github.pushOnEdit": true,
 
   "performance.reduceBackground": false,
   "performance.cacheMinutes": 5,

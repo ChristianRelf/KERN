@@ -18,10 +18,15 @@ use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    let mut builder = tauri::Builder::default();
+    // An isolated test/development instance (KERN_DATA_DIR) runs alongside
+    // the normal one instead of handing over to it.
+    if std::env::var_os("KERN_DATA_DIR").is_none() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             window::show_main(app);
-        }))
+        }));
+    }
+    builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
@@ -31,10 +36,20 @@ pub fn run() {
             Some(vec!["--autostart"]),
         ))
         .setup(|app| {
-            let data_dir = app.path().app_data_dir()?;
+            // KERN_DATA_DIR points a development or test run at a separate
+            // data folder so real data is never touched.
+            let data_dir = match std::env::var_os("KERN_DATA_DIR") {
+                Some(d) if !d.is_empty() => std::path::PathBuf::from(d),
+                _ => app.path().app_data_dir()?,
+            };
             let paths = Paths::new(data_dir);
             std::fs::create_dir_all(&paths.data_dir)?;
             std::fs::create_dir_all(&paths.attachments_dir)?;
+            // The asset protocol may read managed attachments and cached
+            // favicons only, wherever the data folder actually is.
+            let scope = app.asset_protocol_scope();
+            let _ = scope.allow_directory(&paths.attachments_dir, true);
+            let _ = scope.allow_directory(paths.favicons_dir(), true);
             let conn = match db::open(&paths.db_path, &paths.default_backups_dir) {
                 Ok(c) => c,
                 Err(e) => {
@@ -54,6 +69,9 @@ pub fn run() {
                 "internal.attachmentsDir",
                 &serde_json::json!(paths.attachments_dir.to_string_lossy()),
             );
+            if let Err(e) = folders::apply_trust_retention(&conn) {
+                eprintln!("couldn't apply trust retention: {e}");
+            }
             app.manage(AppState::new(conn, paths));
             if let Err(e) = window::create_tray(app) {
                 eprintln!("tray unavailable: {e}");
@@ -91,6 +109,9 @@ pub fn run() {
             projects::project_create,
             projects::project_update,
             projects::projects_reorder,
+            projects::projects_arrange,
+            projects::projects_reset_order,
+            projects::groups_reorder,
             projects::project_duplicate,
             projects::project_delete,
             projects::project_restore,
@@ -99,6 +120,58 @@ pub fn run() {
             projects::group_create,
             projects::group_update,
             projects::group_delete,
+            // project folders & workspace trust
+            folders::folder_inspect,
+            folders::project_folder_get,
+            folders::project_folder_link,
+            folders::project_folder_unlink,
+            folders::project_folder_set_trust,
+            folders::project_files_list,
+            folders::project_file_open,
+            folders::project_file_reveal,
+            folders::project_file_path,
+            folders::project_folder_create,
+            folders::project_file_rename,
+            folders::trusted_folders_list,
+            folders::trusted_folder_update,
+            // AI API accounts & routing
+            ai::ai_accounts_list,
+            ai::ai_account_create,
+            ai::ai_account_update,
+            ai::ai_account_replace_key,
+            ai::ai_account_delete,
+            ai::ai_accounts_reorder,
+            ai::ai_account_test,
+            ai::ai_key_test,
+            ai::ai_request,
+            ai::ai_request_cancel,
+            ai::ai_usage,
+            ai::ai_history_clear,
+            ai::ai_security_check,
+            // git & GitHub
+            git::git_remote,
+            git::git_status,
+            git::git_diff,
+            git::git_log,
+            git::git_branches,
+            git::git_switch,
+            git::git_sync,
+            git::git_clone,
+            git::git_available,
+            git::project_scan_todos,
+            github::github_status,
+            github::github_set_token,
+            github::github_clear_token,
+            github::github_repos,
+            github::github_project,
+            github::github_connect,
+            github::github_disconnect,
+            github::github_update_connection,
+            github::github_sync,
+            github::github_sync_task,
+            github::github_create_issue,
+            github::github_pulls,
+            github::github_overview,
             // boards
             boards::boards_list,
             boards::board_get,
@@ -137,6 +210,8 @@ pub fn run() {
             attachments::attachments_list,
             attachments::attachment_add,
             attachments::attachment_delete,
+            attachments::attachment_add_link,
+            attachments::attachment_rename,
             attachments::asset_import,
             attachments::asset_import_bytes,
             // dashboards
@@ -162,11 +237,16 @@ pub fn run() {
             views::view_create,
             views::view_update,
             views::view_delete,
+            views::views_reorder,
             search::search,
             stats::stats_overview,
             stats::stats_completions,
             stats::stats_due_counts,
             stats::storage_stats,
+            storage::storage_report,
+            storage::storage_scan,
+            storage::storage_scan_cancel,
+            storage::storage_cleanup,
             trash::trash_list,
             trash::trash_purge,
             trash::trash_empty,
@@ -189,7 +269,8 @@ pub fn run() {
             system::write_text_file,
             system::write_binary_file,
             system::read_text_file,
-            system::link_metadata,
+            links::link_metadata,
+            links::favicon_get,
             system::tray_set_visible,
             system::quit_app,
             system::show_main_window,

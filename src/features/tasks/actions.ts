@@ -10,6 +10,7 @@ import { pushUndo } from "@/stores/undo";
 import { toast, toastError } from "@/stores/toast";
 import { addDaysStr, formatDue, todayStr } from "@/lib/dates";
 import { getSetting } from "@/stores/settings";
+import { scheduleIssuePush } from "@/features/github/push";
 
 /** Builds the patch that reverts `patch` given the task's previous state. */
 export function inversePatch(prev: Task, patch: TaskPatch, spawned: boolean): TaskPatch {
@@ -73,6 +74,7 @@ export async function updateTask(id: string, patch: TaskPatch, opts: UpdateOpts 
   const rollback = optimisticPatch([id], patch);
   try {
     const res = await api.tasks.update(id, patch);
+    if (res.task.issue) scheduleIssuePush(id);
     const refresh = () => invalidateTasks();
     if (opts.refreshDelay) window.setTimeout(refresh, opts.refreshDelay);
     else refresh();
@@ -96,15 +98,73 @@ export async function updateTask(id: string, patch: TaskPatch, opts: UpdateOpts 
   }
 }
 
+/**
+ * How long a completed task stays in place before lists reconcile, so the
+ * strikethrough can be seen. Zero when animations are off or reduced.
+ */
+export function completionHold(): number {
+  if (!getSetting("interaction.completionAnimation")) return 0;
+  const motion = typeof document !== "undefined" ? document.documentElement.dataset.motion : "full";
+  if (motion === "reduced" || motion === "off") return 0;
+  const strike = { subtle: 220, standard: 260, pronounced: 300 }[getSetting("interaction.completionIntensity")] ?? 260;
+  return strike + 320;
+}
+
+interface CompletionRun {
+  /** The state the user asked for most recently. */
+  desired: boolean;
+  /** The state the backend has confirmed. */
+  applied: boolean;
+  /** Status to restore when reopening. */
+  reopenStatus: TaskStatus;
+  /** Next occurrence spawned by this run (removed again if the user unchecks). */
+  spawnedId: string | null;
+}
+
+// One run per task: writes are sent in order and coalesced, so rapid clicks
+// can never leave the backend in a different state from the last click.
+const runs = new Map<string, CompletionRun>();
+
 export async function setCompleted(task: Task, completed: boolean) {
-  const status: TaskStatus = completed ? "completed" : task.status === "completed" ? "todo" : task.status;
-  const res = await updateTask(
-    task.id,
-    { status },
-    { undoLabel: completed ? "Completed" : "Reopened", refreshDelay: completed ? 650 : 0 },
-  );
-  if (res?.spawned && res.spawned.dueDate) {
-    toast(`Next: ${formatDue(res.spawned.dueDate)}`);
+  const statusFor = (done: boolean, reopen: TaskStatus): TaskStatus => (done ? "completed" : reopen);
+  const pending = runs.get(task.id);
+  if (pending) {
+    pending.desired = completed;
+    // Keep the UI on the latest click while the earlier write finishes.
+    optimisticPatch([task.id], { status: statusFor(completed, pending.reopenStatus) });
+    return;
+  }
+  const run: CompletionRun = {
+    desired: completed,
+    applied: task.status === "completed",
+    reopenStatus: task.status === "completed" ? "todo" : task.status,
+    spawnedId: null,
+  };
+  runs.set(task.id, run);
+  try {
+    while (run.applied !== run.desired) {
+      const target = run.desired;
+      if (!target && run.spawnedId) {
+        // Unchecked straight after completing a recurring task: withdraw the
+        // occurrence it spawned, as Undo would.
+        await api.tasks.purge([run.spawnedId]).catch(() => undefined);
+        run.spawnedId = null;
+      }
+      const res = await updateTask(
+        task.id,
+        { status: statusFor(target, run.reopenStatus) },
+        { undoLabel: target ? "Completed" : "Reopened", refreshDelay: target ? completionHold() : 0 },
+      );
+      if (!res) return; // failure was reported and rolled back
+      run.applied = target;
+      if (target && res.spawned) run.spawnedId = res.spawned.id;
+    }
+    if (run.applied && run.spawnedId) {
+      const next = await api.tasks.get(run.spawnedId).catch(() => null);
+      if (next?.dueDate) toast(`Next: ${formatDue(next.dueDate)}`);
+    }
+  } finally {
+    runs.delete(task.id);
   }
 }
 
@@ -115,6 +175,7 @@ export async function updateTasks(ids: string[], patch: TaskPatch, label?: strin
   const rollback = optimisticPatch(ids, patch);
   try {
     const results = await api.tasks.updateMany(ids, patch);
+    for (const r of results) if (r.task.issue) scheduleIssuePush(r.task.id);
     invalidateTasks();
     if (label) {
       pushUndo(label, async () => {

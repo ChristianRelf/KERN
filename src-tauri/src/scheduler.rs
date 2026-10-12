@@ -3,7 +3,7 @@
 //! reminders, automatic backups and housekeeping. No busy loops; the tick
 //! interval is 20s (60s with "reduce background activity").
 
-use crate::domain::{activity, archive, attachments, notify, settings, trash};
+use crate::domain::{activity, ai, archive, attachments, notify, settings, trash};
 use crate::state::AppState;
 use crate::util::now_ms;
 use chrono::{Local, NaiveTime, Timelike};
@@ -158,6 +158,7 @@ fn maintenance(app: &AppHandle, at_startup: bool) {
             changed |= n > 0;
         }
         activity::prune(c, settings::get_or(c, "data.activityRetentionDays", 180))?;
+        ai::prune(c, settings::get_or(c, "ai.usageRetentionDays", 90))?;
         let purged = trash::purge_older_than(c, settings::get_or(c, "data.trashRetentionDays", 30))?;
         changed |= purged > 0;
         notify::prune_log(c);

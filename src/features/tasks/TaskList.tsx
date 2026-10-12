@@ -28,6 +28,7 @@ import { QuickAdd } from "./QuickAdd";
 import { BulkBar } from "./BulkBar";
 import { isTextInput } from "@/lib/shortcuts";
 import { MenuContent } from "@/components/ui/Menu";
+import { useFlip } from "@/hooks/useFlip";
 
 export interface TaskSection {
   key: string;
@@ -129,6 +130,8 @@ export function TaskList({
   const taskRows = useMemo(() => rows.filter((r) => r.type === "task") as Extract<FlatRow, { type: "task" }>[], [rows]);
   const allIds = useMemo(() => taskRows.map((r) => r.task.id), [taskRows]);
   const virtual = taskRows.length > VIRTUAL_THRESHOLD;
+  // Neighbours glide into place when tasks leave or join (not for huge lists).
+  useFlip(scrollRef, virtual ? null : sections, orderOverride);
 
   const virtualizer = useVirtualizer({
     count: virtual ? rows.length : 0,

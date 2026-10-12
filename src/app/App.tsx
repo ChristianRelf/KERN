@@ -15,6 +15,9 @@ import { CommandPalette } from "@/features/search/CommandPalette";
 import { QuickCapture } from "@/features/capture/QuickCapture";
 import { CreateProjectDialog } from "@/features/projects/CreateProjectDialog";
 import { TaskModal } from "@/features/tasks/TaskModal";
+import { TaskComposer } from "@/features/tasks/TaskComposer";
+import { TrustPromptHost } from "@/features/projects/folders";
+import { RepoPickerHost } from "@/features/github/shared";
 import { ShortcutsDialog } from "@/features/settings/ShortcutsDialog";
 import { BriefingPrompt } from "@/features/daily-briefing/BriefingPrompt";
 import { Onboarding } from "@/features/onboarding/Onboarding";
@@ -59,9 +62,12 @@ function Shell() {
       <QuickCapture />
       <CreateProjectDialog />
       <TaskModal />
+      <TaskComposer />
       <ShortcutsDialog />
       <BriefingPrompt />
       <Onboarding />
+      <TrustPromptHost />
+      <RepoPickerHost />
       <ConfirmHost />
       <PromptHost />
       <Toaster />

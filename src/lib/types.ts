@@ -40,6 +40,8 @@ export interface Task {
   subtaskCount: number;
   subtaskDone: number;
   attachmentCount: number;
+  /** Linked GitHub issue. */
+  issue?: { repo: string; number: number; url: string } | null;
 }
 
 export interface TaskQuery {
@@ -126,7 +128,7 @@ export interface Label {
   taskCount: number;
 }
 
-export type ProjectTab = "overview" | "tasks" | "board" | "whiteboard" | "notes" | "files" | "activity";
+export type ProjectTab = "overview" | "tasks" | "board" | "whiteboard" | "notes" | "files" | "code" | "activity";
 
 export interface Project {
   id: string;
@@ -151,6 +153,75 @@ export interface Project {
   taskOverdue: number;
   taskDueSoon: number;
   lastActivityAt: number | null;
+  /** Linked folder (canonical path) and its trust; availability via api.folders.get. */
+  folderPath: string | null;
+  folderTrust: Trust | null;
+  aiPrefs: ProjectAiPrefs;
+  /** Connected GitHub repository, "owner/name". */
+  githubRepo: string | null;
+}
+
+export type Trust = "trusted" | "restricted";
+
+export interface ProjectAiPrefs {
+  /** Use the global routing settings (default true). */
+  inherit?: boolean;
+  accountId?: string | null;
+  model?: string | null;
+  /** Allow AI features to read this project's linked folder. */
+  fileAccess?: boolean;
+}
+
+export interface FolderInfo {
+  path: string;
+  name: string;
+  trust: Trust | null;
+  linkedProjects: string[];
+}
+
+export interface FolderCapabilities {
+  browse: boolean;
+  openDocuments: boolean;
+  openPrograms: boolean;
+  modify: boolean;
+  aiFiles: boolean;
+  aiFilesReason: string | null;
+}
+
+export interface ProjectFolder {
+  projectId: string;
+  path: string;
+  name: string;
+  status: "ok" | "missing" | "not_directory" | "inaccessible";
+  trust: Trust;
+  capabilities: FolderCapabilities;
+  linkedAt: number;
+}
+
+export interface FileEntry {
+  name: string;
+  rel: string;
+  isDir: boolean;
+  isLink: boolean;
+  size: number | null;
+  modified: number | null;
+  program: boolean;
+  sensitive: boolean;
+  hidden: boolean;
+}
+
+export interface DirListing {
+  rel: string;
+  entries: FileEntry[];
+  truncated: boolean;
+}
+
+export interface TrustRecord {
+  path: string;
+  trust: Trust;
+  decidedAt: number;
+  projects: string[];
+  exists: boolean;
 }
 
 export interface ProjectInput {
@@ -161,6 +232,7 @@ export interface ProjectInput {
   targetDate?: string | null;
   groupId?: string | null;
   defaultView?: ProjectTab | null;
+  folder?: { path: string; trust: Trust } | null;
 }
 
 export interface ProjectPatch {
@@ -175,6 +247,7 @@ export interface ProjectPatch {
   hiddenTabs?: ProjectTab[];
   archived?: boolean;
   sortOrder?: number;
+  aiPrefs?: ProjectAiPrefs;
 }
 
 export interface ProjectGroup {
@@ -514,4 +587,339 @@ export interface LinkMetadata {
   description: string | null;
   siteName: string | null;
   image: string | null;
+}
+
+export type StorageCategoryId = "database" | "attachments" | "whiteboard" | "backups" | "cache" | "logs" | "other";
+
+export interface StorageCategory {
+  id: StorageCategoryId;
+  bytes: number;
+  files: number;
+}
+
+export interface StorageLocation {
+  id: string;
+  label: string;
+  path: string;
+  exists: boolean;
+}
+
+export interface LinkedFolderUsage {
+  projectId: string;
+  projectName: string;
+  path: string;
+  bytes: number;
+  files: number;
+  complete: boolean;
+  note: string | null;
+}
+
+export interface StorageReport {
+  scannedAt: number;
+  durationMs: number;
+  totalBytes: number;
+  totalFiles: number;
+  categories: StorageCategory[];
+  locations: StorageLocation[];
+  skipped: number;
+  linked: LinkedFolderUsage[] | null;
+}
+
+export type StorageCleanup = "favicons" | "expiredPreviews" | "temporary" | "unusedWhiteboardAssets";
+
+// ------------------------------------------------------------ AI API accounts
+
+export type AiProvider = "anthropic" | "openai";
+export type AiStatus = "ready" | "rate_limited" | "quota_reached" | "auth_error" | "permission_error" | "unavailable" | "disabled" | "unknown";
+export type AiErrorCategory =
+  | "rate_limited"
+  | "spend_limit"
+  | "insufficient_quota"
+  | "invalid_key"
+  | "permission"
+  | "model_unavailable"
+  | "network"
+  | "overloaded"
+  | "timeout"
+  | "invalid_request"
+  | "unknown";
+
+export interface AiAccount {
+  id: string;
+  provider: AiProvider;
+  name: string;
+  keyHint: string | null;
+  enabled: boolean;
+  priority: number;
+  role: "primary" | "fallback" | "none";
+  failoverEligible: boolean;
+  preferredModel: string | null;
+  models: string[];
+  organizationId: string | null;
+  projectRef: string | null;
+  observedPool: string | null;
+  budgetLimit: number | null;
+  budgetUnit: "tokens" | "usd" | null;
+  budgetWarnPercent: number;
+  budgetHard: boolean;
+  status: AiStatus;
+  statusDetail: string | null;
+  cooldownUntil: number | null;
+  /** Provider-reported rate-limit headers at the time of the last response. */
+  rateLimits: { headers?: Record<string, string>; observedAt?: number } | null;
+  lastCheckedAt: number | null;
+  lastUsedAt: number | null;
+  createdAt: number;
+  month: { requests: number; tokens: number; cost: number | null };
+}
+
+export interface AiAccountInput {
+  provider: AiProvider;
+  name: string;
+  apiKey: string;
+  organizationId?: string | null;
+  projectRef?: string | null;
+  preferredModel?: string | null;
+}
+
+export interface AiAccountPatch {
+  name?: string;
+  enabled?: boolean;
+  role?: "primary" | "fallback" | "none";
+  failoverEligible?: boolean;
+  preferredModel?: string | null;
+  organizationId?: string | null;
+  projectRef?: string | null;
+  budgetLimit?: number | null;
+  budgetUnit?: "tokens" | "usd";
+  budgetWarnPercent?: number;
+  budgetHard?: boolean;
+}
+
+export interface AiValidation {
+  outcome: "authenticated" | "auth_failed" | "permission" | "unavailable" | "rate_limited" | "quota" | "network" | "unknown";
+  message: string;
+  httpStatus: number | null;
+  models: string[];
+  pool: string | null;
+}
+
+export interface AiFailure {
+  category: AiErrorCategory;
+  httpStatus: number | null;
+  code: string | null;
+  message: string;
+  retryAfter: number | null;
+  replaySafe: boolean;
+}
+
+export interface AiRouteRequest {
+  requestId: string;
+  prompt: string;
+  system?: string | null;
+  maxTokens?: number;
+  accountId?: string | null;
+  model?: string | null;
+  projectId?: string | null;
+  replayable?: boolean;
+  purpose?: string;
+}
+
+export interface AiRouteOutcome {
+  ok: boolean;
+  text: string | null;
+  accountId: string | null;
+  accountName: string | null;
+  provider: AiProvider | null;
+  model: string | null;
+  usage: { inputTokens: number | null; outputTokens: number | null; cachedTokens: number | null } | null;
+  estimatedCost: number | null;
+  stopReason: string | null;
+  attempts: { accountId: string; accountName: string; model: string; ok: boolean; category: AiErrorCategory | null; message: string | null; durationMs: number }[];
+  switches: { from: string; to: string; reason: string }[];
+  warnings: string[];
+  error: AiFailure | null;
+}
+
+export interface AiBreakdown {
+  key: string;
+  label: string;
+  requests: number;
+  tokens: number;
+  cost: number | null;
+}
+
+export interface AiUsageEvent {
+  id: number;
+  requestId: string;
+  accountId: string | null;
+  accountName: string | null;
+  provider: AiProvider;
+  model: string | null;
+  purpose: string;
+  attempt: number;
+  startedAt: number;
+  durationMs: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cachedTokens: number | null;
+  success: boolean;
+  errorCategory: string | null;
+  httpStatus: number | null;
+  estimatedCost: number | null;
+}
+
+export interface AiUsageSummary {
+  days: { day: string; requests: number; failures: number; inputTokens: number; outputTokens: number }[];
+  byProvider: AiBreakdown[];
+  byModel: AiBreakdown[];
+  byAccount: AiBreakdown[];
+  requests: number;
+  failures: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  cost: number | null;
+  recent: AiUsageEvent[];
+  failovers: { id: number; requestId: string; fromName: string | null; toName: string | null; reason: string; detail: string | null; createdAt: number }[];
+}
+
+export interface AiSecurityReport {
+  store: string;
+  accounts: number;
+  keysPresent: number;
+  missing: string[];
+}
+
+export interface Favicon {
+  origin: string;
+  /** Absolute path of the locally cached icon. */
+  path: string | null;
+  status: "ok" | "none" | "error" | "disabled";
+}
+
+export const LINK_MIME = "text/uri-list";
+
+// ------------------------------------------------------------ git & GitHub
+
+export interface GitRemoteInfo {
+  isRepo: boolean;
+  originUrl: string | null;
+  /** owner/name when origin is on github.com */
+  github: string | null;
+}
+
+export interface GitChangedFile {
+  path: string;
+  code: string;
+  staged: boolean;
+  unstaged: boolean;
+  untracked: boolean;
+  conflicted: boolean;
+  renamedFrom: string | null;
+}
+
+export interface GitStatus {
+  branch: string | null;
+  detached: boolean;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  files: GitChangedFile[];
+}
+
+export interface GitCommit {
+  hash: string;
+  short: string;
+  author: string;
+  date: string;
+  subject: string;
+}
+
+export interface GitBranch {
+  name: string;
+  remote: boolean;
+  current: boolean;
+  upstream: string | null;
+  shortHash: string;
+  date: string;
+}
+
+export interface TodoItem {
+  path: string;
+  line: number;
+  kind: string;
+  text: string;
+}
+
+export interface GithubStatus {
+  connected: boolean;
+  login: string | null;
+  source: "cli" | "token" | null;
+  cliInstalled: boolean;
+  cliSignedIn: boolean;
+  hasToken: boolean;
+  error: string | null;
+}
+
+export interface RepoSummary {
+  fullName: string;
+  description: string | null;
+  private: boolean;
+  defaultBranch: string | null;
+  htmlUrl: string;
+  openIssues: number;
+  updatedAt: string | null;
+}
+
+export interface ProjectRepo {
+  projectId: string;
+  owner: string;
+  name: string;
+  fullName: string;
+  defaultBranch: string | null;
+  htmlUrl: string | null;
+  syncIssues: boolean;
+  importClosed: boolean;
+  lastSyncedAt: number | null;
+  lastSyncError: string | null;
+  linkedIssues: number;
+}
+
+export interface SyncReport {
+  imported: number;
+  updatedInKern: number;
+  updatedOnGithub: number;
+  unchanged: number;
+  errors: string[];
+}
+
+export interface PullInfo {
+  number: number;
+  title: string;
+  htmlUrl: string;
+  draft: boolean;
+  author: string;
+  head: string;
+  base: string;
+  updatedAt: string;
+  checks: "success" | "failure" | "pending" | "none";
+  review: "approved" | "changes_requested" | "commented" | "none";
+  linkedIssues: number[];
+  linkedTasks: { id: string; title: string; done: boolean }[];
+}
+
+export interface RepoOverview {
+  fullName: string;
+  description: string | null;
+  htmlUrl: string;
+  defaultBranch: string | null;
+  private: boolean;
+  stars: number;
+  forks: number;
+  openIssues: number;
+  pushedAt: string | null;
+  languages: [string, number][];
+  readme: string | null;
+  readmeSource: "local" | "github" | null;
 }

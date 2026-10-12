@@ -11,6 +11,7 @@ import { createTask, updateTask } from "@/features/tasks/actions";
 import { STATUS_LABELS } from "@/features/tasks/meta";
 import { parseQuickTask } from "@/features/tasks/parse";
 import { inputFromParsed } from "@/features/tasks/QuickAdd";
+import { openNewTask } from "@/features/tasks/creation";
 import { dayStartMs, addDaysStr } from "@/lib/dates";
 
 const COLUMNS: KanbanColumn[] = (["inbox", "todo", "in_progress", "blocked", "completed"] as TaskStatus[]).map((s) => ({
@@ -45,6 +46,7 @@ export default function StatusBoard() {
           { undoLabel: moved ? `Moved to ${col.title}` : undefined, undoable: true, refreshDelay: 0 },
         );
       }}
+      onComposeCard={(col, title) => openNewTask({ status: col.status ?? "todo", title })}
       onAddCard={async (col, title) => {
         const parsed = parseQuickTask(title, { projects: ctx.projects });
         await createTask(await inputFromParsed(parsed, { status: col.status ?? "todo" }), { quiet: true });

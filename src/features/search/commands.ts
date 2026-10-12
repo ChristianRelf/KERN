@@ -40,6 +40,7 @@ import { toast, toastError } from "@/stores/toast";
 import { prompt } from "@/components/ui/Dialog";
 import { useFocus } from "@/features/focus/store";
 import { useDashboardUi } from "@/features/dashboard/store";
+import { openNewTask } from "@/features/tasks/creation";
 
 export interface Command {
   id: string;
@@ -79,7 +80,7 @@ export function getCommands(): Command[] {
   const ui = useUi.getState();
   const focus = useFocus.getState();
   const cmds: Command[] = [
-    { id: "newTask", title: "Create task", icon: Plus, section: "Create", shortcut: "newTask", keywords: "add new todo", run: () => ui.openCapture("task") },
+    { id: "newTask", title: "Create task", icon: Plus, section: "Create", shortcut: "newTask", keywords: "add new todo", run: () => openNewTask() },
     { id: "newNote", title: "Create note", icon: NotebookPen, section: "Create", shortcut: "newNote", keywords: "write", run: () => void createNote() },
     { id: "newProject", title: "Create project", icon: FolderPlus, section: "Create", shortcut: "newProject", run: () => ui.set({ createProjectOpen: true }) },
     { id: "newWhiteboard", title: "Create whiteboard", icon: Presentation, section: "Create", keywords: "canvas board", run: () => void createWhiteboard() },

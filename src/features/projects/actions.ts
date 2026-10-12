@@ -12,7 +12,9 @@ import {
   Trash,
   Presentation,
   Settings2,
+  FolderOpen,
 } from "lucide-react";
+import { linkFolder } from "./folders";
 import { api, describeError } from "@/lib/ipc";
 import { invalidate } from "@/lib/query";
 import type { Project, ProjectGroup, ProjectInput, ProjectPatch } from "@/lib/types";
@@ -21,7 +23,7 @@ import { toast, toastError } from "@/stores/toast";
 import { navigate, useRouter } from "@/stores/router";
 import { prompt } from "@/components/ui/Dialog";
 import type { MenuItems } from "@/components/ui/Menu";
-import { useUi } from "@/stores/ui";
+import { openNewTask } from "@/features/tasks/creation";
 
 const PROJECT_DOMAINS = ["projects", "project", "groups", "tasks", "board", "boards", "rundown", "stats", "recent", "whiteboards", "notes"] as const;
 const refresh = () => invalidate(...PROJECT_DOMAINS);
@@ -87,7 +89,8 @@ export async function deleteProject(p: Project) {
     invalidate("trash");
     const r = useRouter.getState().route;
     if (r.name === "project" && r.id === p.id) navigate({ name: "projects" }, { replace: true });
-    pushUndo(`Moved ${p.name} to trash`, async () => {
+    // A linked folder is never touched by deleting the project.
+    pushUndo(`Moved ${p.name} to trash${p.folderPath ? " — its folder on disk is untouched" : ""}`, async () => {
       await api.projects.restore(p.id);
       refresh();
       invalidate("trash");
@@ -123,7 +126,7 @@ export function projectMenu(p: Project, groups: ProjectGroup[]): MenuItems {
     {
       label: "New task",
       icon: Plus,
-      onSelect: () => useUi.getState().openCapture("task", { projectId: p.id }),
+      onSelect: () => openNewTask({ projectId: p.id }),
     },
     { type: "separator" },
     { label: "Rename", icon: Pencil, onSelect: () => void renameProject(p) },
@@ -147,6 +150,11 @@ export function projectMenu(p: Project, groups: ProjectGroup[]): MenuItems {
         { type: "separator" },
         { label: "New group…", icon: Plus, onSelect: () => void newGroup(p) },
       ],
+    },
+    {
+      label: p.folderPath ? "Change linked folder…" : "Link a folder…",
+      icon: FolderOpen,
+      onSelect: () => void linkFolder(p),
     },
     { label: "Project settings", icon: Settings2, onSelect: () => navigate({ name: "project", id: p.id, tab: "overview" }) },
     { label: "Duplicate", icon: Copy, onSelect: () => void duplicateProject(p) },

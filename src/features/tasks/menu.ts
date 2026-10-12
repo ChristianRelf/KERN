@@ -1,4 +1,8 @@
 import {
+  ExternalLink,
+  GitBranch,
+  Plus,
+  RefreshCw,
   Archive,
   ArchiveRestore,
   ArrowUpRight,
@@ -23,7 +27,10 @@ import {
   CircleSlash,
   Circle,
 } from "lucide-react";
-import type { MenuItems } from "@/components/ui/Menu";
+import type { MenuEntry, MenuItems } from "@/components/ui/Menu";
+import { api, describeError } from "@/lib/ipc";
+import { invalidate, invalidateTasks } from "@/lib/query";
+import { slug } from "@/features/github/push";
 import type { Label, Project, Task, TaskStatus } from "@/lib/types";
 import { deleteTasks, duplicateTask, quickDates, rescheduleTasks, setCompleted, updateTask, updateTasks } from "./actions";
 import { PRIORITY_LABELS, STATUS_LABELS } from "./meta";
@@ -32,7 +39,7 @@ import { getSetting } from "@/stores/settings";
 import { navigate } from "@/stores/router";
 import { useFocus } from "@/features/focus/store";
 import { nextWeekdayStr } from "@/lib/dates";
-import { toast } from "@/stores/toast";
+import { toast, toastError } from "@/stores/toast";
 
 /** Opens task details according to the user's detail-mode preference. */
 export function openTask(id: string) {
@@ -132,6 +139,7 @@ export function taskMenu(
     },
     !multi && !done && { label: "Start focus session", icon: Timer, onSelect: () => startFocusOn(task) },
     !multi && { label: "Duplicate", icon: CopyPlus, shortcut: "Mod+D", onSelect: () => void duplicateTask(task.id) },
+    !multi && githubSubmenu(task, ctx.projects.find((p) => p.id === task.projectId)),
     !multi && {
       label: "Copy title",
       icon: Copy,
@@ -151,4 +159,55 @@ export function taskMenu(
       onSelect: () => void deleteTasks(ids),
     },
   ];
+}
+
+/** GitHub issue and branch actions for a task in a connected / linked project. */
+function githubSubmenu(task: Task, project: Project | undefined): MenuEntry | false {
+  const items: MenuEntry[] = [];
+  if (task.issue) {
+    const issue = task.issue;
+    items.push(
+      { label: `Open issue #${issue.number}`, icon: ExternalLink, onSelect: () => void api.system.open(issue.url) },
+      {
+        label: "Sync with GitHub now",
+        icon: RefreshCw,
+        onSelect: () =>
+          void api.github
+            .syncTask(task.id)
+            .then(() => (invalidateTasks(), toast("Synced with GitHub")))
+            .catch((e) => toastError(describeError(e, "Couldn't sync."))),
+      },
+    );
+  } else if (project?.githubRepo) {
+    items.push({
+      label: `Create issue in ${project.githubRepo}`,
+      icon: Plus,
+      onSelect: async () => {
+        try {
+          const url = await api.github.createIssue(task.id);
+          invalidateTasks();
+          toast("Issue created", { action: { label: "Open", run: () => void api.system.open(url) } });
+        } catch (e) {
+          toastError(describeError(e, "Couldn't create the issue."));
+        }
+      },
+    });
+  }
+  if (project?.folderPath && project.folderTrust === "trusted") {
+    const name = task.issue ? `${task.issue.number}-${slug(task.title)}` : `task/${slug(task.title) || "work"}`;
+    items.push({
+      label: "Create branch for this task",
+      icon: GitBranch,
+      onSelect: async () => {
+        try {
+          await api.git.switch(project.id, name, true);
+          invalidate("git");
+          toast(`Created and switched to ${name}`);
+        } catch (e) {
+          toastError(describeError(e, "Couldn't create the branch."));
+        }
+      },
+    });
+  }
+  return items.length ? { type: "submenu", label: "GitHub & git", icon: GitBranch, items } : false;
 }

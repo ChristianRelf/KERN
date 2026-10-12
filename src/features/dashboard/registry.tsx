@@ -13,7 +13,9 @@ import {
   StickyNote,
   Sunrise,
   Timer,
+  HardDrive,
 } from "lucide-react";
+import { StorageWidget } from "@/features/storage/StorageWidget";
 import type { WidgetDef, WidgetConfig } from "./types";
 import { RundownWidget, RundownConfigForm, RundownHeader, type RundownConfig } from "./widgets/RundownWidget";
 import {
@@ -173,6 +175,17 @@ export const WIDGETS: WidgetDef[] = [
     defaultSize: { w: 4, h: 4 },
     minSize: { w: 3, h: 3 },
     Component: WeeklyActivityWidget,
+  }),
+  def({
+    type: "storage",
+    name: "Storage",
+    description: "How much space Kern uses, by category.",
+    icon: HardDrive,
+    defaultConfig: {},
+    defaultSize: { w: 4, h: 4 },
+    minSize: { w: 2, h: 2 },
+    Component: StorageWidget,
+    single: true,
   }),
   def<BookmarksConfig>({
     type: "bookmarks",

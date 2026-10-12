@@ -17,7 +17,7 @@ import { useTasks } from "@/hooks/data";
 import { useToday } from "@/hooks/useToday";
 import { addMonthsStr, formatDue, formatTime, monthGrid, monthStartStr, parseDateStr, weekdayLabels } from "@/lib/dates";
 import { IconButton, Button } from "@/components/ui/Button";
-import { Popover, TaskCheck, Switch } from "@/components/ui/Controls";
+import { Popover, TaskCheck, TaskTitle, Switch } from "@/components/ui/Controls";
 import { openTask } from "./menu";
 import { toggleComplete, updateTask } from "./actions";
 import { useUi } from "@/stores/ui";
@@ -50,7 +50,7 @@ function CalTask({ task, overlay, still }: { task: Task; overlay?: boolean; stil
     >
       <TaskCheck checked={task.status === "completed"} onToggle={() => void toggleComplete(task)} priority={task.priority} />
       {task.dueTime && <span className="faint tabular">{formatTime(task.dueTime)}</span>}
-      <span className="truncate">{task.title}</span>
+      <TaskTitle title={task.title} done={task.status === "completed"} />
     </div>
   );
 }

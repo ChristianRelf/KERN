@@ -92,11 +92,7 @@
   min-width: 0;
   transition: color var(--t-panel) var(--ease);
 }
-.task-row[data-done="true"] .task-row__title {
-  color: var(--text-3);
-  text-decoration: line-through;
-  text-decoration-color: var(--text-4);
-}
+
 .task-row__desc {
   font-size: var(--fs-sm);
   color: var(--text-3);
@@ -521,7 +517,9 @@
 }
 .cal-task[data-done="true"] {
   color: var(--text-3);
-  text-decoration: line-through;
+}
+.cal-task .strike {
+  flex: 1;
 }
 .cal-task .task-check {
   --size: 12px;
@@ -538,4 +536,16 @@
 }
 .cal__more:hover {
   color: var(--text);
+}
+
+.draft-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 10px;
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  font-size: var(--fs-sm);
+  color: var(--text-2);
 }

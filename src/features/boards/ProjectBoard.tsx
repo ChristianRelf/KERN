@@ -29,6 +29,7 @@ import { createTask, updateTask } from "@/features/tasks/actions";
 import { STATUS_LABELS } from "@/features/tasks/meta";
 import { parseQuickTask } from "@/features/tasks/parse";
 import { inputFromParsed } from "@/features/tasks/QuickAdd";
+import { openNewTask } from "@/features/tasks/creation";
 import { navigate } from "@/stores/router";
 
 export function useCardContext(showProject: boolean, hidden: string[] = []): CardContext {
@@ -349,6 +350,7 @@ function BoardInner({
         onToggleCollapse={(c) => updateColumn(c.id, { collapsed: !c.collapsed })}
         onRenameColumn={(c, name) => updateColumn(c.id, { name })}
         onResizeColumn={(c, width) => updateColumn(c.id, { width })}
+        onComposeCard={(col, title) => openNewTask({ projectId, columnId: col.id, status: col.status ?? "todo", title })}
         onAddCard={async (col, title) => {
           const parsed = parseQuickTask(title, { projects: ctx.projects });
           const input = await inputFromParsed(parsed, { projectId, columnId: col.id, status: col.status ?? "todo" });
