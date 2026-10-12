@@ -393,7 +393,7 @@ impl Provider {
         }
     }
 
-    /// The organisation a response says the key belongs to — keys sharing
+    /// The organisation a response says the key belongs to - keys sharing
     /// it share rate limits and billing.
     pub fn observed_pool(self, h: &BTreeMap<String, String>) -> Option<String> {
         match self {

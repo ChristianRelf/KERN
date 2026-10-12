@@ -769,7 +769,7 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
             ["Data schema", info ? `v${info.schemaVersion}` : ""],
             ["Runtime", info ? `Tauri ${info.tauriVersion} · ${info.platform}` : ""],
             ["Data folder", info?.dataDir ?? ""],
-            ["Account", "None needed — everything stays on this computer"],
+            ["Account", "None needed - everything stays on this computer"],
             ["Telemetry", "None"],
           ].map(([k, v]) => (
             <div key={k} className="set-row">

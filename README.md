@@ -133,12 +133,12 @@ as CSV, notes as Markdown and projects as JSON.
 
 ### Projects, with optional development tools
 
-A project needs only a name. Everything else — folders, repositories, commands,
-services — is optional and only appears once it's connected, so a renovation or a
+A project needs only a name. Everything else - folders, repositories, commands,
+services - is optional and only appears once it's connected, so a renovation or a
 school assignment never shows git tabs or empty developer panels.
 
 - **Command Centre**: each project's overview is an editable widget grid (the
-  dashboard engine) starting from a preset that fits the project — General, or
+  dashboard engine) starting from a preset that fits the project - General, or
   Hybrid once code is linked. Development widgets load lazily and only if added.
 - **Resume Workspace**: Kern remembers each project's tab, board, whiteboard, open
   task, open file, selected repository and terminal layout (debounced, flushed on
@@ -148,7 +148,7 @@ school assignment never shows git tabs or empty developer panels.
 - **Milestones** work in every project (target date, status, progress from tasks or
   manual, dependencies) and can optionally be releases (version, repository, linked
   pull requests and issues, changelog draft). Tasks join a milestone through
-  `tasks.milestone_id` — still one task record. Publishing a release is always done
+  `tasks.milestone_id` - still one task record. Publishing a release is always done
   by the user on GitHub; Kern only opens a prefilled draft.
 - **Work sessions** are timestamp-based (elapsed = end − start − paused), so sleep,
   minimising and restarts never drift. A long silence before a heartbeat is offered
@@ -184,7 +184,7 @@ school assignment never shows git tabs or empty developer panels.
   as a resolved version. OSV advisory lookups are explicit and send only package
   names and resolved versions; a clean result reads "no known advisories".
 - **Health** is a state (On track / Needs attention / Blocked / No recent data) with
-  clickable reasons and configurable rules — no scores. Development signals only
+  clickable reasons and configurable rules - no scores. Development signals only
   count when the project has them, and come from data already fetched.
 - **Catch-up** builds a deterministic local digest with numbered sources (works with
   no AI). The optional AI summary shows what's included and its size first, honours

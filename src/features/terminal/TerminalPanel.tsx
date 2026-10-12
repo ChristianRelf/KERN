@@ -53,7 +53,11 @@ export default function TerminalPanel() {
     const ro = new ResizeObserver(() => fit());
     ro.observe(el);
     l.term.focus();
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      // Hidden terminals must not keep keyboard focus.
+      l.term.blur();
+    };
   }, [active?.id, open, maximized]);
 
   useEffect(() => {
@@ -108,7 +112,7 @@ export default function TerminalPanel() {
       <div className="terminal-bar">
         <div className="terminal-tabs" role="tablist">
           {shown.map((t) => (
-            <div key={t.id} role="tab" aria-selected={t.id === active?.id} className="terminal-tab" data-active={t.id === active?.id || undefined} onClick={() => set({ activeId: t.id })} onAuxClick={(e) => e.button === 1 && void closeTab(t.id)} title={`${t.command ?? t.shell} — ${t.cwd}`}>
+            <div key={t.id} role="tab" aria-selected={t.id === active?.id} className="terminal-tab" data-active={t.id === active?.id || undefined} onClick={() => set({ activeId: t.id })} onAuxClick={(e) => e.button === 1 && void closeTab(t.id)} title={`${t.command ?? t.shell} - ${t.cwd}`}>
               <span className="terminal-tab__dot" data-running={t.running || undefined} aria-hidden />
               <span className="truncate">{t.title}</span>
               <button type="button" className="terminal-tab__close" aria-label={`Close ${t.title}`} onClick={(e) => (e.stopPropagation(), void closeTab(t.id))}>

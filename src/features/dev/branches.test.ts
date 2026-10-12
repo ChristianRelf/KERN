@@ -8,7 +8,7 @@ describe("branch names", () => {
     expect(suggestBranchName("Reactor cooling controls")).toBe("feature/reactor-cooling-controls");
     expect(suggestBranchName("Reactor cooling controls", 124)).toBe("feature/124-reactor-cooling-controls");
     expect(suggestBranchName("Cooling", 7, ["bug"])).toBe("fix/7-cooling");
-    expect(slugify("Ünïcode — and the ~weird~ chars!")).toBe("unicode-weird-chars");
+    expect(slugify("Ünïcode - and the ~weird~ chars!")).toBe("unicode-weird-chars");
     expect(slugify("!!!")).toBe("work");
   });
 

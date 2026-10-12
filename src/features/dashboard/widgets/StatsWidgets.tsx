@@ -48,7 +48,7 @@ function Bars({ data, today, labelFmt = "EEEEE", height = "100%" }: { data: { da
   return (
     <div className="bars" style={{ height }} role="img" aria-label={data.map((d) => `${d.day}: ${d.count}`).join(", ")}>
       {data.map((d) => (
-        <div key={d.day} className="bars__col" data-today={d.day === today || undefined} title={`${formatDayHeading(d.day, today)} — ${d.count} completed`}>
+        <div key={d.day} className="bars__col" data-today={d.day === today || undefined} title={`${formatDayHeading(d.day, today)} - ${d.count} completed`}>
           <span className="bars__value">{d.count || ""}</span>
           <div className="bars__bar" style={{ height: `${(d.count / max) * 70}%` }} />
           <span className="bars__label">{format(parseDateStr(d.day), labelFmt)}</span>

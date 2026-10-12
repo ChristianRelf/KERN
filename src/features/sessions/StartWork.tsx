@@ -1,7 +1,7 @@
 // Start Work on a task. In any project it starts a work session. When the
 // project has a trusted local repository it also offers to work on the
 // current branch, create a branch, create a worktree, or reuse an existing
-// branch or worktree — and links the choice to the task. Nothing is
+// branch or worktree - and links the choice to the task. Nothing is
 // committed, pushed or merged, and no command or assistant is started.
 
 import { FolderGit2, GitBranch, GitBranchPlus, Play, Workflow } from "lucide-react";
@@ -207,7 +207,7 @@ function StartWorkDialog({ task, onClose }: { task: Task; onClose: () => void })
               </div>
               <label className="row" style={{ gap: 8, fontSize: "var(--fs-sm)" }}>
                 <Checkbox checked={switchTo} onChange={setSwitchTo} label="Switch to it now" /> Switch to it now
-                {switchTo && dirty > 0 && <span className="faint">— git keeps your {dirty} uncommitted change{dirty === 1 ? "" : "s"}, or stops if they'd conflict</span>}
+                {switchTo && dirty > 0 && <span className="faint">- git keeps your {dirty} uncommitted change{dirty === 1 ? "" : "s"}, or stops if they'd conflict</span>}
               </label>
             </div>
           )}

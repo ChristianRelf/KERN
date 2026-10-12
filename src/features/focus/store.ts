@@ -107,7 +107,7 @@ export const useFocus = create<FocusState>((set, get) => {
     if (s.phase === "running" && s.endsAt) {
       const title = s.kind === "focus" ? "Focus session complete" : "Break's over";
       const body =
-        s.kind === "focus" ? (s.taskTitle ? `${s.taskTitle} — time for a break.` : "Time for a break.") : "Ready to focus again?";
+        s.kind === "focus" ? (s.taskTitle ? `${s.taskTitle} - time for a break.` : "Time for a break.") : "Ready to focus again?";
       void api.focus.schedule(s.endsAt, title, body).catch(() => undefined);
     } else {
       void api.focus.cancel().catch(() => undefined);

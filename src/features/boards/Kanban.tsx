@@ -285,7 +285,7 @@ function AddCard({ onAdd, onCompose }: { onAdd: (title: string) => Promise<void>
       <textarea
         className="textarea"
         autoFocus
-        placeholder="Card title — try “tomorrow p2”"
+        placeholder="Card title - try “tomorrow p2”"
         value={text}
         onChange={(e) => setText(e.target.value)}
         onBlur={() => !text.trim() && setOpen(false)}

@@ -22,7 +22,7 @@ const layerOpen = () =>
   !!document.querySelector(".dialog-overlay") ||
   Array.from(document.querySelectorAll("[data-radix-popper-content-wrapper]")).some((w) => !w.querySelector(".tooltip"));
 
-/** Pointer travel beyond this is a drag, pan, resize or selection — not a click. */
+/** Pointer travel beyond this is a drag, pan, resize or selection - not a click. */
 const CLICK_SLOP = 6;
 
 /**
@@ -32,7 +32,7 @@ const CLICK_SLOP = 6;
  * portal layer, no menu/popover/dialog was open at press time (that click
  * just closes the layer), the pointer barely moved, it wasn't cancelled and
  * it didn't select text. The decision is deferred one tick and skipped if
- * `stillCurrent` reports the target changed — so clicking another item
+ * `stillCurrent` reports the target changed - so clicking another item
  * replaces the panel instead of closing it.
  */
 export function useOutsideDismiss(

@@ -134,7 +134,7 @@ export function MilestonesTab({ projectId }: { projectId: string }) {
               </div>
             }
           >
-            Group tasks towards a goal with a target date — a launch, a deadline, a finished room.
+            Group tasks towards a goal with a target date - a launch, a deadline, a finished room.
           </EmptyState>
         ) : view === "list" ? (
           <div className="ms-list">

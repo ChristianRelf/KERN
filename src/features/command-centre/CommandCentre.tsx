@@ -1,6 +1,6 @@
 // Project Command Centre: the project's overview. An editable widget grid
 // (same engine as the dashboard) that starts from a preset matching what
-// the project has — General for any project, Hybrid once code is linked —
+// the project has - General for any project, Hybrid once code is linked -
 // with the main project actions always one click away. Development actions
 // only appear when the project has development resources.
 

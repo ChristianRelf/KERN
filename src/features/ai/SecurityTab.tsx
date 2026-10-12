@@ -13,7 +13,7 @@ const GUARANTEES = [
   "Kern never shows a saved key again or sends it to the interface; requests are made by Kern's backend.",
   "Keys never appear in logs, error messages, URLs, command lines or backups and exports.",
   "Removing an account deletes its key from the credential store.",
-  "Only request metadata is kept (time, model, tokens, outcome) — never prompts or replies.",
+  "Only request metadata is kept (time, model, tokens, outcome) - never prompts or replies.",
   "Nothing is sent to an AI provider unless you make a request; Kern doesn't poll for usage.",
 ];
 
@@ -46,7 +46,7 @@ export function SecurityTab() {
           {report && report.missing.length > 0 && (
             <div className="set-row">
               <span className="set-row__hint">
-                Missing on this device: {report.missing.join(", ")}. This happens after restoring a backup on another computer — backups never contain keys. Replace the key from the account's menu.
+                Missing on this device: {report.missing.join(", ")}. This happens after restoring a backup on another computer - backups never contain keys. Replace the key from the account's menu.
               </span>
             </div>
           )}

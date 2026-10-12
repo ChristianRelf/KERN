@@ -536,7 +536,7 @@ export const FileNode = memo(function FileNode({ data, selected }: NodeProps<WbN
           )}
         </div>
         <div className="wbn__meta truncate" title={data.path}>
-          {missing ? "Moved or deleted — not found at its original location" : data.path}
+          {missing ? "Moved or deleted - not found at its original location" : data.path}
         </div>
       </div>
     </>

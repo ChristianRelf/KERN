@@ -102,7 +102,7 @@ function WorktreeRow({ project, repo, w, onRemove, onChanged }: { project: Proje
       label: w.agent ? "Change assistant label…" : "Assign to an assistant…",
       icon: Bot,
       onSelect: async () => {
-        const agent = await prompt({ title: "Assistant working here", initial: w.agent ?? "", placeholder: "e.g. Claude Code session", label: "A label only — Kern never starts assistants or commands by itself." });
+        const agent = await prompt({ title: "Assistant working here", initial: w.agent ?? "", placeholder: "e.g. Claude Code session", label: "A label only - Kern never starts assistants or commands by itself." });
         if (agent !== null) void update({ agent: agent.trim() || null });
       },
     },
@@ -132,7 +132,7 @@ function WorktreeRow({ project, repo, w, onRemove, onChanged }: { project: Proje
         </span>
         <span className="row faint" style={{ gap: 8, fontSize: "var(--fs-xs)", minWidth: 0 }}>
           <span className="row" style={{ gap: 4 }}>
-            <GitBranch size={12} /> {w.branch ?? (w.detached ? `detached ${w.head?.slice(0, 7) ?? ""}` : "—")}
+            <GitBranch size={12} /> {w.branch ?? (w.detached ? `detached ${w.head?.slice(0, 7) ?? ""}` : "-")}
           </span>
           {dirty > 0 && <span className="dirty-dot">{dirty} changed</span>}
           {(w.ahead ?? 0) > 0 && <span>↑{w.ahead}</span>}
@@ -230,7 +230,7 @@ function RemoveWorktreeDialog({ repo, w, onClose }: { repo: Repository; w: Workt
               <Checkbox checked={deleteBranch && branchDeletable} onChange={setDeleteBranch} label="Also delete the branch" disabled={!branchDeletable} />
               <span>
                 Also delete the branch <span className="mono">{info.branch}</span>
-                {!branchDeletable && <span className="faint"> — kept, because {info.merged === false ? "it isn't merged" : "it has commits no remote has"}</span>}
+                {!branchDeletable && <span className="faint"> - kept, because {info.merged === false ? "it isn't merged" : "it has commits no remote has"}</span>}
               </span>
             </label>
           )}

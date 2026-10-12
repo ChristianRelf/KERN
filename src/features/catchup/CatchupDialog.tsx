@@ -76,7 +76,7 @@ function toMarkdown(title: string, view: Pick<CatchupDigest, "whatChanged" | "co
     md += `## ${sec.title}${ai && sec.key === "nextSteps" ? " (suggestions)" : ""}\n\n`;
     for (const l of lines) {
       const refs = l.sources.map((id) => byId.get(id)).filter(Boolean) as CatchupSource[];
-      md += `- ${l.text}${refs.length ? ` — ${refs.map((r) => (r.url ? `[${r.title}](${r.url})` : r.title)).join(", ")}` : ""}\n`;
+      md += `- ${l.text}${refs.length ? ` - ${refs.map((r) => (r.url ? `[${r.title}](${r.url})` : r.title)).join(", ")}` : ""}\n`;
     }
     md += "\n";
   }
@@ -256,7 +256,7 @@ function CatchupDialog({ projectId, onClose }: { projectId: string; onClose: () 
             ) : preview.allowed ? (
               <>
                 <span>
-                  Sends {preview.sources} item{preview.sources === 1 ? "" : "s"} ({preview.categories.map(([c, n]) => `${n} ${c}`).join(", ")}) — about {preview.approxTokens.toLocaleString()} tokens — to your AI provider using your routing settings.
+                  Sends {preview.sources} item{preview.sources === 1 ? "" : "s"} ({preview.categories.map(([c, n]) => `${n} ${c}`).join(", ")}) - about {preview.approxTokens.toLocaleString()} tokens - to your AI provider using your routing settings.
                 </span>
                 <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
                   Titles, short descriptions and dates only. No file contents; key-like strings are redacted.
@@ -324,7 +324,7 @@ function CatchupRow({ line, sources }: { line: CatchupLine; sources: CatchupSour
       <span className="grow">{line.text}</span>
       <span className="catchup-refs">
         {refs.slice(0, 6).map((s) => (
-          <Tooltip key={s.id} content={`${s.title}${s.detail ? ` — ${s.detail}` : ""}`}>
+          <Tooltip key={s.id} content={`${s.title}${s.detail ? ` - ${s.detail}` : ""}`}>
             <button type="button" className="catchup-ref" onClick={() => openSource(s)} aria-label={`Open ${s.kind}: ${s.title}`}>
               {s.url && !["task", "note", "milestone"].includes(s.kind) ? <ExternalLink size={10} /> : null}
               {s.kind}

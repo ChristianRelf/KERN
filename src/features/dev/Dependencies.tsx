@@ -1,5 +1,5 @@
 // Dependency explorer: packages from manifests and lockfiles, with the
-// declared range and — only when a lockfile says so — the resolved
+// declared range and - only when a lockfile says so - the resolved
 // version. A virtualised list is the default; the graph shows one
 // package's neighbourhood so it never draws thousands of nodes. Advisory
 // lookups (OSV) are optional and explicit. Nothing is installed or
@@ -192,7 +192,7 @@ function PackageList({ packages, findings, onOpen }: { packages: DepPackage[]; f
               </span>
               <Tooltip content={p.resolved ? "Resolved version (from the lockfile)" : "No lockfile entry, so the installed version isn't known"}>
                 <span className="mono truncate dep-row__ver" data-unknown={!p.resolved || undefined}>
-                  {p.resolved ?? "—"}
+                  {p.resolved ?? "-"}
                 </span>
               </Tooltip>
               <span className="faint dep-row__meta">
@@ -222,7 +222,7 @@ function PackageDialog({ p, finding, onClose }: { p: DepPackage; finding?: Advis
     <Dialog open onOpenChange={(o) => !o && onClose()} title={<span className="mono">{p.name}</span>}>
       <div className="props">
         <span className="props__label">Declared</span>
-        <span className="mono">{p.declared ?? "—"}</span>
+        <span className="mono">{p.declared ?? "-"}</span>
         <span className="props__label">Resolved</span>
         <span className="mono">{p.resolved ?? "Unknown (no lockfile entry)"}</span>
         <span className="props__label">Kind</span>

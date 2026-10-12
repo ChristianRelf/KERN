@@ -11,6 +11,7 @@ import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon } from "@xterm/addon-search";
 import { api, describeError, isTauri } from "@/lib/ipc";
 import { getSetting } from "@/stores/settings";
+import { comboFromEvent, resolveBindings, SHORTCUTS } from "@/lib/shortcuts";
 import { toastError } from "@/stores/toast";
 import { confirm } from "@/components/ui/Dialog";
 
@@ -116,7 +117,9 @@ async function createRenderer(id: string) {
       void navigator.clipboard.readText().then((t) => t && void api.pty.write(id, t));
       return false;
     }
-    if (mod && e.code === "Backquote") return false;
+    // Kern's own global shortcuts (palette, capture, new task, terminal) stay Kern's.
+    const combo = comboFromEvent(e);
+    if (combo && globalCombos().has(combo)) return false;
     return true;
   });
   term.onData((d) => void api.pty.write(id, d).catch(() => undefined));
@@ -128,6 +131,11 @@ async function createRenderer(id: string) {
   for (const chunk of early.get(id) ?? []) term.write(chunk);
   early.delete(id);
   return live.get(id)!;
+}
+
+function globalCombos(): Set<string> {
+  const bindings = resolveBindings(getSetting("keyboard.shortcuts"));
+  return new Set(SHORTCUTS.filter((d) => d.global && bindings[d.id]).map((d) => bindings[d.id]!));
 }
 
 let listening = false;
@@ -149,6 +157,38 @@ export function startTerminalEvents() {
   });
 }
 
+/** Where a project's terminal starts: its folder, else its primary local repository. */
+async function projectStart(projectId: string): Promise<CwdTarget> {
+  const p = await api.projects.get(projectId).catch(() => null);
+  if (p?.folderPath) return { kind: "project", projectId };
+  const repos = await api.repos.list(projectId).catch(() => []);
+  const local = repos.find((r) => r.localPath && r.localStatus === "ok");
+  return local ? { kind: "repository", repositoryId: local.id } : { kind: "default" };
+}
+
+/**
+ * The size a new shell starts at, close to what the panel will fit, so the
+ * first prompt isn't drawn at one width and re-wrapped at another.
+ */
+function initialSize(): { cols: number; rows: number } {
+  const first = live.values().next().value;
+  if (first) return { cols: first.term.cols, rows: first.term.rows };
+  const fontSize = getSetting("terminal.fontSize");
+  let cell = fontSize * 0.6;
+  try {
+    const ctx = document.createElement("canvas").getContext("2d");
+    if (ctx) {
+      ctx.font = `${fontSize}px ${css("--font-mono") || "Consolas, monospace"}`;
+      cell = ctx.measureText("W").width || cell;
+    }
+  } catch {
+    /* estimate */
+  }
+  const width = (document.querySelector(".workspace__main")?.clientWidth ?? window.innerWidth) - 24;
+  const height = useTerminal.getState().height - 44;
+  return { cols: Math.max(40, Math.floor(width / cell)), rows: Math.max(8, Math.floor(height / Math.ceil(fontSize * 1.2))) };
+}
+
 export interface OpenOptions {
   cwd?: CwdTarget;
   projectId?: string | null;
@@ -161,10 +201,10 @@ export interface OpenOptions {
 export async function openTerminal(opts: OpenOptions = {}) {
   startTerminalEvents();
   const projectId = opts.projectId ?? null;
-  const cwd: CwdTarget = opts.cwd ?? (projectId ? { kind: "project", projectId } : { kind: "default" });
+  const cwd: CwdTarget = opts.cwd ?? (projectId ? await projectStart(projectId) : { kind: "default" });
   try {
     await loadXterm();
-    const info = await api.pty.spawn({ cwd, shell: opts.shell ?? (getSetting("terminal.shell") || null), run: opts.run ?? null, projectId, title: opts.title ?? null, cols: 100, rows: 24 });
+    const info = await api.pty.spawn({ cwd, shell: opts.shell ?? (getSetting("terminal.shell") || null), run: opts.run ?? null, projectId, title: opts.title ?? null, ...initialSize() });
     await createRenderer(info.id);
     useTerminal.setState((s) => ({ tabs: [...s.tabs, info], activeId: info.id, open: true }));
     return info;

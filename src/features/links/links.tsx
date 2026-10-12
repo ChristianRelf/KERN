@@ -5,7 +5,7 @@
 // Favicons come from Kern's local cache (fetched once per site by the Rust
 // favicon service, if allowed in Privacy). The query cache dedupes
 // concurrent requests per origin, images load lazily, and a missing or
-// broken icon falls back to a neutral globe — never a broken image.
+// broken icon falls back to a neutral globe - never a broken image.
 
 import { ClipboardCopy, ExternalLink, Globe, Mail, Pencil, Trash, Type } from "lucide-react";
 import { useState, type CSSProperties, type ReactNode } from "react";
@@ -72,7 +72,7 @@ export function useFavicon(url: string) {
 
 // Average tone of an icon's visible pixels, measured once per icon. Icons
 // that are nearly black (or white) would vanish on the matching theme, so
-// those — and only those — get a small contrasting plate.
+// those - and only those - get a small contrasting plate.
 const tones = new Map<string, "dark" | "light" | "mid">();
 
 export function measureTone(img: HTMLImageElement): "dark" | "light" | "mid" {

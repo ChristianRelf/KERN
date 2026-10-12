@@ -171,7 +171,7 @@ pub fn shells() -> Vec<Shell> {
 
 /// Where a terminal starts.
 #[derive(Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase", tag = "kind")]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "kind")]
 pub enum CwdTarget {
     /// The project's linked folder (optionally a sub-folder).
     Project { project_id: String, rel: Option<String> },
@@ -504,6 +504,17 @@ mod tests {
         buf.push(bytes[bytes.len() - 1]);
         assert_eq!(take_utf8(&mut buf), "✓");
         assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn start_folders_deserialize_from_the_frontend() {
+        let t: CwdTarget = serde_json::from_str(r#"{"kind":"repository","repositoryId":"r1","rel":null}"#).unwrap();
+        assert!(matches!(t, CwdTarget::Repository { ref repository_id, .. } if repository_id == "r1"));
+        let t: CwdTarget = serde_json::from_str(r#"{"kind":"worktree","repositoryId":"r1","path":"C:/x"}"#).unwrap();
+        assert!(matches!(t, CwdTarget::Worktree { .. }));
+        let t: CwdTarget = serde_json::from_str(r#"{"kind":"project","projectId":"p1"}"#).unwrap();
+        assert!(matches!(t, CwdTarget::Project { ref project_id, .. } if project_id == "p1"));
+        assert!(matches!(serde_json::from_str::<CwdTarget>(r#"{"kind":"default"}"#).unwrap(), CwdTarget::Default));
     }
 
     #[test]

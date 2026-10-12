@@ -43,7 +43,7 @@ export function EnvProfilesSection({ project }: { project: Project }) {
     return (
       <div className="col" style={{ gap: 8 }}>
         <span className="faint" style={{ fontSize: "var(--fs-sm)" }}>
-          Keep the variables your commands need — ports, URLs, API keys — in named profiles. Secrets are stored in your system's credential store, never in Kern's database or backups.
+          Keep the variables your commands need - ports, URLs, API keys - in named profiles. Secrets are stored in your system's credential store, never in Kern's database or backups.
         </span>
         <div className="row" style={{ gap: 6 }}>
           {["Development", "Testing", "Staging"].map((n) => (
@@ -330,7 +330,7 @@ function ExportDialog({ profile, onClose }: { profile: EnvProfile; onClose: () =
         </>
       }
     >
-      <p className="dialog__desc">Writes a .env file. Make sure it's listed in your .gitignore — Kern never commits files.</p>
+      <p className="dialog__desc">Writes a .env file. Make sure it's listed in your .gitignore - Kern never commits files.</p>
       {hasSecrets && (
         <label className="row danger-check" style={{ gap: 8 }}>
           <Checkbox checked={secrets} onChange={setSecrets} label="Include secret values" />

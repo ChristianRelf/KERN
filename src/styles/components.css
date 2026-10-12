@@ -619,6 +619,26 @@
   padding: 0 8px;
   font-size: var(--fs-xs);
 }
+/* Large: primary section switchers (e.g. the Code tab). */
+.segmented--lg {
+  padding: 3px;
+  gap: 3px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.segmented--lg .segmented__item {
+  height: calc(var(--control-h) + 4px);
+  padding: 0 14px;
+  gap: 8px;
+  font-size: var(--fs-md);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.segmented--lg .segmented__item svg {
+  width: var(--icon-md, 16px);
+  height: var(--icon-md, 16px);
+}
 
 /* ---------- Tabs (compact underline) */
 .tabs {

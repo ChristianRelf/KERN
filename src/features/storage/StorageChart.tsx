@@ -163,7 +163,7 @@ export default function StorageChart({
                 <span className="storage-legend__key" style={{ background: tones[r.slot] }} aria-hidden />
                 <span className="grow truncate">{CATEGORY_LABEL[r.id]}</span>
                 <span className="storage-legend__pct tabular">{r.bytes > 0 ? `${pct < 0.1 ? "<0.1" : pct.toFixed(pct < 10 ? 1 : 0)}%` : ""}</span>
-                <span className="storage-legend__value tabular">{r.bytes > 0 ? formatBytes(r.bytes) : "—"}</span>
+                <span className="storage-legend__value tabular">{r.bytes > 0 ? formatBytes(r.bytes) : "-"}</span>
               </li>
             );
           })}

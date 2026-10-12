@@ -147,7 +147,7 @@ const CLEANUPS: { id: StorageCleanup; label: string; hint: string; confirm?: str
     id: "unusedWhiteboardAssets",
     label: "Remove unused whiteboard images",
     hint: "Images no longer placed on any whiteboard (including whiteboards in the trash) for over a day.",
-    confirm: "Images that aren't on any whiteboard are deleted permanently. Images on whiteboards — even in the trash — are kept.",
+    confirm: "Images that aren't on any whiteboard are deleted permanently. Images on whiteboards - even in the trash - are kept.",
   },
 ];
 
@@ -204,7 +204,7 @@ function LinkedFolders({ report, scan }: { report: StorageReport | null | undefi
           </span>
           {l.note && <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{l.note}</span>}
           <span className="tabular" style={{ fontSize: "var(--fs-sm)" }}>
-            {l.files ? `${formatBytes(l.bytes)} · ${l.files.toLocaleString()} files` : "—"}
+            {l.files ? `${formatBytes(l.bytes)} · ${l.files.toLocaleString()} files` : "-"}
           </span>
         </div>
       ))}

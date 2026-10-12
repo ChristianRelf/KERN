@@ -2,7 +2,7 @@
 //!
 //! Only Kern-owned locations are measured (the data folder, the WebView data
 //! folder, Kern's own archives in a custom backup folder), plus linked
-//! project folders when the user explicitly asks — and those are reported
+//! project folders when the user explicitly asks - and those are reported
 //! separately, never added to Kern's total.
 //!
 //! Accounting is by path and mutually exclusive: each file lands in exactly

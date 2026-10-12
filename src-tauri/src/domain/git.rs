@@ -304,7 +304,7 @@ pub async fn git_diff(app: AppHandle, repo_id: String, path: String, staged: boo
             let full = folders::resolve_inside(&root, &path)?;
             let meta = std::fs::metadata(&full)?;
             if meta.len() > 512 * 1024 {
-                return Ok(format!("New file ({} KB) — too large to preview.", meta.len() / 1024));
+                return Ok(format!("New file ({} KB) - too large to preview.", meta.len() / 1024));
             }
             let bytes = std::fs::read(&full)?;
             if bytes.iter().take(4096).any(|b| *b == 0) {
@@ -785,7 +785,7 @@ mod tests {
     #[test]
     fn slugs_branch_names() {
         assert_eq!(slug("Fix login bug!"), "fix-login-bug");
-        assert_eq!(slug("  Call   supplier — today "), "call-supplier-today");
+        assert_eq!(slug("  Call   supplier - today "), "call-supplier-today");
     }
 
     #[test]

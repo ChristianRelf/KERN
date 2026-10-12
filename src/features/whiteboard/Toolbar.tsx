@@ -104,7 +104,7 @@ export function Toolbar({
           </Tooltip>
         </span>
       </Dropdown>
-      {btn("connector", Spline, "Connector — drag between objects", "C")}
+      {btn("connector", Spline, "Connector - drag between objects", "C")}
       {btn("task", SquareCheckBig, "Task card", "K")}
       {btn("area", Frame, "Area", "A")}
       <Dropdown

@@ -67,7 +67,7 @@ export const VALIDATION_LABEL: Record<string, string> = {
   auth_failed: "Authentication failed",
   permission: "Insufficient permissions",
   unavailable: "Provider temporarily unavailable",
-  rate_limited: "Rate limited — the key works but is busy",
+  rate_limited: "Rate limited - the key works but is busy",
   quota: "Authenticated, but out of credit or quota",
   network: "Couldn't reach the provider",
   unknown: "Unknown validation status",

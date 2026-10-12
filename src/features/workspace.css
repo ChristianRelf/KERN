@@ -732,7 +732,15 @@ button.dev-link:hover,
   opacity: 0.6;
 }
 .wt-row__task {
-  max-width: 180px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 200px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.wt-row__task svg {
+  flex-shrink: 0;
 }
 .wt-files {
   display: flex;

@@ -79,9 +79,9 @@ function ProjectRow({ p, groups }: { p: Project; groups: ProjectGroup[] }) {
         </span>
         <span className="faint tabular">{p.taskTotal - p.taskDone} open</span>
         <span className="tabular" style={{ color: p.taskOverdue ? "var(--text)" : "var(--text-4)" }}>
-          {p.taskOverdue ? `${p.taskOverdue} overdue` : "—"}
+          {p.taskOverdue ? `${p.taskOverdue} overdue` : "-"}
         </span>
-        <span className="faint">{p.targetDate ? formatDue(p.targetDate) : "—"}</span>
+        <span className="faint">{p.targetDate ? formatDue(p.targetDate) : "-"}</span>
         <span onClick={(e) => e.stopPropagation()}>
           <Dropdown items={() => projectMenu(p, groups)} align="end">
             <IconButton icon={Ellipsis} label="Project actions" size="sm" noTooltip />

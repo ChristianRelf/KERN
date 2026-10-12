@@ -161,7 +161,7 @@ function MorningView() {
                 </span>
               </div>
               <DueLabel date={s.task.dueDate} time={s.task.dueTime} done={false} today={today} />
-              <Tooltip content={s.task.pinned ? "Unpin" : "Pin — always rank higher"}>
+              <Tooltip content={s.task.pinned ? "Unpin" : "Pin - always rank higher"}>
                 <IconButton
                   icon={Pin}
                   label={s.task.pinned ? "Unpin" : "Pin"}
@@ -371,7 +371,7 @@ function HistoricView({ day, kind }: { day: string; kind: "morning" | "evening" 
   if (!snap) return <EmptyState icon={History}>No {kind} snapshot was saved for this day.</EmptyState>;
   const banner = (
     <div className="snapshot-banner">
-      <History size={14} /> Snapshot saved {format(new Date(snap.createdAt), "EEE d MMM, HH:mm")} — a historical record; tasks may have changed since.
+      <History size={14} /> Snapshot saved {format(new Date(snap.createdAt), "EEE d MMM, HH:mm")} - a historical record; tasks may have changed since.
     </div>
   );
   if (kind === "evening") {

@@ -1,8 +1,8 @@
-//! Kern — a local-first personal productivity workspace.
+//! Kern - a local-first personal productivity workspace.
 //!
 //! The backend owns persistence (SQLite), file management, notifications,
 //! backups and OS integration. The frontend talks to it exclusively through
-//! the typed commands registered below — it never issues SQL.
+//! the typed commands registered below - it never issues SQL.
 
 pub mod db;
 pub mod domain;

@@ -125,13 +125,13 @@ export function TrustPromptHost() {
             <div>
               <ShieldCheck size={14} />
               <span>
-                <b>Trusted</b> — open programs and scripts (each one confirmed), create and rename items, and allow AI file access per project.
+                <b>Trusted</b> - open programs and scripts (each one confirmed), create and rename items, and allow AI file access per project.
               </span>
             </div>
             <div>
               <ShieldHalf size={14} />
               <span>
-                <b>Restricted</b> — browse, reveal and open documents. Nothing runs.
+                <b>Restricted</b> - browse, reveal and open documents. Nothing runs.
               </span>
             </div>
           </div>
@@ -312,7 +312,7 @@ export function ProjectFolderCard({ project }: { project: Project }) {
         <div className="col grow" style={{ minWidth: 0 }}>
           <span className="truncate folder-card__name">{f.name}</span>
           <Tooltip content={f.path}>
-            <span className="folder-card__path truncate">{ok ? shortPath(f.path, 64) : "Folder unavailable — it may have been moved or deleted."}</span>
+            <span className="folder-card__path truncate">{ok ? shortPath(f.path, 64) : "Folder unavailable - it may have been moved or deleted."}</span>
           </Tooltip>
         </div>
         {ok ? <TrustBadge trust={f.trust} /> : null}
@@ -603,7 +603,7 @@ export function FolderBrowser({ project }: { project: Project }) {
                   </Tooltip>
                 )}
                 {e.program && (
-                  <Tooltip content={folder.capabilities.openPrograms ? "Program or script — opening asks first" : "Program or script — disabled in restricted mode"}>
+                  <Tooltip content={folder.capabilities.openPrograms ? "Program or script - opening asks first" : "Program or script - disabled in restricted mode"}>
                     <span className="chip">Program</span>
                   </Tooltip>
                 )}

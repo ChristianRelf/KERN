@@ -307,7 +307,7 @@ function MilestonesBody() {
   return (
     <div className="col" style={{ gap: 6 }}>
       <UpcomingMilestones projectId={p.id} max={6} />
-      <div className="row" style={{ gap: 4 }}>
+      <div className="row" style={{ gap: 16 }}>
         <button type="button" className="mini-more" onClick={() => void createMilestone({ projectId: p.id })}>
           <Plus size={12} /> Milestone
         </button>

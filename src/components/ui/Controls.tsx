@@ -133,11 +133,11 @@ export function Segmented<T extends string>({
   value: T;
   onChange: (v: T) => void;
   options: SegOption<T>[];
-  size?: "md" | "sm";
+  size?: "md" | "sm" | "lg";
   ariaLabel?: string;
 }) {
   return (
-    <div className={`segmented ${size === "sm" ? "segmented--sm" : ""}`} role="radiogroup" aria-label={ariaLabel}>
+    <div className={`segmented${size === "md" ? "" : ` segmented--${size}`}`} role="radiogroup" aria-label={ariaLabel}>
       {options.map((o) => {
         const Icon = o.icon;
         const btn = (

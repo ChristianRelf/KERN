@@ -46,7 +46,7 @@ export function ProjectsWidget({ config }: WidgetProps<ProjectsConfig>) {
               <div className="proj-row__top">
                 <span className="truncate grow">{p.name}</span>
                 <span className="faint tabular" style={{ fontSize: "var(--fs-xs)" }}>
-                  {p.taskTotal ? `${Math.round((p.taskDone / p.taskTotal) * 100)}%` : "—"}
+                  {p.taskTotal ? `${Math.round((p.taskDone / p.taskTotal) * 100)}%` : "-"}
                 </span>
               </div>
               <Progress value={p.taskTotal ? p.taskDone / p.taskTotal : 0} />

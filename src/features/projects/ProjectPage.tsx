@@ -413,7 +413,7 @@ function Files({ project }: { project: Project }) {
           ))
         ) : (
           <span className="faint" style={{ fontSize: "var(--fs-sm)" }}>
-            Keep the project's important web pages here — docs, repositories, designs.
+            Keep the project's important web pages here - docs, repositories, designs.
           </span>
         )}
       </div>

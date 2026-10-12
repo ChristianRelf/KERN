@@ -97,7 +97,7 @@ export function useOsIntegration() {
       void api.system.showWindow().then(() => useUi.getState().openCapture());
     })
       .then(() => (registered = true))
-      .catch(() => toastError(`Couldn't register ${globalCapture} system-wide — another app may be using it.`));
+      .catch(() => toastError(`Couldn't register ${globalCapture} system-wide - another app may be using it.`));
     return () => {
       if (registered) void unregister(accel).catch(() => undefined);
     };
@@ -143,7 +143,7 @@ export function useBackendEvents() {
       listen<string>("kern://backup-failed", (e) => toastError(`Automatic backup failed: ${e.payload}`)),
       listen<{ from: string; to: string; reason: string }>("kern://ai-switch", (e) => {
         if (!useSettings.getState().values["ai.notifySwitch"]) return;
-        const msg = `Switched to ${e.payload.to} — ${e.payload.from} unavailable (${e.payload.reason}).`;
+        const msg = `Switched to ${e.payload.to} - ${e.payload.from} unavailable (${e.payload.reason}).`;
         toast(msg);
         announce(msg);
       }),

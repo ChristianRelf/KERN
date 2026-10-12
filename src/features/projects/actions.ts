@@ -95,7 +95,7 @@ export async function deleteProject(p: Project) {
     const r = useRouter.getState().route;
     if (r.name === "project" && r.id === p.id) navigate({ name: "projects" }, { replace: true });
     // A linked folder is never touched by deleting the project.
-    pushUndo(`Moved ${p.name} to trash${p.folderPath ? " — its folder on disk is untouched" : ""}`, async () => {
+    pushUndo(`Moved ${p.name} to trash${p.folderPath ? " - its folder on disk is untouched" : ""}`, async () => {
       await api.projects.restore(p.id);
       refresh();
       invalidate("trash");

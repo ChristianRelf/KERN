@@ -35,7 +35,7 @@ async function patch(a: AiAccount, p: Parameters<typeof api.ai.update>[1]) {
 async function testAccount(a: AiAccount) {
   try {
     const r = await api.ai.test(a.id);
-    (r.outcome === "authenticated" ? toast : toastError)(`${a.name}: ${VALIDATION_LABEL[r.outcome]}${r.outcome === "authenticated" ? "" : ` — ${r.message}`}`);
+    (r.outcome === "authenticated" ? toast : toastError)(`${a.name}: ${VALIDATION_LABEL[r.outcome]}${r.outcome === "authenticated" ? "" : ` - ${r.message}`}`);
   } catch (e) {
     toastError(describeError(e, "The test couldn't run."));
   } finally {

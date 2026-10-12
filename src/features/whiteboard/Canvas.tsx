@@ -558,7 +558,7 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
       try {
         pasteSnap(JSON.parse(text.slice(CLIP_PREFIX.length)) as Snap, at);
       } catch {
-        /* malformed clipboard — ignore */
+        /* malformed clipboard - ignore */
       }
       return;
     }

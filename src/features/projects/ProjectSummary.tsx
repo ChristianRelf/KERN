@@ -31,9 +31,9 @@ export function ProjectSummary({ id }: { id: string }) {
         <span className="props__label">Overdue</span>
         <span>{p.taskOverdue}</span>
         <span className="props__label">Target</span>
-        <span>{p.targetDate ? formatDue(p.targetDate) : "—"}</span>
+        <span>{p.targetDate ? formatDue(p.targetDate) : "-"}</span>
         <span className="props__label">Last activity</span>
-        <span>{p.lastActivityAt ? relativeTime(p.lastActivityAt) : "—"}</span>
+        <span>{p.lastActivityAt ? relativeTime(p.lastActivityAt) : "-"}</span>
       </div>
       <div className="row" style={{ flexWrap: "wrap" }}>
         <Button size="sm" icon={ArrowUpRight} onClick={() => navigate({ name: "project", id })}>

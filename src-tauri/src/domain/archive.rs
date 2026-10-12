@@ -4,7 +4,7 @@
 //!
 //! ```text
 //! manifest.json        format, formatVersion, schemaVersion, appVersion, createdAt, kind, counts
-//! kern.db              consistent SQLite snapshot (VACUUM INTO — safe on a live database)
+//! kern.db              consistent SQLite snapshot (VACUUM INTO - safe on a live database)
 //! attachments/...      managed attachment files
 //! data/<table>.json    (exports) every table as JSON rows
 //! notes/*.md           (exports) notes as Markdown with front matter
@@ -307,15 +307,15 @@ const PORTABLE_README: &str = "# Kern export
 
 This archive is a complete, portable copy of your Kern data.
 
-- `manifest.json` — archive format/version, app and schema versions, item counts.
-- `kern.db` — a SQLite database snapshot. Open it with any SQLite tool, or
+- `manifest.json` - archive format/version, app and schema versions, item counts.
+- `kern.db` - a SQLite database snapshot. Open it with any SQLite tool, or
   restore it in Kern (Settings → Data & Backups → Restore).
-- `data/*.json` — every table as plain JSON rows (dates are local YYYY-MM-DD,
+- `data/*.json` - every table as plain JSON rows (dates are local YYYY-MM-DD,
   timestamps are UTC epoch milliseconds).
-- `notes/*.md` — notes as Markdown with YAML front matter.
-- `whiteboards/*.json` — whiteboard scenes (objects and connections); these can
+- `notes/*.md` - notes as Markdown with YAML front matter.
+- `whiteboards/*.json` - whiteboard scenes (objects and connections); these can
   be imported individually from any whiteboard's menu.
-- `attachments/` — managed files referenced by relative paths in the data.
+- `attachments/` - managed files referenced by relative paths in the data.
 ";
 
 pub fn read_manifest(path: &Path) -> AppResult<Manifest> {

@@ -62,7 +62,7 @@ Memory after loading the 5,000-task list was about 368 MB private.
 |---|---|
 | NSIS installer | 3.6 MB |
 | MSI installer | 4.4 MB |
-| Main JS chunk (React, query, dashboard, tasks) | 816 KB (256 KB gzip) — was 691 KB (211 KB gzip) before phase 2 |
+| Main JS chunk (React, query, dashboard, tasks) | 816 KB (256 KB gzip) - was 691 KB (211 KB gzip) before phase 2 |
 | Storage chart (Chart.js), lazy | 141 KB (49 KB gzip) |
 | API account pages, lazy | 19 KB (6 KB gzip) |
 | Project Code tab (GitHub & git), lazy | 18 KB (6 KB gzip) |

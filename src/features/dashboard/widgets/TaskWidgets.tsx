@@ -41,7 +41,7 @@ export function TodayWidget({ config }: WidgetProps<TodayConfig>) {
       <MiniTaskList tasks={tasks} max={config.max} onMore={() => navigate({ name: "tasks", view: "today" })} />
       {config.showAdd && (
         <div style={{ margin: "0 -8px" }}>
-          <QuickAdd defaults={{ dueDate: today, status: "todo" }} placeholder={tasks.length ? "Add task for today" : "Nothing due today — add a task"} />
+          <QuickAdd defaults={{ dueDate: today, status: "todo" }} placeholder={tasks.length ? "Add task for today" : "Nothing due today - add a task"} />
         </div>
       )}
     </div>

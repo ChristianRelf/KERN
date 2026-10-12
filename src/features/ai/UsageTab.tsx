@@ -77,7 +77,7 @@ export function UsageTab() {
         <Tile label="Requests" value={String(u.requests)} sub={u.failures ? `${u.failures} failed` : "none failed"} />
         <Tile label="Input tokens" value={formatTokens(u.inputTokens)} sub={u.cachedTokens ? `${formatTokens(u.cachedTokens)} cached` : undefined} />
         <Tile label="Output tokens" value={formatTokens(u.outputTokens)} />
-        <Tile label="Estimated cost" value={u.cost !== null ? formatUsd(u.cost) : "—"} sub={u.cost !== null ? "for priced models" : "set prices under Routing"} />
+        <Tile label="Estimated cost" value={u.cost !== null ? formatUsd(u.cost) : "-"} sub={u.cost !== null ? "for priced models" : "set prices under Routing"} />
       </div>
       <div className="ai-strip" aria-label="Requests per day">
         {days.map((d) => (

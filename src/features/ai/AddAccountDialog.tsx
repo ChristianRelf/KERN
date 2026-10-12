@@ -104,7 +104,7 @@ export function AddAccountDialog({ onClose, replaceFor }: { onClose: () => void;
       {!replaceFor && (
         <div className="row" style={{ gap: 10 }}>
           <ProviderIcon provider={provider} size={32} />
-          <input className="input grow" autoFocus placeholder="Account name — Personal, Work, Secondary…" aria-label="Account name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className="input grow" autoFocus placeholder="Account name - Personal, Work, Secondary…" aria-label="Account name" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
       )}
       <div className="field">
@@ -122,7 +122,7 @@ export function AddAccountDialog({ onClose, replaceFor }: { onClose: () => void;
             setResult(null);
           }}
         />
-        <span className="ai-dialog__hint">Stored in your system's credential store — never in Kern's database, backups or logs. This is an API key, not a subscription login.</span>
+        <span className="ai-dialog__hint">Stored in your system's credential store - never in Kern's database, backups or logs. This is an API key, not a subscription login.</span>
       </div>
       {result && (
         <div className="ai-test-result" data-ok={ok || undefined} role="status">
@@ -146,7 +146,7 @@ export function AddAccountDialog({ onClose, replaceFor }: { onClose: () => void;
             </div>
             <div className="ai-dialog__row">
               <span>Organisation ID</span>
-              <input className="input mono" placeholder={provider === "anthropic" ? "Optional — detected after a request" : "Optional"} value={org} onChange={(e) => setOrg(e.target.value)} aria-label="Organisation ID" />
+              <input className="input mono" placeholder={provider === "anthropic" ? "Optional - detected after a request" : "Optional"} value={org} onChange={(e) => setOrg(e.target.value)} aria-label="Organisation ID" />
             </div>
             {provider === "openai" && (
               <div className="ai-dialog__row">

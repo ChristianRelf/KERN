@@ -1,4 +1,4 @@
-// Run: the detected stack (from configuration files only — nothing runs
+// Run: the detected stack (from configuration files only - nothing runs
 // during detection), whether its tools are installed, the scripts it
 // defines, the user's saved commands, environment profiles and local
 // services. Commands start only when the user clicks them, in a terminal
@@ -204,7 +204,7 @@ function Commands({ project, repo }: { project: Project; repo: Repository | null
                 <span className="faint truncate mono" style={{ fontSize: "var(--fs-xs)" }}>
                   {c.cwd && `${c.cwd} › `}
                   {c.program} {c.args.join(" ")}
-                  {c.detail && ` — ${c.detail}`}
+                  {c.detail && ` - ${c.detail}`}
                 </span>
               </span>
               <IconButton icon={Save} label="Save as a command" size="sm" onClick={() => setEditing({ projectId: project.id, repositoryId: repo?.id ?? null, name: c.name, program: c.program, args: c.args, cwd: c.cwd, confirm: false, pinned: false })} />
@@ -333,7 +333,7 @@ function CommandDialog({ project, initial, onClose }: { project: Project; initia
           <input className="input mono" value={args} placeholder="run dev" onChange={(e) => setArgs(e.target.value)} />
         </div>
       </div>
-      <span className="field__hint">The program runs directly with these arguments — no shell, so pipes and && aren't interpreted.</span>
+      <span className="field__hint">The program runs directly with these arguments - no shell, so pipes and && aren't interpreted.</span>
       <div className="row" style={{ gap: 8 }}>
         {local.length > 0 && (
           <div className="field grow">

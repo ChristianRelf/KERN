@@ -144,7 +144,7 @@ export function IntegrationsSection() {
         <div className="set-group">
           <Row label="Git" hint="Git tools in projects use the git installed on this computer, in trusted folders only.">
             <span className="faint" style={{ fontSize: "var(--fs-sm)" }}>
-              {gitVersion === undefined ? "Checking…" : (gitVersion ?? "Not found — install Git to use git tools")}
+              {gitVersion === undefined ? "Checking…" : (gitVersion ?? "Not found - install Git to use git tools")}
             </span>
           </Row>
         </div>

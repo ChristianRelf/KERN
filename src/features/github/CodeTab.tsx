@@ -109,7 +109,7 @@ export function CodeTab({ project }: { project: Project }) {
             </div>
           }
         >
-          Projects don't need code. Link a repository to see its changes, branches, worktrees, pull requests and builds here — you can link several.
+          Projects don't need code. Link a repository to see its changes, branches, worktrees, pull requests and builds here - you can link several.
         </EmptyState>
       </div>
     );
@@ -118,7 +118,7 @@ export function CodeTab({ project }: { project: Project }) {
     <div className="page-body page-body--pad code-tab">
       <SyntaxPrompt project={project} />
       <RepoBar project={project} repos={repos} selected={selected} onSelect={(r) => select(r.id)} onManage={() => setManage(true)} />
-      <Segmented size="sm" value={section} onChange={setSection} ariaLabel="Code section" options={sections} />
+      <Segmented size="lg" value={section} onChange={setSection} ariaLabel="Code section" options={sections} />
       {section === "overview" && <Overview project={project} repo={selected} />}
       {(section === "changes" || section === "history" || section === "worktrees") && selected && (
         <LocalGate project={project} repo={selected} trusted={trusted}>

@@ -185,7 +185,7 @@ function SessionRow({ s }: { s: WorkSession }) {
       </span>
       <button type="button" className="truncate grow" style={{ textAlign: "left" }} disabled={!s.taskId} onClick={() => s.taskId && openTask(s.taskId)}>
         {s.taskTitle ?? s.projectName ?? "No project"}
-        {s.note && <span className="faint"> — {s.note}</span>}
+        {s.note && <span className="faint"> - {s.note}</span>}
       </button>
       {s.branch && <span className="chip">{s.branch}</span>}
       <span className="tabular">{formatDuration(s.elapsedMs / 1000)}</span>

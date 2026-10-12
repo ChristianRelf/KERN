@@ -136,7 +136,7 @@ function TestRequest() {
         )}
       </div>
       <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
-        A real, billed request (up to 256 output tokens) — sent only when you press the button. Only request metadata is kept; the prompt and reply aren't stored.
+        A real, billed request (up to 256 output tokens) - sent only when you press the button. Only request metadata is kept; the prompt and reply aren't stored.
       </span>
       {out && (
         <div className="ai-outcome" data-ok={out.ok || undefined}>
@@ -204,12 +204,12 @@ export function RoutingTab() {
           <Row label="Wait for short rate limits" hint="If the provider asks to retry within this time, Kern waits and retries the same account instead of switching.">
             <SNumber k="ai.maxRetryWaitSeconds" min={0} max={120} suffix="seconds" />
           </Row>
-          <Row label="Tell me when Kern switches accounts" hint="A brief notice, for example “Switched to Secondary — primary account unavailable.”">
+          <Row label="Tell me when Kern switches accounts" hint="A brief notice, for example “Switched to Secondary - primary account unavailable.”">
             <SToggle k="ai.notifySwitch" />
           </Row>
         </div>
         <p className="ai-note">
-          Requests are only retried on another account when the failure produced no output. A request that timed out after sending might already have been processed, so it's reported instead of resent. Keys from the same organisation share limits — adding a key there doesn't add allowance, and Kern won't rotate between them.
+          Requests are only retried on another account when the failure produced no output. A request that timed out after sending might already have been processed, so it's reported instead of resent. Keys from the same organisation share limits - adding a key there doesn't add allowance, and Kern won't rotate between them.
         </p>
       </section>
       <section>

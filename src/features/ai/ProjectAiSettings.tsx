@@ -96,7 +96,7 @@ export function ProjectAiSettings({ project }: { project: Project }) {
           </label>
         </Tooltip>
         {blocker && <span className="faint" style={{ fontSize: "var(--fs-xs)", marginTop: -6 }}>{blocker}</span>}
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>Trusting a folder never sends its files anywhere by itself — this permission is separate.</span>
+        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>Trusting a folder never sends its files anywhere by itself - this permission is separate.</span>
       </div>
     </Popover>
   );

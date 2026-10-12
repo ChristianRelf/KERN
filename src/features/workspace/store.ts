@@ -91,7 +91,7 @@ export async function restoreContext(projectId: string, ws: WorkspaceState) {
     if (ok) useUi.getState().set({ openFile: { projectId, rel: ws.openFile.rel, repositoryId: ws.openFile.repositoryId ?? null } });
     else missing.push(ws.openFile.rel.split("/").pop() ?? "a file");
   }
-  if (missing.length) toast(`Resumed — ${missing.join(", ")} from last time ${missing.length === 1 ? "isn't" : "aren't"} available anymore.`);
+  if (missing.length) toast(`Resumed - ${missing.join(", ")} from last time ${missing.length === 1 ? "isn't" : "aren't"} available anymore.`);
 }
 
 /** Opens a project and restores its last context. */
@@ -109,7 +109,7 @@ export async function resumeProject(projectId: string) {
     boardId: boardOk ? ws?.boardId ?? undefined : undefined,
     whiteboardId: wbOk ? ws?.whiteboardId ?? undefined : undefined,
   });
-  if (!boardOk || !wbOk) toast(`Resumed — the ${!boardOk ? "board" : "whiteboard"} you had open isn't available anymore.`);
+  if (!boardOk || !wbOk) toast(`Resumed - the ${!boardOk ? "board" : "whiteboard"} you had open isn't available anymore.`);
 }
 
 /** "Resume work": the most recently opened project, plus the running session. */

@@ -198,6 +198,9 @@
   flex-shrink: 0;
 }
 .mini-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--fs-xs);
   color: var(--text-3);
   padding: 4px 0;

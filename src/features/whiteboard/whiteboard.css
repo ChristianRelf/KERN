@@ -430,7 +430,7 @@
   color: var(--text-3);
 }
 
-/* Level of detail: when zoomed far out, text is unreadable anyway — skip it. */
+/* Level of detail: when zoomed far out, text is unreadable anyway - skip it. */
 .wb[data-lod="low"] .wbn__body,
 .wb[data-lod="low"] .wbn__meta,
 .wb[data-lod="low"] .wbn__kind,

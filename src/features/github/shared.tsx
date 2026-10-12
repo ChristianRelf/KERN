@@ -56,7 +56,7 @@ export async function syncProject(projectId: string, quiet = false) {
   try {
     const r = await api.github.sync(projectId);
     invalidate("tasks", "task", "board", "projects", "project", "labels", "github", "activity");
-    if (!quiet || r.imported || r.updatedInKern) toast(`Issues synced — ${summarize(r)}.`);
+    if (!quiet || r.imported || r.updatedInKern) toast(`Issues synced - ${summarize(r)}.`);
     if (r.errors.length) toastError(`${r.errors.length} issue${r.errors.length === 1 ? "" : "s"} couldn't sync: ${r.errors[0]}`);
     return r;
   } catch (e) {
