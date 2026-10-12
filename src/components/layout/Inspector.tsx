@@ -1,12 +1,15 @@
 import { Maximize2, PanelRightClose, Pin, PinOff } from "lucide-react";
-import { useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useRef, useState, type CSSProperties } from "react";
+import { Skeleton } from "@/components/ui/Controls";
+
+const MilestoneDetail = lazy(() => import("@/features/milestones/MilestoneDetail").then((m) => ({ default: m.MilestoneDetail })));
 import { useOutsideDismiss } from "@/hooks/useOutsideDismiss";
 import { useUi } from "@/stores/ui";
 import { useSetting, setSetting } from "@/stores/settings";
 import { IconButton } from "@/components/ui/Button";
 import { TaskDetail } from "@/features/tasks/TaskDetail";
 import { ProjectSummary } from "@/features/projects/ProjectSummary";
-import { MilestoneDetail } from "@/features/milestones/MilestoneDetail";
+
 import { navigate } from "@/stores/router";
 import { useTask } from "@/hooks/data";
 import { resolveBindings } from "@/lib/shortcuts";
@@ -77,7 +80,11 @@ export function Inspector() {
         <IconButton icon={PanelRightClose} label="Close panel" shortcut={shortcuts.closeInspector} size="sm" onClick={close} />
       </div>
       <div className="inspector__body">
-        {target.kind === "task" ? <TaskDetail id={target.id} onClose={close} /> : target.kind === "milestone" ? <MilestoneDetail id={target.id} /> : <ProjectSummary id={target.id} />}
+        {target.kind === "task" ? <TaskDetail id={target.id} onClose={close} /> : target.kind === "milestone" ? (
+          <Suspense fallback={<Skeleton height={80} />}>
+            <MilestoneDetail id={target.id} />
+          </Suspense>
+        ) : <ProjectSummary id={target.id} />}
       </div>
     </aside>
   );

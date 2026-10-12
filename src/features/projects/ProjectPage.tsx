@@ -50,8 +50,6 @@ import { addLinkAttachment } from "@/features/tasks/TaskDetail";
 import { LINK_MIME } from "@/lib/types";
 import { confirmDelete } from "@/components/ui/Dialog";
 import { ActivityList } from "./activity";
-import { CommandCentre } from "@/features/command-centre/CommandCentre";
-import { MilestonesTab } from "@/features/milestones/MilestonesTab";
 import { HealthBadge } from "@/features/health/Health";
 import { useCapabilities } from "@/features/dev/hooks";
 import { linkGithubRepository, linkLocalRepository } from "@/features/dev/Repositories";
@@ -60,6 +58,8 @@ import { applySnapshot, flushWorkspaces, recordWorkspace, restoreContext, saveSn
 
 const ProjectWhiteboard = lazy(() => import("@/features/whiteboard/ProjectWhiteboard"));
 const NotesPage = lazy(() => import("@/features/notes/NotesPage"));
+const CommandCentre = lazy(() => import("@/features/command-centre/CommandCentre").then((m) => ({ default: m.CommandCentre })));
+const MilestonesTab = lazy(() => import("@/features/milestones/MilestonesTab").then((m) => ({ default: m.MilestonesTab })));
 const CodeTab = lazy(() => import("@/features/github/CodeTab").then((m) => ({ default: m.CodeTab })));
 
 const TABS: { id: ProjectTab; label: string; icon: typeof ListTodo }[] = [
@@ -260,7 +260,11 @@ function ProjectView({ p, ws, tab, boardId, whiteboardId, column }: { p: Project
           </Button>
         </div>
       )}
-      {current === "overview" && <CommandCentre project={p} />}
+      {current === "overview" && (
+        <Suspense fallback={<PageFallback />}>
+          <CommandCentre project={p} />
+        </Suspense>
+      )}
       {current === "tasks" && <ProjectTasks projectId={id} />}
       {current === "board" && <ProjectBoard projectId={id} boardId={board} column={column} />}
       {current === "whiteboard" && (
@@ -273,7 +277,11 @@ function ProjectView({ p, ws, tab, boardId, whiteboardId, column }: { p: Project
           <NotesPage projectId={id} embedded />
         </Suspense>
       )}
-      {current === "milestones" && <MilestonesTab projectId={id} />}
+      {current === "milestones" && (
+        <Suspense fallback={<PageFallback />}>
+          <MilestonesTab projectId={id} />
+        </Suspense>
+      )}
       {current === "files" && <Files project={p} />}
       {current === "code" && (
         <Suspense fallback={<PageFallback />}>
