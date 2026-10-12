@@ -12,7 +12,6 @@ import {
   FileDiff,
   FolderOpen,
   GitBranch,
-  GitCommitHorizontal,
   GitPullRequest,
   Link2,
   ListTodo,
@@ -20,12 +19,13 @@ import {
   RefreshCw,
   ShieldHalf,
   Star,
+  Tag,
   Unlink,
   Upload,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { GitChangedFile, Project, PullInfo, TodoItem } from "@/lib/types";
+import type { GitChangedFile, GitCommit, Project, PullInfo, TodoItem } from "@/lib/types";
 import { api, describeError } from "@/lib/ipc";
 import { invalidate } from "@/lib/query";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -40,7 +40,12 @@ import { openTask } from "@/features/tasks/menu";
 import { createTask } from "@/features/tasks/actions";
 import { linkFolder, setFolderTrust, useProjectFolder } from "@/features/projects/folders";
 import { openLink } from "@/features/links/links";
+import { renderMarkdown, safeHref } from "@/lib/markdown";
+import { copyText } from "@/features/projects/folders";
 import { GithubMark, cloneIntoProject, connectProject, syncProject, useGitRemote, useProjectRepo } from "./shared";
+import { layoutGraph, parseRefs, type Edge } from "./graph";
+import { languageColor } from "./languages";
+import { SyntaxPrompt } from "@/features/plugins/SyntaxPrompt";
 
 type Section = "overview" | "changes" | "branches" | "pulls";
 
@@ -70,6 +75,7 @@ export function CodeTab({ project }: { project: Project }) {
 
   return (
     <div className="page-body page-body--pad code-tab">
+      <SyntaxPrompt project={project} />
       {repo ? (
         <div className="code-bar">
           <GithubMark size={16} />
@@ -234,12 +240,12 @@ function Overview({ project, connected }: { project: Project; connected: boolean
                 <div className="col" style={{ gap: 6 }}>
                   <div className="lang-bar" aria-hidden>
                     {ov.languages.slice(0, 6).map(([l, b], i) => (
-                      <span key={l} style={{ width: `${(b / total) * 100}%`, opacity: 1 - i * 0.14 }} />
+                      <span key={l} style={{ width: `${(b / total) * 100}%`, "--lang": languageColor(l, i) } as CSSProperties} />
                     ))}
                   </div>
                   <div className="row faint" style={{ gap: 12, fontSize: "var(--fs-xs)", flexWrap: "wrap" }}>
-                    {ov.languages.slice(0, 6).map(([l, b]) => (
-                      <span key={l}>
+                    {ov.languages.slice(0, 6).map(([l, b], i) => (
+                      <span key={l} className="lang-key" style={{ "--lang": languageColor(l, i) } as CSSProperties}>
                         {l} {((b / total) * 100).toFixed(b / total < 0.1 ? 1 : 0)}%
                       </span>
                     ))}
@@ -256,19 +262,48 @@ function Overview({ project, connected }: { project: Project; connected: boolean
   );
 }
 
+/** Links inside rendered Markdown open in the browser, never inside Kern. */
+function onMarkdownClick(e: MouseEvent<HTMLElement>) {
+  const a = (e.target as HTMLElement).closest("a");
+  if (!a) return;
+  e.preventDefault();
+  const href = safeHref(a.getAttribute("href"));
+  if (href) void openLink(href);
+}
+
 function Readme({ text, source }: { text: string; source: "local" | "github" | null }) {
+  const [raw, setRaw] = useState(false);
   const [open, setOpen] = useState(false);
-  const lines = text.split("\n");
-  const shown = open ? lines : lines.slice(0, 18);
+  const html = useMemo(() => renderMarkdown(text), [text]);
+  const long = text.split("\n").length > 30;
   return (
-    <div className="readme">
+    <div className="readme" data-clipped={long && !open ? true : undefined}>
       <div className="readme__head">
-        README <span className="faint">· {source === "local" ? "from your local copy" : "from GitHub"}</span>
+        <span>
+          README <span className="faint">· {source === "local" ? "from your local copy" : "from GitHub"}</span>
+        </span>
+        <span className="spacer" />
+        <Segmented
+          size="sm"
+          value={raw ? "raw" : "preview"}
+          onChange={(v) => setRaw(v === "raw")}
+          ariaLabel="README view"
+          options={[
+            { value: "preview", label: "Preview" },
+            { value: "raw", label: "Raw" },
+          ]}
+        />
       </div>
-      <pre className="readme__body selectable">{shown.join("\n")}</pre>
-      {lines.length > 18 && (
+      <div className="readme__clip">
+        {raw ? (
+          <pre className="readme__body selectable">{text}</pre>
+        ) : (
+          <div className="readme__md prose selectable" onClick={onMarkdownClick} dangerouslySetInnerHTML={{ __html: html }} />
+        )}
+      </div>
+      {long && (
         <button type="button" className="mini-more" onClick={() => setOpen(!open)}>
-          {open ? "Show less" : `Show all ${lines.length} lines`}
+          {open ? "Show less" : "Show the full README"}
         </button>
       )}
     </div>
@@ -476,7 +511,6 @@ function Diff({ projectId, path, staged, untracked }: { projectId: string; path:
 
 function Branches({ project }: { project: Project }) {
   const { data: branches, error } = useQuery({ queryKey: ["git", "branches", project.id], queryFn: () => api.git.branches(project.id), retry: false });
-  const { data: log } = useQuery({ queryKey: ["git", "log", project.id], queryFn: () => api.git.log(project.id, 40), retry: false });
   const [showRemote, setShowRemote] = useState(false);
   const switchTo = async (name: string, create = false) => {
     try {
@@ -492,7 +526,7 @@ function Branches({ project }: { project: Project }) {
   const remote = useMemo(() => (branches ?? []).filter((b) => b.remote && !local.some((l) => b.name.endsWith(`/${l.name}`))), [branches, local]);
   if (error) return <EmptyState compact icon={GitBranch}>{describeError(error)}</EmptyState>;
   return (
-    <div className="code-columns">
+    <div className="code-columns code-columns--graph">
       <div className="col" style={{ gap: 2, minWidth: 0 }}>
         <div className="row" style={{ marginBottom: 4 }}>
           <span className="section-title">Branches</span>
@@ -532,28 +566,102 @@ function Branches({ project }: { project: Project }) {
             </button>
           ))}
       </div>
-      <div className="col" style={{ gap: 2, minWidth: 0 }}>
-        <span className="section-title" style={{ marginBottom: 4 }}>
-          Recent commits
-        </span>
-        {!log && <Skeleton height={80} />}
-        {log?.length === 0 && <span className="faint">No commits yet.</span>}
-        {log?.map((c) => (
-          <div key={c.hash} className="git-commit">
-            <GitCommitHorizontal size={14} className="faint" />
-            <span className="truncate grow">{c.subject}</span>
-            <span className="faint truncate" style={{ fontSize: "var(--fs-xs)", maxWidth: 120 }}>
-              {c.author}
-            </span>
-            <span className="faint mono" style={{ fontSize: "var(--fs-xs)" }}>
-              {c.short}
-            </span>
-            <span className="faint" style={{ fontSize: "var(--fs-xs)", width: 64, textAlign: "right" }}>
-              {relativeTime(Date.parse(c.date))}
-            </span>
-          </div>
-        ))}
+      <History project={project} />
+    </div>
+  );
+}
+
+const ROW_H = 30;
+const LANE_W = 14;
+const hue = (n: number) => `var(--hue-${n % 8})`;
+const laneX = (lane: number) => 9 + lane * LANE_W;
+
+/** One segment of a lane line; lane changes curve smoothly. */
+function segment(e: Edge, y1: number, y2: number) {
+  const x1 = laneX(e.from);
+  const x2 = laneX(e.to);
+  if (x1 === x2) return `M${x1} ${y1}V${y2}`;
+  const m = (y1 + y2) / 2;
+  return `M${x1} ${y1}C${x1} ${m} ${x2} ${m} ${x2} ${y2}`;
+}
+
+/** Commit history drawn as a graph: lanes, merges and branch/tag labels. */
+function History({ project }: { project: Project }) {
+  const [all, setAll] = useState(true);
+  const [limit, setLimit] = useState(80);
+  const { data: log, error, isFetching } = useQuery({
+    queryKey: ["git", "log", project.id, all, limit],
+    queryFn: () => api.git.log(project.id, limit, all),
+    retry: false,
+    placeholderData: (prev) => prev,
+  });
+  const layout = useMemo(() => (log ? layoutGraph(log) : null), [log]);
+  const graphW = layout ? laneX(Math.max(layout.width, 1) - 1) + 9 : 0;
+
+  return (
+    <div className="col" style={{ gap: 2, minWidth: 0 }}>
+      <div className="row" style={{ marginBottom: 4, gap: 8 }}>
+        <span className="section-title">History</span>
+        <span className="spacer" />
+        <Segmented
+          size="sm"
+          value={all ? "all" : "current"}
+          onChange={(v) => setAll(v === "all")}
+          ariaLabel="Branches shown"
+          options={[
+            { value: "all", label: "All branches" },
+            { value: "current", label: "Current branch" },
+          ]}
+        />
       </div>
+      {error && <span className="faint">{describeError(error, "Couldn't read the history.")}</span>}
+      {!log && !error && <Skeleton height={120} />}
+      {log?.length === 0 && <span className="faint">No commits yet.</span>}
+      {log && layout && log.length > 0 && (
+        <div className="git-graph" role="list" aria-label="Commit history">
+          {log.map((c, i) => (
+            <CommitRow key={c.hash} c={c} row={layout.rows[i]} width={graphW} />
+          ))}
+        </div>
+      )}
+      {log && log.length >= limit && limit < 500 && (
+        <button type="button" className="mini-more" style={{ alignSelf: "flex-start" }} disabled={isFetching} onClick={() => setLimit((n) => Math.min(500, n + 120))}>
+          {isFetching ? "Loading…" : "Load older commits"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CommitRow({ c, row, width }: { c: GitCommit; row: ReturnType<typeof layoutGraph>["rows"][number]; width: number }) {
+  const refs = parseRefs(c.refs);
+  const merge = c.parents.length > 1;
+  const mid = ROW_H / 2;
+  return (
+    <div className="git-graph__row" role="listitem" title={`${c.hash}\n${c.author} · ${new Date(c.date).toLocaleString()}`}>
+      <svg className="git-graph__lanes" width={width} height={ROW_H} aria-hidden>
+        {row.top.map((e, j) => (
+          <path key={`t${j}`} d={segment(e, 0, mid)} stroke={hue(e.color)} />
+        ))}
+        {row.bottom.map((e, j) => (
+          <path key={`b${j}`} d={segment(e, mid, ROW_H)} stroke={hue(e.color)} />
+        ))}
+        <circle cx={laneX(row.lane)} cy={mid} r={merge ? 3.5 : 4} fill={merge ? "var(--bg)" : hue(row.color)} stroke={hue(row.color)} strokeWidth={merge ? 2 : 0} />
+      </svg>
+      {refs.map((r) => (
+        <span key={r.kind + r.name} className="ref-chip" data-kind={r.kind} style={{ "--chip": hue(row.color) } as CSSProperties}>
+          {r.kind === "tag" ? <Tag size={10} /> : r.kind === "head" ? <GitBranch size={10} /> : null}
+          {r.name}
+        </span>
+      ))}
+      <span className="truncate grow git-graph__subject" data-merge={merge || undefined}>
+        {c.subject}
+      </span>
+      <span className="faint truncate git-graph__author">{c.author}</span>
+      <button type="button" className="faint mono git-graph__hash" onClick={() => void copyText(c.hash, "Commit hash")} title="Copy full hash">
+        {c.short}
+      </button>
+      <span className="faint git-graph__time">{relativeTime(Date.parse(c.date))}</span>
     </div>
   );
 }

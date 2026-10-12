@@ -9,6 +9,7 @@ import {
   ListTodo,
   Palette,
   Presentation,
+  Puzzle,
   Search,
   Settings,
   Sunrise,
@@ -52,6 +53,7 @@ import { APP_NAME } from "@/app/brand";
 import { BrandMark } from "@/app/BrandMark";
 import { comboFromEvent } from "@/lib/shortcuts";
 import { ACCENTS } from "@/features/projects/ProjectGlyph";
+import { PluginsSection } from "@/features/plugins/PluginsSection";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: typeof Settings }[] = [
   { id: "general", label: "General", icon: Settings },
@@ -68,6 +70,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: typeof Settings }[] 
   { id: "privacy", label: "Privacy", icon: Shield },
   { id: "api", label: "API", icon: KeyRound },
   { id: "integrations", label: "Integrations", icon: Blocks },
+  { id: "plugins", label: "Plugins", icon: Puzzle },
   { id: "performance", label: "Performance", icon: Gauge },
   { id: "about", label: "About", icon: Info },
 ];
@@ -404,7 +407,8 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
             keywords: "inspector modal page detail",
             control: <SSegmented k="general.detailMode" options={[{ value: "inspector", label: "Side panel" }, { value: "modal", label: "Dialog" }, { value: "page", label: "Full page" }]} />,
           },
-          { label: "Confirm permanent deletes", hint: "Reversible actions use Undo instead of confirmations.", control: <SToggle k="general.confirmPermanentDelete" /> },
+          { label: "Confirm before deleting", hint: "Asks before moving tasks, notes, projects, whiteboards, files and other items to the trash.", keywords: "are you sure delete modal", control: <SToggle k="general.confirmDelete" /> },
+          { label: "Confirm permanent deletes", hint: "Asks before deleting something from the trash for good.", control: <SToggle k="general.confirmPermanentDelete" /> },
           { label: "System-wide quick capture", hint: "Opens quick capture from any app. Off by default.", keywords: "global hotkey shortcut", control: <GlobalShortcutPicker /> },
         ],
       },
@@ -711,6 +715,7 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
       },
     ],
     integrations: <IntegrationsSection />,
+    plugins: <PluginsSection />,
     api: (
       <Suspense fallback={<Skeleton height={120} />}>
         <ApiPage tab={apiTab} />

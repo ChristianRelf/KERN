@@ -55,6 +55,7 @@ import { RichLink } from "@/features/links/links";
 
 import { addLinkAttachment } from "@/features/tasks/TaskDetail";
 import { LINK_MIME } from "@/lib/types";
+import { confirmDelete } from "@/components/ui/Dialog";
 
 const ProjectWhiteboard = lazy(() => import("@/features/whiteboard/ProjectWhiteboard"));
 const NotesPage = lazy(() => import("@/features/notes/NotesPage"));
@@ -469,7 +470,10 @@ function Files({ project }: { project: Project }) {
               title={l.name}
               size="lg"
               onRename={(name) => void api.attachments.rename(l.id, name).then(() => invalidate("attachments"))}
-              onRemove={() => void api.attachments.delete(l.id).then(() => invalidate("attachments"))}
+              onRemove={async () => {
+                if (!(await confirmDelete(`Remove “${l.name}”?`, "Only the saved link is removed.", "Remove"))) return;
+                await api.attachments.delete(l.id).then(() => invalidate("attachments"));
+              }}
             />
           ))
         ) : (
@@ -507,6 +511,7 @@ function Files({ project }: { project: Project }) {
                 label="Remove file"
                 size="sm"
                 onClick={async () => {
+                  if (!(await confirmDelete(`Remove “${f.name}”?`, "Kern's stored copy of the file is deleted.", "Remove"))) return;
                   await api.attachments.delete(f.id);
                   invalidate("attachments");
                 }}

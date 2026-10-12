@@ -210,6 +210,23 @@ export interface FileEntry {
   hidden: boolean;
 }
 
+export interface FileText {
+  /** Line endings normalised to "
+". */
+  text: string;
+  crlf: boolean;
+  bom: boolean;
+  modified: number | null;
+  size: number;
+  readOnly: boolean;
+}
+
+export interface FileKindCount {
+  /** Lower-case extension, or the lower-case name of a file without one. */
+  key: string;
+  count: number;
+}
+
 export interface DirListing {
   rel: string;
   entries: FileEntry[];
@@ -841,6 +858,10 @@ export interface GitCommit {
   author: string;
   date: string;
   subject: string;
+  /** Parent hashes, first parent first. */
+  parents: string[];
+  /** Full decorations: "HEAD -> refs/heads/main", "refs/remotes/origin/main", "tag: refs/tags/v1.0". */
+  refs: string[];
 }
 
 export interface GitBranch {

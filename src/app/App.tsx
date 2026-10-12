@@ -25,6 +25,14 @@ import { Button } from "@/components/ui/Button";
 import { describeError } from "@/lib/ipc";
 import { BrandMark } from "./BrandMark";
 
+/** Fades out and removes the startup splash painted by index.html. */
+function hideSplash() {
+  const el = document.getElementById("splash");
+  if (!el || el.dataset.hidden !== undefined) return;
+  el.dataset.hidden = "";
+  window.setTimeout(() => el.remove(), 200);
+}
+
 function initialRoute(): Route {
   const { values, raw } = useSettings.getState();
   switch (values["general.landing"]) {
@@ -93,6 +101,10 @@ export function App() {
   useEffect(() => {
     void boot();
   }, []);
+
+  useEffect(() => {
+    if (loaded || error) hideSplash();
+  }, [loaded, error]);
 
   if (error)
     return (

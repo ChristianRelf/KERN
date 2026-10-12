@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { create } from "zustand";
 import { useState, type ReactNode } from "react";
 import { Button, IconButton } from "./Button";
+import { getSetting } from "@/stores/settings";
 
 export function Dialog({
   open,
@@ -78,6 +79,12 @@ const useConfirm = create<{ req: ConfirmReq | null }>(() => ({ req: null }));
 
 export function confirm(opts: Omit<ConfirmReq, "resolve">): Promise<boolean> {
   return new Promise((resolve) => useConfirm.setState({ req: { ...opts, resolve } }));
+}
+
+/** "Are you sure?" before a delete. Resolves true straight away when delete confirmations are turned off in Settings. */
+export function confirmDelete(title: string, message?: ReactNode, confirmLabel = "Delete"): Promise<boolean> {
+  if (!getSetting("general.confirmDelete")) return Promise.resolve(true);
+  return confirm({ title, message, confirmLabel, danger: true });
 }
 
 export function ConfirmHost() {

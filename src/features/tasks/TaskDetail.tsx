@@ -28,7 +28,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS as DndCSS } from "@dnd-kit/utilities";
-import type { Task, TaskPatch, TaskStatus } from "@/lib/types";
+import type { Attachment, Task, TaskPatch, TaskStatus } from "@/lib/types";
 import { useAttachments, useLabelMap, useProjectMap, useSubtasks, useTask } from "@/hooks/data";
 import { TaskCheck, EmptyState, Skeleton } from "@/components/ui/Controls";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -47,7 +47,7 @@ import { onBeforeNavigate } from "@/stores/router";
 import { LINK_MIME } from "@/lib/types";
 import { RichLink, extractUrls, normalizeUrl } from "@/features/links/links";
 import { GithubMark } from "@/features/github/shared";
-import { prompt } from "@/components/ui/Dialog";
+import { confirmDelete, prompt } from "@/components/ui/Dialog";
 import { clearDraft, setDraft, useDrafts } from "@/stores/drafts";
 
 function useAutosize(ref: React.RefObject<HTMLTextAreaElement | null>, value: string) {
@@ -597,6 +597,13 @@ export async function addLinkAttachment(target: { taskId?: string; projectId?: s
 
 // ------------------------------------------------------------- attachments
 
+async function removeAttachment(a: Attachment) {
+  const message = !a.managed ? "Only the link is removed; the original file stays where it is." : "Kern's stored copy of the file is deleted.";
+  if (!(await confirmDelete(`Remove “${a.name}”?`, message, "Remove"))) return;
+  await api.attachments.delete(a.id);
+  invalidate("attachments", "tasks", "task");
+}
+
 function Attachments({ task }: { task: Task }) {
   const { data: atts } = useAttachments({ taskId: task.id });
   const add = async (managed: boolean) => {
@@ -636,13 +643,13 @@ function Attachments({ task }: { task: Task }) {
             url={a.path}
             title={a.name}
             onRename={(name) => void api.attachments.rename(a.id, name).then(() => invalidate("attachments"))}
-            onRemove={() => void api.attachments.delete(a.id).then(() => invalidate("attachments", "tasks", "task"))}
+            onRemove={() => void removeAttachment(a)}
             trailing={
               <IconButton
                 icon={X}
                 label="Remove link"
                 size="sm"
-                onClick={() => void api.attachments.delete(a.id).then(() => invalidate("attachments", "tasks", "task"))}
+                onClick={() => void removeAttachment(a)}
               />
             }
           />
@@ -665,10 +672,7 @@ function Attachments({ task }: { task: Task }) {
             icon={X}
             label="Remove attachment"
             size="sm"
-            onClick={async () => {
-              await api.attachments.delete(a.id);
-              invalidate("attachments", "tasks", "task");
-            }}
+            onClick={() => void removeAttachment(a)}
           />
         </div>
         ),

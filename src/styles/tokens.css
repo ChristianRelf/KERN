@@ -45,6 +45,31 @@
   --update: #5b9cf5;
   --update-soft: rgba(91, 156, 245, 0.14);
 
+  /* Muted series hues: commit-graph lanes, language bars */
+  --hue-0: #7f9fd6;
+  --hue-1: #c49a6c;
+  --hue-2: #82b48f;
+  --hue-3: #b98fc9;
+  --hue-4: #6fb2b0;
+  --hue-5: #d08a8a;
+  --hue-6: #b5b06a;
+  --hue-7: #8f93d6;
+
+  /* Code highlighting (file viewer); muted to sit in the greyscale UI */
+  --code-foreground: #d4d4d4;
+  --code-token-comment: #6f757c;
+  --code-token-keyword: #c49ad6;
+  --code-token-string: #a8c79a;
+  --code-token-string-expression: #a8c79a;
+  --code-token-constant: #d6a77a;
+  --code-token-function: #8fb3e0;
+  --code-token-parameter: #d9c48f;
+  --code-token-punctuation: #9a9a9a;
+  --code-token-link: #8fb3e0;
+  --code-token-inserted: #8bb795;
+  --code-token-deleted: #e0716f;
+  --code-token-changed: #cfae74;
+
   /* Elevation */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.38);
@@ -140,6 +165,27 @@
   --warning: #9a7430;
   --update: #2563d9;
   --update-soft: rgba(37, 99, 217, 0.1);
+  --hue-0: #4a6fae;
+  --hue-1: #9a6c38;
+  --hue-2: #43815a;
+  --hue-3: #8a5aa0;
+  --hue-4: #2f7e7b;
+  --hue-5: #a95656;
+  --hue-6: #807b2e;
+  --hue-7: #5a5fb0;
+  --code-foreground: #262626;
+  --code-token-comment: #8a8f95;
+  --code-token-keyword: #8a4fa8;
+  --code-token-string: #3f7d4f;
+  --code-token-string-expression: #3f7d4f;
+  --code-token-constant: #a35f22;
+  --code-token-function: #2f62a8;
+  --code-token-parameter: #866a1c;
+  --code-token-punctuation: #666666;
+  --code-token-link: #2f62a8;
+  --code-token-inserted: #3f7d4f;
+  --code-token-deleted: #c4413d;
+  --code-token-changed: #9a7430;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
   --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.08);
   --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--border);

@@ -13,7 +13,7 @@ import { IconButton } from "@/components/ui/Button";
 import { ContextMenu } from "@/components/ui/Menu";
 import { EmptyState } from "@/components/ui/Controls";
 import { ProjectPicker } from "@/features/tasks/pickers";
-import { prompt } from "@/components/ui/Dialog";
+import { confirmDelete, prompt } from "@/components/ui/Dialog";
 import { useUi } from "@/stores/ui";
 
 const refresh = () => {
@@ -38,6 +38,7 @@ async function convert(item: InboxItem, to: "task" | "note", projectId?: string 
 }
 
 async function remove(item: InboxItem) {
+  if (!(await confirmDelete("Delete this inbox item?"))) return;
   try {
     await api.inbox.delete(item.id);
     refresh();

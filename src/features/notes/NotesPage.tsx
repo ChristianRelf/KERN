@@ -30,6 +30,7 @@ import { EmptyState, Skeleton } from "@/components/ui/Controls";
 import { ProjectGlyph } from "@/features/projects/ProjectGlyph";
 import { createNote } from "@/features/search/commands";
 import { NoteEditor, InsertMenu } from "./NoteEditor";
+import { confirmDelete } from "@/components/ui/Dialog";
 
 const refresh = () => invalidate("notes", "note", "recent", "search");
 
@@ -43,6 +44,7 @@ async function patchNote(id: string, patch: Parameters<typeof api.notes.update>[
 }
 
 async function deleteNote(n: NoteMeta, after?: () => void) {
+  if (!(await confirmDelete(`Delete “${n.title || "Untitled"}”?`, "The note moves to the trash, where you can restore it."))) return;
   try {
     await api.notes.delete([n.id]);
     refresh();

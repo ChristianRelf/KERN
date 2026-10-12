@@ -31,6 +31,9 @@ thiserror = "2"
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 base64 = "0.22"
 semver = "1"
+sha2 = "0.10"
+# Moves files from the project file browser to the Recycle Bin / Trash.
+os_trash = { package = "trash", version = "5" }
 
 url = "2"
 

@@ -11,6 +11,7 @@ import { toast, toastError } from "@/stores/toast";
 import { addDaysStr, formatDue, todayStr } from "@/lib/dates";
 import { getSetting } from "@/stores/settings";
 import { scheduleIssuePush } from "@/features/github/push";
+import { confirmDelete } from "@/components/ui/Dialog";
 
 /** Builds the patch that reverts `patch` given the task's previous state. */
 export function inversePatch(prev: Task, patch: TaskPatch, spawned: boolean): TaskPatch {
@@ -193,6 +194,8 @@ export async function updateTasks(ids: string[], patch: TaskPatch, label?: strin
 
 export async function deleteTasks(ids: string[]) {
   if (!ids.length) return;
+  const one = ids.length === 1;
+  if (!(await confirmDelete(one ? "Delete this task?" : `Delete ${ids.length} tasks?`, `${one ? "It moves" : "They move"} to the trash, where you can restore ${one ? "it" : "them"}.`))) return;
   try {
     await api.tasks.delete(ids);
     invalidateTasks();

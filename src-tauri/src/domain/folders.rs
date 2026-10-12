@@ -10,8 +10,9 @@
 //!
 //! Restricted folders can be browsed, revealed and their documents opened.
 //! Programs and scripts are never opened in restricted mode; in a trusted
-//! folder they open only after a separate, explicit confirmation. Creating
-//! and renaming items requires trust. Nothing ever runs automatically.
+//! folder they open only after a separate, explicit confirmation. Creating,
+//! renaming, duplicating and deleting items (deletes go to the
+//! Recycle Bin) require trust. Nothing ever runs automatically.
 
 use crate::domain::settings;
 use crate::error::{invalid, AppError, AppResult};
@@ -215,7 +216,7 @@ pub struct Capabilities {
     pub open_documents: bool,
     /// Programs and scripts: trusted folders only, each run confirmed.
     pub open_programs: bool,
-    /// Creating folders and renaming items.
+    /// Creating, renaming, duplicating and deleting (to the Recycle Bin) items.
     pub modify: bool,
     /// AI features may read files (needs trust, the project's own permission
     /// and the global privacy setting).
@@ -563,6 +564,220 @@ pub async fn project_file_rename(app: AppHandle, project_id: String, rel: String
     .await
 }
 
+/// The item itself (not what a link points to): the parent folder is
+/// resolved and verified, the final name is taken as-is.
+fn entry_inside(root: &Path, rel: &str) -> AppResult<PathBuf> {
+    let p = Path::new(rel);
+    let name = p.file_name().ok_or_else(|| AppError::Invalid("The project folder itself can't be changed from Kern.".into()))?;
+    let parent_rel = p.parent().map(|x| x.to_string_lossy().to_string()).unwrap_or_default();
+    let parent = if parent_rel.is_empty() { root.to_path_buf() } else { resolve_inside(root, &parent_rel)? };
+    let target = parent.join(valid_name(&name.to_string_lossy())?);
+    if std::fs::symlink_metadata(&target).is_err() {
+        return Err(AppError::NotFound(format!("'{rel}'")));
+    }
+    Ok(target)
+}
+
+#[tauri::command]
+pub async fn project_file_create(app: AppHandle, project_id: String, parent_rel: String, name: String) -> AppResult<String> {
+    blocking(&app, move |s| {
+        let (root, trust) = s.with(|c| root_of(c, &project_id))?;
+        if trust != Trust::Trusted {
+            return invalid("Creating files needs a trusted folder.");
+        }
+        let parent = if parent_rel.is_empty() { root.clone() } else { resolve_inside(&root, &parent_rel)? };
+        let target = parent.join(valid_name(&name)?);
+        std::fs::OpenOptions::new().write(true).create_new(true).open(&target).map_err(|e| match e.kind() {
+            std::io::ErrorKind::AlreadyExists => AppError::Invalid("Something with that name already exists.".into()),
+            _ => AppError::Io(e),
+        })?;
+        Ok(rel_of(&root, &target))
+    })
+    .await
+}
+
+/// "name.ext" → "name copy.ext", then "name copy 2.ext", …
+fn copy_name(dir: &Path, name: &str) -> PathBuf {
+    let (stem, ext) = match name.rfind('.') {
+        Some(i) if i > 0 => (&name[..i], &name[i..]),
+        _ => (name, ""),
+    };
+    (1..)
+        .map(|n| dir.join(if n == 1 { format!("{stem} copy{ext}") } else { format!("{stem} copy {n}{ext}") }))
+        .find(|p| std::fs::symlink_metadata(p).is_err())
+        .expect("unbounded")
+}
+
+/// Duplicates a file next to itself. Folders aren't duplicated.
+#[tauri::command]
+pub async fn project_file_duplicate(app: AppHandle, project_id: String, rel: String) -> AppResult<String> {
+    blocking(&app, move |s| {
+        let (root, trust) = s.with(|c| root_of(c, &project_id))?;
+        if trust != Trust::Trusted {
+            return invalid("Duplicating needs a trusted folder.");
+        }
+        let src = entry_inside(&root, &rel)?;
+        if !std::fs::symlink_metadata(&src)?.is_file() {
+            return invalid("Only files can be duplicated.");
+        }
+        let dir = src.parent().ok_or_else(|| AppError::Invalid("Can't duplicate that.".into()))?;
+        let dest = copy_name(dir, &src.file_name().unwrap_or_default().to_string_lossy());
+        std::fs::copy(&src, &dest)?;
+        Ok(rel_of(&root, &dest))
+    })
+    .await
+}
+
+/// Moves a file or folder to the system Recycle Bin / Trash, never a
+/// permanent delete. A link is removed itself; its target is untouched.
+#[tauri::command]
+pub async fn project_file_trash(app: AppHandle, project_id: String, rel: String) -> AppResult<()> {
+    blocking(&app, move |s| {
+        let (root, trust) = s.with(|c| root_of(c, &project_id))?;
+        if trust != Trust::Trusted {
+            return invalid("Deleting needs a trusted folder.");
+        }
+        let target = entry_inside(&root, &rel)?;
+        os_trash::delete(&target).map_err(|e| AppError::Other(format!("Couldn't move it to the Recycle Bin ({e}).")))
+    })
+    .await
+}
+
+// ------------------------------------------------------------ viewing & editing
+
+const MAX_TEXT: u64 = 2 * 1024 * 1024;
+const MAX_IMAGE: u64 = 30 * 1024 * 1024;
+
+fn modified_ms(meta: &std::fs::Metadata) -> Option<i64> {
+    meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as i64)
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FileText {
+    /// Contents with line endings normalised to "\n".
+    pub text: String,
+    /// The file used Windows line endings; saving restores them.
+    pub crlf: bool,
+    /// The file started with a UTF-8 byte-order mark; saving keeps it.
+    pub bom: bool,
+    pub modified: Option<i64>,
+    pub size: u64,
+    /// Editing needs a trusted folder.
+    pub read_only: bool,
+}
+
+/// Splits raw bytes into text and the details needed to write them back
+/// unchanged: BOM and line-ending style.
+pub fn decode_text(bytes: &[u8]) -> AppResult<(String, bool, bool)> {
+    if bytes.iter().take(8192).any(|b| *b == 0) {
+        return invalid("This looks like a binary file, so Kern can't show it as text.");
+    }
+    let (bom, body) = match bytes.strip_prefix(b"\xEF\xBB\xBF") {
+        Some(rest) => (true, rest),
+        None => (false, bytes),
+    };
+    let text = std::str::from_utf8(body).map_err(|_| AppError::Invalid("This file isn't UTF-8 text, so Kern can't show it.".into()))?;
+    let crlf = text.contains("\r\n");
+    Ok((if crlf { text.replace("\r\n", "\n") } else { text.to_string() }, crlf, bom))
+}
+
+pub fn encode_text(text: &str, crlf: bool, bom: bool) -> Vec<u8> {
+    let body = if crlf { text.replace("\r\n", "\n").replace('\n', "\r\n") } else { text.to_string() };
+    let mut out = Vec::with_capacity(body.len() + 3);
+    if bom {
+        out.extend_from_slice(b"\xEF\xBB\xBF");
+    }
+    out.extend_from_slice(body.as_bytes());
+    out
+}
+
+#[tauri::command]
+pub async fn project_file_read(app: AppHandle, project_id: String, rel: String) -> AppResult<FileText> {
+    blocking(&app, move |s| {
+        let (root, trust) = s.with(|c| root_of(c, &project_id))?;
+        let path = resolve_inside(&root, &rel)?;
+        let meta = std::fs::metadata(&path)?;
+        if !meta.is_file() {
+            return invalid("That isn't a file.");
+        }
+        if meta.len() > MAX_TEXT {
+            return invalid("This file is over 2 MB, which is too large for Kern's viewer. Open it in your editor instead.");
+        }
+        let (text, crlf, bom) = decode_text(&std::fs::read(&path)?)?;
+        Ok(FileText { text, crlf, bom, modified: modified_ms(&meta), size: meta.len(), read_only: trust != Trust::Trusted })
+    })
+    .await
+}
+
+/// Saves edited text. Refuses when the file changed on disk since it was
+/// read (`expected_modified`), so another editor's work is never overwritten.
+#[tauri::command]
+pub async fn project_file_write(app: AppHandle, project_id: String, rel: String, text: String, crlf: bool, bom: bool, expected_modified: Option<i64>) -> AppResult<Option<i64>> {
+    blocking(&app, move |s| {
+        let (root, trust) = s.with(|c| root_of(c, &project_id))?;
+        if trust != Trust::Trusted {
+            return invalid("Editing files needs a trusted folder.");
+        }
+        let path = resolve_inside(&root, &rel)?;
+        let meta = std::fs::metadata(&path)?;
+        if !meta.is_file() {
+            return invalid("That isn't a file.");
+        }
+        if expected_modified.is_some() && modified_ms(&meta) != expected_modified {
+            return invalid("The file changed on disk since you opened it. Reload it to see the latest version.");
+        }
+        let bytes = encode_text(&text, crlf, bom);
+        if bytes.len() as u64 > MAX_TEXT * 2 {
+            return invalid("That's too much text to save from Kern.");
+        }
+        // Write beside the file, then swap it in, so a failed save never leaves a half-written file.
+        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let tmp = path.with_file_name(format!(".{name}.kern-saving"));
+        std::fs::write(&tmp, &bytes)?;
+        if let Err(e) = std::fs::rename(&tmp, &path) {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e.into());
+        }
+        Ok(std::fs::metadata(&path).ok().and_then(|m| modified_ms(&m)))
+    })
+    .await
+}
+
+fn image_mime(path: &Path) -> Option<&'static str> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    Some(match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" | "jfif" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "avif" => "image/avif",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        "svg" => "image/svg+xml",
+        _ => return None,
+    })
+}
+
+/// An image as a data URL for the in-app viewer (the webview can't read
+/// project folders directly).
+#[tauri::command]
+pub async fn project_file_image(app: AppHandle, project_id: String, rel: String) -> AppResult<String> {
+    use base64::Engine;
+    blocking(&app, move |s| {
+        let (root, _) = s.with(|c| root_of(c, &project_id))?;
+        let path = resolve_inside(&root, &rel)?;
+        let mime = image_mime(&path).ok_or_else(|| AppError::Invalid("Kern can't preview that kind of image.".into()))?;
+        let meta = std::fs::metadata(&path)?;
+        if !meta.is_file() || meta.len() > MAX_IMAGE {
+            return invalid("This image is too large to preview.");
+        }
+        let bytes = std::fs::read(&path)?;
+        Ok(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
+    })
+    .await
+}
+
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TrustRecord {
@@ -721,5 +936,41 @@ mod tests {
         assert!(!is_program(Path::new("notes.md")));
         assert!(is_sensitive(".env") && is_sensitive(".env.local") && is_sensitive("server.pem"));
         assert!(!is_sensitive("README.md"));
+    }
+
+    #[test]
+    fn copy_names_and_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = canonical(dir.path()).unwrap();
+        std::fs::write(root.join("a.txt"), "x").unwrap();
+        assert_eq!(copy_name(&root, "a.txt"), root.join("a copy.txt"));
+        std::fs::write(root.join("a copy.txt"), "x").unwrap();
+        assert_eq!(copy_name(&root, "a.txt"), root.join("a copy 2.txt"));
+        assert_eq!(copy_name(&root, ".env"), root.join(".env copy"));
+        assert_eq!(entry_inside(&root, "a.txt").unwrap(), root.join("a.txt"));
+        assert!(entry_inside(&root, "missing.txt").is_err());
+        assert!(entry_inside(&root, "").is_err());
+        assert!(entry_inside(&root, "../a.txt").is_err());
+    }
+
+    #[test]
+    fn text_round_trips_bom_and_line_endings() {
+        let raw = b"\xEF\xBB\xBFone\r\ntwo\r\n";
+        let (text, crlf, bom) = decode_text(raw).unwrap();
+        assert_eq!((text.as_str(), crlf, bom), ("one\ntwo\n", true, true));
+        assert_eq!(encode_text(&format!("{text}three"), crlf, bom), b"\xEF\xBB\xBFone\r\ntwo\r\nthree".to_vec());
+        assert_eq!(encode_text("a\nb", false, false), b"a\nb".to_vec());
+        assert!(decode_text(b"PNG\0\0data").is_err());
+        assert!(decode_text(&[0xff, 0xfe, 0x41]).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn entry_inside_keeps_the_link_itself() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = canonical(dir.path()).unwrap();
+        std::fs::create_dir(root.join("real")).unwrap();
+        std::os::unix::fs::symlink(root.join("real"), root.join("link")).unwrap();
+        assert_eq!(entry_inside(&root, "link").unwrap(), root.join("link"));
     }
 }

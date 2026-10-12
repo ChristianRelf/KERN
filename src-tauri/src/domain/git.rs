@@ -313,23 +313,43 @@ pub struct Commit {
     pub author: String,
     pub date: String,
     pub subject: String,
+    /// Parent hashes, first parent first (empty for a root commit).
+    pub parents: Vec<String>,
+    /// Branches and tags pointing here, as git decorates them
+    /// in full ("HEAD -> refs/heads/main", "refs/remotes/origin/main",
+    /// "tag: refs/tags/v1.0").
+    pub refs: Vec<String>,
 }
 
 pub fn parse_log(raw: &str) -> Vec<Commit> {
     raw.split('\u{1e}')
         .filter_map(|rec| {
             let f: Vec<&str> = rec.trim_matches('\n').split('\u{1f}').collect();
-            (f.len() == 5).then(|| Commit { hash: f[0].into(), short: f[1].into(), author: f[2].into(), date: f[3].into(), subject: f[4].into() })
+            (f.len() == 7).then(|| Commit {
+                hash: f[0].into(),
+                short: f[1].into(),
+                author: f[2].into(),
+                date: f[3].into(),
+                parents: f[4].split_whitespace().map(String::from).collect(),
+                refs: f[5].split(", ").map(str::trim).filter(|r| !r.is_empty()).map(String::from).collect(),
+                subject: f[6].into(),
+            })
         })
         .collect()
 }
 
 #[tauri::command]
-pub async fn git_log(app: AppHandle, project_id: String, limit: Option<u32>) -> AppResult<Vec<Commit>> {
+pub async fn git_log(app: AppHandle, project_id: String, limit: Option<u32>, all: Option<bool>) -> AppResult<Vec<Commit>> {
     blocking(&app, move |s| {
         let root = trusted_root(s, &project_id)?;
         let n = format!("--max-count={}", limit.unwrap_or(50).clamp(1, 500));
-        let out = git(&root, &["log", &n, "--date=iso-strict", "--format=%H%x1f%h%x1f%an%x1f%aI%x1f%s%x1e"], 30);
+        // Topological order keeps each branch's commits together, which is
+        // what the history graph needs to draw tidy lanes.
+        let mut args = vec!["log", n.as_str(), "--topo-order", "--decorate=full", "--date=iso-strict", "--format=%H%x1f%h%x1f%an%x1f%aI%x1f%P%x1f%D%x1f%s%x1e"];
+        if all.unwrap_or(false) {
+            args.push("--all");
+        }
+        let out = git(&root, &args, 30);
         // A brand-new repository has no commits yet.
         match out {
             Ok(o) => Ok(parse_log(&o)),
@@ -522,7 +542,7 @@ pub struct TodoItem {
     pub text: String,
 }
 
-const SKIP_DIRS: &[&str] = &[".git", "node_modules", "target", "dist", "build", "out", ".next", ".nuxt", "vendor", "__pycache__", ".venv", "venv", "coverage", ".idea", ".vscode", "bin", "obj"];
+pub const SKIP_DIRS: &[&str] = &[".git", "node_modules", "target", "dist", "build", "out", ".next", ".nuxt", "vendor", "__pycache__", ".venv", "venv", "coverage", ".idea", ".vscode", "bin", "obj"];
 
 /// Finds TODO / FIXME / HACK / XXX comments. Reads text files only (no
 /// binaries, nothing over 512 KB, no files that look like secrets).
@@ -600,6 +620,18 @@ pub async fn project_scan_todos(app: AppHandle, project_id: String) -> AppResult
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn log_parents_and_refs() {
+        let raw = "a1\u{1f}a\u{1f}Ann\u{1f}2026-01-02T00:00:00Z\u{1f}b2 c3\u{1f}HEAD -> main, origin/main, tag: v1\u{1f}Merge x\u{1e}\n\
+                   b2\u{1f}b\u{1f}Ann\u{1f}2026-01-01T00:00:00Z\u{1f}\u{1f}\u{1f}Root\u{1e}\n";
+        let log = parse_log(raw);
+        assert_eq!(log.len(), 2);
+        assert_eq!(log[0].parents, vec!["b2", "c3"]);
+        assert_eq!(log[0].refs, vec!["HEAD -> main", "origin/main", "tag: v1"]);
+        assert_eq!(log[0].subject, "Merge x");
+        assert!(log[1].parents.is_empty() && log[1].refs.is_empty());
+    }
 
     #[test]
     fn github_slugs() {

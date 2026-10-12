@@ -20,6 +20,7 @@ export type SettingsSection =
   | "privacy"
   | "api"
   | "integrations"
+  | "plugins"
   | "performance"
   | "about";
 

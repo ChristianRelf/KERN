@@ -21,7 +21,7 @@ import type { Project, ProjectGroup, ProjectInput, ProjectPatch } from "@/lib/ty
 import { pushUndo } from "@/stores/undo";
 import { toast, toastError } from "@/stores/toast";
 import { navigate, useRouter } from "@/stores/router";
-import { prompt } from "@/components/ui/Dialog";
+import { confirmDelete, prompt } from "@/components/ui/Dialog";
 import type { MenuItems } from "@/components/ui/Menu";
 import { openNewTask } from "@/features/tasks/creation";
 
@@ -83,6 +83,11 @@ export async function duplicateProject(p: Project) {
 }
 
 export async function deleteProject(p: Project) {
+  const ok = await confirmDelete(
+    `Delete “${p.name}”?`,
+    `The project and its tasks move to the trash, where you can restore them.${p.folderPath ? " Its folder on disk is untouched." : ""}`,
+  );
+  if (!ok) return;
   try {
     await api.projects.delete(p.id);
     refresh();

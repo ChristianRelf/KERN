@@ -16,6 +16,8 @@ pub mod labels;
 pub mod links;
 pub mod notes;
 pub mod notify;
+pub mod plugins;
+pub mod plugins_catalog;
 pub mod projects;
 pub mod recent;
 pub mod recurrence;

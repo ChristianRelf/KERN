@@ -5,10 +5,14 @@
 
 import {
   ArrowLeft,
+  ArrowUpDown,
   ClipboardCopy,
+  Copy,
   CornerLeftUp,
   Ellipsis,
   ExternalLink,
+  Eye,
+  FilePlus,
   FolderOpen,
   FolderPlus,
   FolderSearch,
@@ -16,18 +20,21 @@ import {
   FolderX,
   Pencil,
   RefreshCw,
+  Search,
   ShieldCheck,
   ShieldHalf,
+  Trash2,
   Unlink,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { create } from "zustand";
 import { useQuery } from "@tanstack/react-query";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { FileEntry, FolderInfo, Project, ProjectFolder, Trust } from "@/lib/types";
 import { api, describeError } from "@/lib/ipc";
 import { invalidate } from "@/lib/query";
-import { Dialog, confirm, prompt } from "@/components/ui/Dialog";
+import { Dialog, confirm, confirmDelete, prompt } from "@/components/ui/Dialog";
+import { isMac } from "@/lib/shortcuts";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Dropdown, ContextMenu, type MenuItems } from "@/components/ui/Menu";
 import { EmptyState, Skeleton, Switch } from "@/components/ui/Controls";
@@ -35,6 +42,8 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { toast, toastError } from "@/stores/toast";
 import { formatBytes, relativeTime } from "@/lib/dates";
 import { FileTypeIcon } from "./fileIcons";
+import { FileViewer, ImageHoverCard, canHoverPreview, isImage, viewableInApp } from "@/features/files/FileViewer";
+import { SyntaxPrompt } from "@/features/plugins/SyntaxPrompt";
 
 export async function copyText(text: string, what = "Path") {
   try {
@@ -348,12 +357,75 @@ async function openEntry(projectId: string, e: FileEntry, folder: ProjectFolder,
 }
 
 const crumbs = (rel: string) => (rel ? rel.split("/") : []);
+const BIN = isMac || !/Win/i.test(navigator.platform) ? "Trash" : "Recycle Bin";
 
-/** A minimal browser for a linked folder: list, navigate, open, reveal, copy path. */
+type SortKey = "name" | "modified" | "size" | "type";
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: "name", label: "Name" },
+  { key: "modified", label: "Date modified" },
+  { key: "size", label: "Size" },
+  { key: "type", label: "Type" },
+];
+const extOf = (n: string) => (n.lastIndexOf(".") > 0 ? n.slice(n.lastIndexOf(".") + 1).toLowerCase() : "");
+const byName = (a: FileEntry, b: FileEntry) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+
+function sortEntries(list: FileEntry[], key: SortKey, desc: boolean, dirsFirst: boolean): FileEntry[] {
+  const cmp = (a: FileEntry, b: FileEntry): number => {
+    if (key === "modified") return (a.modified ?? 0) - (b.modified ?? 0) || byName(a, b);
+    if (key === "size") return (a.size ?? -1) - (b.size ?? -1) || byName(a, b);
+    if (key === "type") return extOf(a.name).localeCompare(extOf(b.name)) || byName(a, b);
+    return byName(a, b);
+  };
+  return [...list].sort((a, b) => (dirsFirst && a.isDir !== b.isDir ? (a.isDir ? -1 : 1) : desc ? -cmp(a, b) : cmp(a, b)));
+}
+
+async function newItem(projectId: string, parentRel: string, kind: "file" | "folder") {
+  const name = await prompt({ title: kind === "file" ? "New file" : "New folder", placeholder: kind === "file" ? "notes.md" : "Folder name", confirmLabel: "Create" });
+  if (!name) return;
+  try {
+    await (kind === "file" ? api.folders.createFile(projectId, parentRel, name) : api.folders.createFolder(projectId, parentRel, name));
+    invalidate("files");
+  } catch (err) {
+    toastError(describeError(err, `Couldn't create the ${kind}.`));
+  }
+}
+
+async function renameEntry(projectId: string, e: FileEntry) {
+  const name = await prompt({ title: "Rename", initial: e.name, confirmLabel: "Rename" });
+  if (!name || name === e.name) return;
+  try {
+    await api.folders.rename(projectId, e.rel, name);
+    invalidate("files");
+  } catch (err) {
+    toastError(describeError(err, "Couldn't rename."));
+  }
+}
+
+async function trashEntry(projectId: string, e: FileEntry) {
+  const ok = await confirmDelete(
+    `Delete “${e.name}”?`,
+    `${e.isDir ? "The folder and everything in it move" : e.isLink ? "The link moves (what it points to is untouched)" : "The file moves"} to the ${BIN}, where you can restore ${e.isDir ? "them" : "it"}.`,
+  );
+  if (!ok) return;
+  try {
+    await api.folders.trash(projectId, e.rel);
+    invalidate("files");
+    toast(`Moved ${e.name} to the ${BIN}`);
+  } catch (err) {
+    toastError(describeError(err, "Couldn't delete that."));
+  }
+}
+
+/** A browser for a linked folder: navigate, filter, sort, open, and (when trusted) create, rename, duplicate and delete. */
 export function FolderBrowser({ project }: { project: Project }) {
   const { data: folder, isLoading: folderLoading } = useProjectFolder(project.id, !!project.folderPath);
   const [rel, setRel] = useState("");
   const [showHidden, setShowHidden] = useState(false);
+  const [query, setQuery] = useState("");
+  const [viewing, setViewing] = useState<FileEntry | null>(null);
+  const [hover, setHover] = useState<{ entry: FileEntry; rect: DOMRect } | null>(null);
+  const hoverTimer = useRef<number | undefined>(undefined);
+  const [sort, setSort] = useState<{ key: SortKey; desc: boolean; dirsFirst: boolean }>({ key: "name", desc: false, dirsFirst: true });
   const ok = folder?.status === "ok";
   const { data: listing, error, isFetching, refetch } = useQuery({
     queryKey: ["files", project.id, rel],
@@ -362,7 +434,15 @@ export function FolderBrowser({ project }: { project: Project }) {
     retry: false,
     staleTime: 10_000,
   });
-  const entries = useMemo(() => (listing?.entries ?? []).filter((e) => showHidden || !e.hidden), [listing, showHidden]);
+  const entries = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const shown = (listing?.entries ?? []).filter((e) => (showHidden || !e.hidden) && (!q || e.name.toLowerCase().includes(q)));
+    return sortEntries(shown, sort.key, sort.desc, sort.dirsFirst);
+  }, [listing, showHidden, query, sort]);
+  const go = (to: string) => {
+    setRel(to);
+    setQuery("");
+  };
 
   if (folderLoading || !folder) return <Skeleton height={60} />;
   if (!ok)
@@ -373,39 +453,65 @@ export function FolderBrowser({ project }: { project: Project }) {
     );
 
   const parts = crumbs(rel);
+  const modify = folder.capabilities.modify;
+  const openExternal = (e: FileEntry) => void openEntry(project.id, e, folder, go);
+  /** Click / Enter: folders open, text and images show in Kern, anything else opens in its app. */
+  const activate = (e: FileEntry) => {
+    setHover(null);
+    if (e.isDir) go(e.rel);
+    else if (viewableInApp(e)) setViewing(e);
+    else openExternal(e);
+  };
   const entryMenu = (e: FileEntry): MenuItems => [
-    { label: e.isDir ? "Open folder" : e.program ? "Run…" : "Open", icon: e.isDir ? FolderOpen : ExternalLink, disabled: e.program && !folder.capabilities.openPrograms, onSelect: () => void openEntry(project.id, e, folder, setRel) },
+    !e.isDir && viewableInApp(e) && { label: isImage(e) ? "View image" : folder.capabilities.modify ? "View & edit" : "View", icon: Eye, onSelect: () => setViewing(e) },
+    { label: e.isDir ? "Open folder" : e.program ? "Run…" : "Open in default app", icon: e.isDir ? FolderOpen : ExternalLink, disabled: e.program && !folder.capabilities.openPrograms, onSelect: () => (e.isDir ? go(e.rel) : openExternal(e)) },
     { label: "Show in file manager", icon: FolderSearch, onSelect: () => void api.folders.reveal(project.id, e.rel).catch((err) => toastError(describeError(err))) },
+    { type: "separator" },
     { label: "Copy path", icon: ClipboardCopy, onSelect: () => void api.folders.path(project.id, e.rel).then((p) => copyText(p)).catch((err) => toastError(describeError(err))) },
-    folder.capabilities.modify && { type: "separator" },
-    folder.capabilities.modify && {
-      label: "Rename…",
-      icon: Pencil,
-      onSelect: async () => {
-        const name = await prompt({ title: "Rename", initial: e.name, confirmLabel: "Rename" });
-        if (!name || name === e.name) return;
-        try {
-          await api.folders.rename(project.id, e.rel, name);
-          invalidate("files");
-        } catch (err) {
-          toastError(describeError(err, "Couldn't rename."));
-        }
+    { label: "Copy relative path", onSelect: () => void copyText(e.rel, "Relative path") },
+    { label: "Copy name", onSelect: () => void copyText(e.name, "Name") },
+    modify && { type: "separator" },
+    modify && e.isDir && { label: "New file here…", icon: FilePlus, onSelect: () => void newItem(project.id, e.rel, "file") },
+    modify && e.isDir && { label: "New folder here…", icon: FolderPlus, onSelect: () => void newItem(project.id, e.rel, "folder") },
+    modify && { label: "Rename…", icon: Pencil, shortcut: "F2", onSelect: () => void renameEntry(project.id, e) },
+    modify &&
+      !e.isDir && {
+        label: "Duplicate",
+        icon: Copy,
+        onSelect: () =>
+          void api.folders
+            .duplicate(project.id, e.rel)
+            .then(() => invalidate("files"))
+            .catch((err) => toastError(describeError(err, "Couldn't duplicate."))),
       },
-    },
+    modify && { type: "separator" },
+    modify && { label: `Delete…`, icon: Trash2, danger: true, shortcut: "Delete", onSelect: () => void trashEntry(project.id, e) },
+  ];
+  const sortMenu: MenuItems = [
+    ...SORTS.map((s) => ({ label: s.label, checked: sort.key === s.key, onSelect: () => setSort((v) => ({ ...v, key: s.key })) })),
+    { type: "separator" as const },
+    { label: "Ascending", checked: !sort.desc, onSelect: () => setSort((v) => ({ ...v, desc: false })) },
+    { label: "Descending", checked: sort.desc, onSelect: () => setSort((v) => ({ ...v, desc: true })) },
+    { type: "separator" as const },
+    { label: "Folders first", checked: sort.dirsFirst, onSelect: () => setSort((v) => ({ ...v, dirsFirst: !v.dirsFirst })) },
+    { label: "Show hidden files", checked: showHidden, onSelect: () => setShowHidden((v) => !v) },
   ];
 
   return (
     <div className="file-browser">
+      <SyntaxPrompt project={project} />
+      <FileViewer projectId={project.id} folder={folder} entry={viewing} onClose={() => setViewing(null)} onOpenExternal={openExternal} />
+      {hover && <ImageHoverCard projectId={project.id} entry={hover.entry} anchor={hover.rect} />}
       <div className="file-browser__bar">
-        <IconButton icon={ArrowLeft} label="Back" size="sm" disabled={!rel} onClick={() => setRel(parts.slice(0, -1).join("/"))} />
+        <IconButton icon={ArrowLeft} label="Back" size="sm" disabled={!rel} onClick={() => go(parts.slice(0, -1).join("/"))} />
         <nav className="file-browser__crumbs" aria-label="Folder path">
-          <button type="button" onClick={() => setRel("")} data-current={!rel || undefined}>
+          <button type="button" onClick={() => go("")} data-current={!rel || undefined}>
             {folder.name}
           </button>
           {parts.map((p, i) => (
             <span key={i} className="row" style={{ gap: 2 }}>
               <span className="faint">/</span>
-              <button type="button" onClick={() => setRel(parts.slice(0, i + 1).join("/"))} data-current={i === parts.length - 1 || undefined}>
+              <button type="button" onClick={() => go(parts.slice(0, i + 1).join("/"))} data-current={i === parts.length - 1 || undefined}>
                 {p}
               </button>
             </span>
@@ -413,29 +519,21 @@ export function FolderBrowser({ project }: { project: Project }) {
         </nav>
         <span className="spacer" />
         <TrustBadge trust={folder.trust} />
+        <label className="file-browser__filter">
+          <Search size={13} aria-hidden />
+          <input value={query} onChange={(ev) => setQuery(ev.target.value)} onKeyDown={(ev) => ev.key === "Escape" && setQuery("")} placeholder="Filter" aria-label="Filter this folder" spellCheck={false} />
+        </label>
         <Tooltip content="Show hidden files">
           <label className="row" style={{ gap: 6, fontSize: "var(--fs-xs)", color: "var(--text-3)" }}>
             <Switch checked={showHidden} onChange={setShowHidden} label="Show hidden files" />
             Hidden
           </label>
         </Tooltip>
-        {folder.capabilities.modify && (
-          <IconButton
-            icon={FolderPlus}
-            label="New folder"
-            size="sm"
-            onClick={async () => {
-              const name = await prompt({ title: "New folder", placeholder: "Folder name", confirmLabel: "Create" });
-              if (!name) return;
-              try {
-                await api.folders.createFolder(project.id, rel, name);
-                invalidate("files");
-              } catch (err) {
-                toastError(describeError(err, "Couldn't create the folder."));
-              }
-            }}
-          />
-        )}
+        <Dropdown items={sortMenu} align="end">
+          <IconButton icon={ArrowUpDown} label="Sort" size="sm" />
+        </Dropdown>
+        {modify && <IconButton icon={FilePlus} label="New file" size="sm" onClick={() => void newItem(project.id, rel, "file")} />}
+        {modify && <IconButton icon={FolderPlus} label="New folder" size="sm" onClick={() => void newItem(project.id, rel, "folder")} />}
         <IconButton icon={RefreshCw} label="Refresh" size="sm" onClick={() => void refetch()} className={isFetching ? "spin" : undefined} />
         <IconButton icon={FolderOpen} label="Open in file manager" size="sm" onClick={() => void api.folders.reveal(project.id, rel).catch((err) => toastError(describeError(err)))} />
       </div>
@@ -455,9 +553,9 @@ export function FolderBrowser({ project }: { project: Project }) {
       ) : !listing ? (
         <Skeleton height={120} />
       ) : (
-        <div className="file-list" role="list">
+        <div className="file-list" role="list" onWheel={() => hover && setHover(null)}>
           {rel && (
-            <button type="button" className="file-row file-row--up" onClick={() => setRel(parts.slice(0, -1).join("/"))}>
+            <button type="button" className="file-row file-row--up" onClick={() => go(parts.slice(0, -1).join("/"))}>
               <CornerLeftUp size={15} strokeWidth={1.75} className="file-icon" />
               <span className="grow">..</span>
             </button>
@@ -470,9 +568,24 @@ export function FolderBrowser({ project }: { project: Project }) {
                 tabIndex={0}
                 data-dir={e.isDir || undefined}
                 data-hidden={e.hidden || undefined}
-                onDoubleClick={() => void openEntry(project.id, e, folder, setRel)}
-                onClick={() => e.isDir && setRel(e.rel)}
-                onKeyDown={(k) => k.key === "Enter" && void openEntry(project.id, e, folder, setRel)}
+                onClick={() => activate(e)}
+                onMouseEnter={(ev) => {
+                  if (!canHoverPreview(e)) return;
+                  const rect = ev.currentTarget.getBoundingClientRect();
+                  window.clearTimeout(hoverTimer.current);
+                  hoverTimer.current = window.setTimeout(() => setHover({ entry: e, rect }), 350);
+                }}
+                onMouseLeave={() => {
+                  window.clearTimeout(hoverTimer.current);
+                  setHover(null);
+                }}
+                onKeyDown={(k) => {
+                  if (k.key === "Enter") activate(e);
+                  else if (modify && k.key === "F2") void renameEntry(project.id, e);
+                  else if (modify && k.key === "Delete") void trashEntry(project.id, e);
+                  else return;
+                  k.preventDefault();
+                }}
               >
                 <FileTypeIcon entry={e} />
                 <span className="truncate grow">{e.name}</span>
@@ -496,7 +609,7 @@ export function FolderBrowser({ project }: { project: Project }) {
               </div>
             </ContextMenu>
           ))}
-          {!entries.length && <div className="empty empty--compact">This folder is empty.</div>}
+          {!entries.length && <div className="empty empty--compact">{query.trim() ? `Nothing here matches “${query.trim()}”.` : "This folder is empty."}</div>}
           {listing.truncated && <div className="faint" style={{ padding: 8, fontSize: "var(--fs-xs)" }}>Showing the first 5,000 items.</div>}
         </div>
       )}

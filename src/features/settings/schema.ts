@@ -38,6 +38,9 @@ export interface Settings {
   "general.startMaximized": boolean;
   "general.landing": "dashboard" | "last" | "tasks" | "inbox";
   "general.confirmPermanentDelete": boolean;
+  "general.confirmDelete": boolean;
+  "plugins.suggestSyntax": boolean;
+  "plugins.declined": string[];
   "general.detailMode": "inspector" | "modal" | "page";
   "general.globalCaptureShortcut": string | null;
   "general.onboarded": boolean;
@@ -188,6 +191,9 @@ export const DEFAULTS: Settings = {
   "general.startMaximized": false,
   "general.landing": "dashboard",
   "general.confirmPermanentDelete": true,
+  "general.confirmDelete": true,
+  "plugins.suggestSyntax": true,
+  "plugins.declined": [],
   "general.detailMode": "inspector",
   "general.globalCaptureShortcut": null,
   "general.onboarded": false,

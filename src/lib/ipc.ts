@@ -110,7 +110,7 @@ export const api = {
     remote: (projectId: string) => call<T.GitRemoteInfo>("git_remote", { projectId }),
     status: (projectId: string) => call<T.GitStatus>("git_status", { projectId }),
     diff: (projectId: string, path: string, staged: boolean, untracked: boolean) => call<string>("git_diff", { projectId, path, staged, untracked }),
-    log: (projectId: string, limit?: number) => call<T.GitCommit[]>("git_log", { projectId, limit: limit ?? null }),
+    log: (projectId: string, limit?: number, all?: boolean) => call<T.GitCommit[]>("git_log", { projectId, limit: limit ?? null, all: all ?? null }),
     branches: (projectId: string) => call<T.GitBranch[]>("git_branches", { projectId }),
     switch: (projectId: string, name: string, create = false) => call<void>("git_switch", { projectId, name, create }),
     sync: (projectId: string, action: "fetch" | "pull" | "push") => call<{ output: string }>("git_sync", { projectId, action }),
@@ -147,9 +147,25 @@ export const api = {
     createFolder: (projectId: string, parentRel: string, name: string) =>
       call<string>("project_folder_create", { projectId, parentRel, name }),
     rename: (projectId: string, rel: string, newName: string) => call<string>("project_file_rename", { projectId, rel, newName }),
+    createFile: (projectId: string, parentRel: string, name: string) => call<string>("project_file_create", { projectId, parentRel, name }),
+    duplicate: (projectId: string, rel: string) => call<string>("project_file_duplicate", { projectId, rel }),
+    /** Moves to the Recycle Bin / Trash. */
+    trash: (projectId: string, rel: string) => call<void>("project_file_trash", { projectId, rel }),
+    read: (projectId: string, rel: string) => call<T.FileText>("project_file_read", { projectId, rel }),
+    write: (projectId: string, rel: string, file: Pick<T.FileText, "text" | "crlf" | "bom" | "modified">) =>
+      call<number | null>("project_file_write", { projectId, rel, text: file.text, crlf: file.crlf, bom: file.bom, expectedModified: file.modified }),
+    /** Data URL of an image inside the folder. */
+    image: (projectId: string, rel: string) => call<string>("project_file_image", { projectId, rel }),
+    kinds: (projectId: string) => call<T.FileKindCount[]>("project_file_kinds", { projectId }),
     trusted: () => call<T.TrustRecord[]>("trusted_folders_list"),
     /** trust = null forgets the decision. */
     updateTrusted: (path: string, trust: T.Trust | null) => call<void>("trusted_folder_update", { path, trust }),
+  },
+  plugins: {
+    installed: () => call<string[]>("syntax_installed"),
+    install: (names: string[]) => call<string[]>("syntax_install", { names }),
+    remove: (names: string[]) => call<void>("syntax_remove", { names }),
+    grammar: (name: string) => call<string>("syntax_grammar", { name }),
   },
   groups: {
     list: () => call<T.ProjectGroup[]>("groups_list"),

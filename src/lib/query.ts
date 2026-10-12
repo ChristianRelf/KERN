@@ -17,6 +17,7 @@ export const queryClient = new QueryClient({
 
 export type Domain =
   | "tasks"
+  | "plugins"
   | "task"
   | "board"
   | "boards"

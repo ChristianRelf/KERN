@@ -7,7 +7,7 @@ import { invalidate } from "@/lib/query";
 import { navigate, useRouter } from "@/stores/router";
 import { pushUndo } from "@/stores/undo";
 import { toast, toastError } from "@/stores/toast";
-import { prompt } from "@/components/ui/Dialog";
+import { confirmDelete, prompt } from "@/components/ui/Dialog";
 
 const refresh = () => invalidate("whiteboards", "whiteboard", "recent", "trash");
 
@@ -26,6 +26,7 @@ export async function renameWhiteboard(w: Whiteboard) {
 }
 
 export async function deleteWhiteboard(w: Whiteboard) {
+  if (!(await confirmDelete(`Delete “${w.name}”?`, "The whiteboard moves to the trash, where you can restore it."))) return;
   try {
     await api.whiteboards.delete(w.id);
     refresh();

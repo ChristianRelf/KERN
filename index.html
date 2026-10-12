@@ -5,9 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
     <title>Kern</title>
-    <style>html,body{background:#111111;margin:0}</style>
+    <style>
+      html,body{background:#111111;margin:0}
+      /* Startup splash: painted before the bundle loads, removed by App once
+         settings are in. Fades in late so fast launches never flash it. */
+      #splash{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:#111111;transition:opacity 180ms ease}
+      #splash[data-hidden]{opacity:0;pointer-events:none}
+      #splash .splash__inner{display:flex;flex-direction:column;align-items:center;gap:22px;opacity:0;animation:splash-in 240ms ease 250ms forwards}
+      #splash .splash__spinner{width:18px;height:18px;border-radius:50%;border:2px solid #2a2a2a;border-top-color:#9a9a9a;animation:splash-spin 800ms linear infinite}
+      @keyframes splash-in{to{opacity:1}}
+      @keyframes splash-spin{to{transform:rotate(360deg)}}
+      @media (prefers-reduced-motion:reduce){#splash .splash__spinner{animation-duration:2.4s}}
+    </style>
   </head>
   <body>
+    <div id="splash" role="status" aria-label="Loading Kern">
+      <div class="splash__inner">
+        <svg width="56" height="56" viewBox="0 0 1024 1024" aria-hidden="true">
+          <rect x="64" y="64" width="896" height="896" rx="200" fill="#222222" stroke="#3a3a3a" stroke-width="24" />
+          <path d="M470 500 L676 742" stroke="#808080" stroke-width="88" stroke-linecap="round" fill="none" />
+          <path d="M446 540 L664 286" stroke="#ededed" stroke-width="88" stroke-linecap="round" fill="none" />
+          <rect x="318" y="242" width="88" height="540" rx="44" fill="#ededed" />
+        </svg>
+        <div class="splash__spinner"></div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
