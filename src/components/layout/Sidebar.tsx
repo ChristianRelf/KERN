@@ -2,7 +2,7 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
-  CircleArrowUp,
+  CircleArrowDown,
   Coffee,
   EyeOff,
   FolderKanban,
@@ -66,20 +66,31 @@ import { APP_NAME } from "@/app/brand";
 import { BrandMark } from "@/app/BrandMark";
 import { AUTO_SCROLL, DROP_ANIMATION, DragPreview, SORT_TRANSITION, SortableRow, announcements, restrictToVertical, useListSensors } from "./sortable";
 
-/** Blue arrow shown when a newer GitHub release exists; opens its page. */
-function UpdateButton() {
+/**
+ * Shown above Trash when a newer GitHub release exists; opens its page
+ * (nothing is downloaded or installed). Pops in when an update appears.
+ */
+function UpdateBanner({ collapsed }: { collapsed: boolean }) {
   const { data } = useUpdateCheck();
   if (!data?.latest) return null;
-  const label = `Update available: ${APP_NAME} ${data.latest} (you have ${data.current})`;
+  const label = `Update available: ${APP_NAME} v${data.latest} (you have v${data.current})`;
   return (
     <Tooltip content={label} side="right">
       <button
         type="button"
-        className="update-btn"
+        className="update-banner"
+        data-collapsed={collapsed || undefined}
         aria-label={label}
         onClick={() => api.system.open(data.url).catch((e) => toastError(describeError(e, "Couldn't open the release page.")))}
       >
-        <CircleArrowUp size={16} strokeWidth={2} />
+        <CircleArrowDown strokeWidth={2} />
+        {!collapsed && (
+          <>
+            <span className="truncate">Update Available</span>
+            <span className="update-banner__dot" aria-hidden />
+            <span className="update-banner__version">v{data.latest}</span>
+          </>
+        )}
       </button>
     </Tooltip>
   );
@@ -161,7 +172,6 @@ export function Sidebar() {
           </Tooltip>
           <span className="brand__name truncate">{APP_NAME}</span>
         </div>
-        <UpdateButton />
         <IconButton icon={Search} label="Search & commands" shortcut={shortcuts.palette} size="sm" onClick={() => useUi.getState().setPalette(true)} />
         <IconButton icon={Plus} label="Quick capture" shortcut={shortcuts.quickCapture} size="sm" onClick={() => useUi.getState().openCapture()} />
       </div>
@@ -172,6 +182,7 @@ export function Sidebar() {
       </div>
 
       <div className="sidebar__bottom">
+        <UpdateBanner collapsed={collapsed} />
         <SessionPill collapsed={collapsed} />
         <FocusPill collapsed={collapsed} />
         <NavButton icon={Trash} label="Trash" active={route.name === "trash"} collapsed={collapsed} onClick={() => navigate({ name: "trash" })} />

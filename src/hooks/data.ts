@@ -127,13 +127,17 @@ export function useDashboards() {
   return useQuery({ queryKey: ["dashboards"], queryFn: api.dashboards.list, staleTime: Infinity });
 }
 
-/** Polls GitHub releases for a newer version. Failures stay silent. */
+/**
+ * Polls GitHub releases for a newer version every minute while Kern is
+ * visible (unchanged lists are answered from the backend's ETag cache).
+ * Failures stay silent.
+ */
 export function useUpdateCheck() {
   return useQuery({
     queryKey: ["updateCheck"],
     queryFn: api.system.checkForUpdate,
-    staleTime: 60 * 60 * 1000,
-    refetchInterval: 6 * 60 * 60 * 1000,
+    staleTime: 55 * 1000,
+    refetchInterval: 60 * 1000,
     refetchOnWindowFocus: false,
     retry: false,
   });

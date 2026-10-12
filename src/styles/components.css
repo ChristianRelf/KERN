@@ -636,8 +636,8 @@
   flex-shrink: 0;
 }
 .segmented--lg .segmented__item svg {
-  width: var(--icon-md, 16px);
-  height: var(--icon-md, 16px);
+  width: 16px;
+  height: 16px;
 }
 
 /* ---------- Tabs (compact underline) */

@@ -1,6 +1,10 @@
 //! Update check: compares the running version with the newest published
 //! GitHub release. Read-only and unauthenticated; it never downloads or
 //! installs anything, the interface just links to the release page.
+//!
+//! The interface polls often (every minute while Kern is visible), so the
+//! last response's ETag is sent back: an unchanged release list comes back
+//! as 304, which GitHub doesn't count against the unauthenticated rate limit.
 
 use crate::domain::settings;
 use crate::error::{AppError, AppResult};
@@ -8,11 +12,29 @@ use crate::state::AppState;
 use semver::Version;
 use serde::Serialize;
 use serde_json::Value;
+use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
 const RELEASES_API: &str = "https://api.github.com/repos/ChristianRelf/KERN/releases?per_page=20";
 pub const RELEASES_PAGE: &str = "https://github.com/ChristianRelf/KERN/releases";
+
+/// Debug builds can point the check at a local stand-in (`KERN_RELEASES_API`)
+/// to try the update notice; release builds always ask GitHub.
+fn releases_api() -> String {
+    #[cfg(debug_assertions)]
+    if let Ok(url) = std::env::var("KERN_RELEASES_API") {
+        return url;
+    }
+    RELEASES_API.to_string()
+}
+
+/// The last release list GitHub sent, with its ETag.
+struct Cached {
+    etag: String,
+    releases: Vec<Value>,
+}
+static LAST: Mutex<Option<Cached>> = Mutex::new(None);
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -60,17 +82,26 @@ pub async fn check_for_update(app: AppHandle) -> AppResult<UpdateInfo> {
             .user_agent("Kern")
             .build()
             .into();
-        let mut resp = agent
-            .get(RELEASES_API)
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .call()
-            .map_err(|e| AppError::Network(format!("Couldn't reach GitHub ({e}).")))?;
-        if resp.status().as_u16() >= 400 {
-            return Err(AppError::Network(format!("GitHub returned {}.", resp.status().as_u16())));
+        let etag = LAST.lock().ok().and_then(|l| l.as_ref().map(|c| c.etag.clone()));
+        let mut req = agent.get(&releases_api()).header("Accept", "application/vnd.github+json").header("X-GitHub-Api-Version", "2022-11-28");
+        if let Some(tag) = &etag {
+            req = req.header("If-None-Match", tag);
         }
-        let text = resp.body_mut().with_config().limit(4 * 1024 * 1024).read_to_string().unwrap_or_default();
-        let releases: Vec<Value> = serde_json::from_str(&text).unwrap_or_default();
+        let mut resp = req.call().map_err(|e| AppError::Network(format!("Couldn't reach GitHub ({e}).")))?;
+        let status = resp.status().as_u16();
+        let releases: Vec<Value> = if status == 304 {
+            LAST.lock().ok().and_then(|l| l.as_ref().map(|c| c.releases.clone())).unwrap_or_default()
+        } else if status >= 400 {
+            return Err(AppError::Network(format!("GitHub returned {status}.")));
+        } else {
+            let new_etag = resp.headers().get("etag").and_then(|v| v.to_str().ok()).map(str::to_string);
+            let text = resp.body_mut().with_config().limit(4 * 1024 * 1024).read_to_string().unwrap_or_default();
+            let releases: Vec<Value> = serde_json::from_str(&text).unwrap_or_default();
+            if let (Some(etag), Ok(mut last)) = (new_etag, LAST.lock()) {
+                *last = Some(Cached { etag, releases: releases.clone() });
+            }
+            releases
+        };
         Ok(match newest(&releases, &cur) {
             Some((v, url)) => UpdateInfo { current, latest: Some(v.to_string()), url },
             None => none,
