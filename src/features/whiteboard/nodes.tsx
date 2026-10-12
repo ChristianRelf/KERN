@@ -13,6 +13,7 @@ import {
   ImageOff,
   SquareCheckBig,
   SquareKanban,
+  Flag,
 } from "lucide-react";
 import type { WbData, WbNode } from "./model";
 import { useAppInfo, useNotes, useProjectMap, useProjects, useTask } from "@/hooks/data";
@@ -28,6 +29,8 @@ import { useToday } from "@/hooks/useToday";
 import { navigate } from "@/stores/router";
 import { IconButton } from "@/components/ui/Button";
 import { getSetting } from "@/stores/settings";
+import { useMilestone } from "@/features/dev/hooks";
+import { openMilestone } from "@/features/milestones/actions";
 
 // ------------------------------------------------------------- context
 
@@ -643,6 +646,46 @@ export const NoteRefNode = memo(function NoteRefNode({ id, data, selected }: Nod
   );
 });
 
+export const MilestoneRefNode = memo(function MilestoneRefNode({ id, data, selected }: NodeProps<WbNode>) {
+  const { update, projectId } = useWb();
+  const { data: projects } = useProjects();
+  const { data: choices } = useQuery({
+    queryKey: ["milestones", "wb", projectId ?? "all", projects?.length],
+    queryFn: async () => (projectId ? api.milestones.list(projectId) : (await Promise.all((projects ?? []).map((p) => api.milestones.list(p.id)))).flat()),
+    enabled: !data.milestoneId && (!!projectId || !!projects),
+  });
+  const { data: m, isError } = useMilestone(data.milestoneId);
+  const today = useToday();
+  return (
+    <>
+      <Resizer selected={selected} data={data} min={[180, 70]} />
+      <Handles />
+      <div className="wbn wbn--card" data-locked={data.locked} onDoubleClick={() => m && openMilestone(m.id)}>
+        <div className="wbn__kind">
+          <Flag /> {m?.isRelease ? "Release" : "Milestone"}
+        </div>
+        {!data.milestoneId ? (
+          <RefPicker placeholder="Choose a milestone" options={(choices ?? []).map((x) => ({ value: x.id, label: x.title }))} onPick={(v) => update(id, { milestoneId: v })} />
+        ) : m && !isError ? (
+          <>
+            <div className="wbn__title truncate">
+              {m.title}
+              {m.isRelease && m.version ? ` · ${m.version}` : ""}
+            </div>
+            <Progress value={m.progress} />
+            <div className="wbn__meta">
+              {m.status === "completed" ? "Completed" : `${m.taskDone}/${m.taskTotal} tasks`}
+              {m.targetDate && m.status !== "completed" && <DueLabel date={m.targetDate} time={null} done={false} today={today} />}
+            </div>
+          </>
+        ) : (
+          <span className="faint">{isError ? "This milestone was deleted" : "Loading…"}</span>
+        )}
+      </div>
+    </>
+  );
+});
+
 export const NODE_TYPES = {
   text: TextNode,
   sticky: StickyNode,
@@ -655,4 +698,5 @@ export const NODE_TYPES = {
   project: ProjectRefNode,
   board: BoardRefNode,
   note: NoteRefNode,
+  milestone: MilestoneRefNode,
 };

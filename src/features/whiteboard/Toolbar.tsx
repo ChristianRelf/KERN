@@ -28,6 +28,7 @@ import {
   ZoomOut,
   Ellipsis,
   RectangleHorizontal,
+  Flag,
 } from "lucide-react";
 import { IconButton } from "@/components/ui/Button";
 import { Dropdown } from "@/components/ui/Menu";
@@ -45,6 +46,7 @@ export type Tool =
   | "project"
   | "board"
   | "note"
+  | "milestone"
   | `shape:${"rect" | "rounded" | "circle" | "line" | "arrow"}`;
 
 const stop = (e: React.SyntheticEvent) => {
@@ -115,6 +117,7 @@ export function Toolbar({
           { label: "Note", icon: FileText, onSelect: () => onInsert("note") },
           { label: "Project", icon: FolderKanban, onSelect: () => onInsert("project") },
           { label: "Board", icon: SquareKanban, onSelect: () => onInsert("board") },
+          { label: "Milestone", icon: Flag, onSelect: () => onInsert("milestone") },
         ]}
       >
         <span>

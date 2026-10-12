@@ -13,7 +13,8 @@ export type WbNodeType =
   | "file"
   | "project"
   | "board"
-  | "note";
+  | "note"
+  | "milestone";
 
 export interface WbData extends Record<string, unknown> {
   title?: string;
@@ -34,6 +35,7 @@ export interface WbData extends Record<string, unknown> {
   projectId?: string;
   boardId?: string;
   noteId?: string;
+  milestoneId?: string;
   url?: string;
   description?: string;
   siteName?: string;
@@ -72,6 +74,7 @@ export const DEFAULT_SIZES: Record<WbNodeType, { w: number; h: number }> = {
   project: { w: 260, h: 104 },
   board: { w: 260, h: 84 },
   note: { w: 280, h: 140 },
+  milestone: { w: 280, h: 110 },
 };
 
 export const newNodeId = () => `n_${crypto.randomUUID()}`;

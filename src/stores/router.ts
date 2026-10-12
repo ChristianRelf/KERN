@@ -21,6 +21,7 @@ export type SettingsSection =
   | "api"
   | "integrations"
   | "plugins"
+  | "developer"
   | "performance"
   | "about";
 

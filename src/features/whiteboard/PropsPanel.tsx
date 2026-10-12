@@ -32,6 +32,7 @@ const TYPE_LABEL: Record<string, string> = {
   project: "Project",
   board: "Board",
   note: "Note",
+  milestone: "Milestone",
 };
 
 /** Floating properties for the current whiteboard selection. */

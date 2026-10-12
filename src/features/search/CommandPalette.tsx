@@ -36,6 +36,7 @@ import { resolveBindings } from "@/lib/shortcuts";
 import { useSetting } from "@/stores/settings";
 import { openLink } from "@/features/links/links";
 import { confirm } from "@/components/ui/Dialog";
+import { requestWhiteboardFocus } from "@/features/whiteboard/focus";
 
 interface Item {
   key: string;
@@ -99,7 +100,10 @@ export function openHit(h: SearchHit) {
       navigate({ name: "whiteboard", id: h.id });
       break;
     case "wb_node":
-      if (h.parentId) navigate({ name: "whiteboard", id: h.parentId });
+      if (h.parentId) {
+        requestWhiteboardFocus(h.parentId, h.id);
+        navigate({ name: "whiteboard", id: h.parentId });
+      }
       break;
     case "label":
       navigate({ name: "label", id: h.id });

@@ -15,6 +15,7 @@ export function ProjectAiSettings({ project }: { project: Project }) {
   const { data: accounts } = useAiAccounts();
   const { data: folder } = useProjectFolder(project.id, !!project.folderPath);
   const globalFolders = useSetting("privacy.aiLinkedFolders");
+  const globalContent = useSetting("privacy.aiProjectContent");
   const account = accounts?.find((a) => a.id === prefs.accountId);
   const set = (p: ProjectAiPrefs) => void updateProject(project.id, { aiPrefs: { ...prefs, ...p } });
 
@@ -82,6 +83,12 @@ export function ProjectAiSettings({ project }: { project: Project }) {
             )}
           </>
         )}
+        <Tooltip content={globalContent ? "Catch-up summaries may send this project's task titles, note titles, milestones and activity to your AI provider, after showing you what's included." : "AI access to project content is off in Privacy settings."}>
+          <label className="row" style={{ gap: 8, opacity: globalContent ? 1 : 0.55 }}>
+            <Switch checked={prefs.contentAccess !== false && globalContent} disabled={!globalContent} onChange={(v) => set({ contentAccess: v })} label="Allow AI catch-up summaries" />
+            Allow AI catch-up summaries
+          </label>
+        </Tooltip>
         <Tooltip content={blocker ?? "AI features may read files in this project's folder. Files that look like secrets (.env, keys) are always excluded."}>
           <label className="row" style={{ gap: 8, opacity: blocker ? 0.55 : 1 }}>
             <Switch checked={!!prefs.fileAccess && !blocker} disabled={!!blocker} onChange={(v) => set({ fileAccess: v })} label="Allow AI to read the linked folder" />

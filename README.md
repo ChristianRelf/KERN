@@ -40,7 +40,10 @@ src/                     React + TypeScript (strict), Vite
   components/ui|layout   design-system controls (Radix primitives, custom styling) and the shell
   features/<feature>/    dashboard, tasks, boards, projects, whiteboard, notes, inbox,
                          daily-briefing, focus, search, capture, settings, trash, onboarding,
-                         storage, links, ai (API accounts), github (GitHub & git)
+                         storage, links, ai (API accounts), github (GitHub & git),
+                         command-centre (project overview), milestones, sessions, workspace
+                         (resume & snapshots), catchup, health, terminal, dev (repositories,
+                         worktrees, commands, environment profiles, services, dependencies)
   lib/                   typed IPC client, query layer, dates, shortcuts, fuzzy matching
   stores/                Zustand stores for transient UI state, settings, router, undo, toasts
   styles/                design tokens (CSS variables), base, controls, layout
@@ -48,7 +51,9 @@ src-tauri/src/
   db/                    connection setup, versioned migrations
   domain/                one module per area: pure service functions on &Connection plus
                          thin #[tauri::command] wrappers (incl. folders, storage, links,
-                         ai/{vault,provider,router,accounts}, git, github)
+                         ai/{vault,provider,router,accounts}, git, github, repos, worktrees,
+                         workflow, sessions, workspace, milestones, devenv, pty, envvars,
+                         services, deps, health, catchup, fileindex)
   scheduler.rs           single low-frequency thread: briefings, reminders, backups, housekeeping
   window.rs              window state persistence, tray, close/minimise behaviour
 ```
@@ -125,5 +130,69 @@ as CSV, notes as Markdown and projects as JSON.
   between keys in the same organisation after a pool-wide limit, and is bounded.
 - **GitHub issues**: two-way, three-way-merged per field (newer edit wins when
   both sides changed). Deleting a task unlinks it; it never closes the issue.
+
+### Projects, with optional development tools
+
+A project needs only a name. Everything else — folders, repositories, commands,
+services — is optional and only appears once it's connected, so a renovation or a
+school assignment never shows git tabs or empty developer panels.
+
+- **Command Centre**: each project's overview is an editable widget grid (the
+  dashboard engine) starting from a preset that fits the project — General, or
+  Hybrid once code is linked. Development widgets load lazily and only if added.
+- **Resume Workspace**: Kern remembers each project's tab, board, whiteboard, open
+  task, open file, selected repository and terminal layout (debounced, flushed on
+  navigation/close) and restores it, skipping anything that no longer exists.
+  Named workspace snapshots can be saved and reapplied. Resuming never runs
+  commands, restarts services or starts assistants.
+- **Milestones** work in every project (target date, status, progress from tasks or
+  manual, dependencies) and can optionally be releases (version, repository, linked
+  pull requests and issues, changelog draft). Tasks join a milestone through
+  `tasks.milestone_id` — still one task record. Publishing a release is always done
+  by the user on GitHub; Kern only opens a prefilled draft.
+- **Work sessions** are timestamp-based (elapsed = end − start − paused), so sleep,
+  minimising and restarts never drift. A long silence before a heartbeat is offered
+  as a gap to keep or exclude. Only explicit links are stored; inferred pull
+  requests are labelled. No keystrokes, screenshots or other apps are tracked.
+- **Repositories**: a project can link zero, one or many (local clone, GitHub, or
+  both). The existing folder link and GitHub issue sync are adopted automatically.
+  Unlinking never touches disk or GitHub. Git commands are repository-scoped and
+  still need a trusted folder.
+- **Worktrees** are always read from `git worktree list` (including ones Kern didn't
+  create). Removal shows the real status first; a dirty worktree needs explicit
+  confirmation, a locked one is never removed, and branches are only deleted with
+  `git branch -d`. Kern never runs clean, reset, force-push or history rewrites.
+- **Start Work** on a task begins a session; with a trusted repository it can also
+  create (or reuse) a branch or worktree with a suggested, git-validated name and
+  link it to the task. Completing a task never commits, pushes, merges or deletes.
+- **Environment detection** reads configuration files only (package.json,
+  Cargo.toml, pyproject.toml, go.mod, …) and checks PATH; nothing is executed.
+  **Saved commands** are a program plus an argument list (no shell string), run only
+  when clicked, in a terminal tab, in a trusted folder.
+- **Terminal**: real pseudoterminals (ConPTY on Windows) rendered with xterm.js,
+  loaded on first use. Processes run with the user's permissions (trust is not a
+  sandbox), are stopped as a tree on close, and quitting with running commands asks
+  first. Output is never persisted.
+- **Environment profiles**: plain values in SQLite, secrets in the OS credential
+  store (only a reference in SQLite, never logged or backed up), injected into the
+  launched process only. `.env` import defaults likely credentials to secrets;
+  exporting secrets needs explicit consent.
+- **Local services** are only the endpoints the user adds, checked only while the
+  project is open. "Running" means it answered; "healthy" only when a configured
+  HTTP check passed. Docker is optional.
+- **Dependencies** come from manifests and lockfiles; a declared range is never shown
+  as a resolved version. OSV advisory lookups are explicit and send only package
+  names and resolved versions; a clean result reads "no known advisories".
+- **Health** is a state (On track / Needs attention / Blocked / No recent data) with
+  clickable reasons and configurable rules — no scores. Development signals only
+  count when the project has them, and come from data already fetched.
+- **Catch-up** builds a deterministic local digest with numbered sources (works with
+  no AI). The optional AI summary shows what's included and its size first, honours
+  the global and per-project content permissions, redacts key-like strings, and
+  drops any claim that doesn't cite a known source.
+- **Universal search** (Ctrl+K) adds milestones, saved commands, workspaces, synced
+  issues, cached pull requests and commits, and linked-folder files and code from an
+  incremental index (skipping dependencies, build output, `.gitignore`d, binary and
+  secret-looking files), with filters.
 
 See `PERFORMANCE.md` for measurements.

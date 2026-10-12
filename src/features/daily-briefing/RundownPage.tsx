@@ -1,4 +1,4 @@
-import { CalendarClock, History, Moon, Pin, RotateCcw, Sunrise, Sunset, X, Archive, CircleCheck } from "lucide-react";
+import { CalendarClock, History, Moon, Pin, RotateCcw, Sunrise, Sunset, X, Archive, CircleCheck, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Task } from "@/lib/types";
@@ -16,7 +16,9 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { openTask } from "@/features/tasks/menu";
 import { rescheduleTasks, toggleComplete, updateTask } from "@/features/tasks/actions";
 import { DueLabel } from "@/features/tasks/TaskRow";
-import { useTasks } from "@/hooks/data";
+import { useProjects, useTasks } from "@/hooks/data";
+import { Dropdown } from "@/components/ui/Menu";
+import { openCatchup } from "@/features/catchup/open";
 import { toast } from "@/stores/toast";
 import { useSetting } from "@/stores/settings";
 import { format } from "date-fns";
@@ -46,6 +48,7 @@ export default function RundownPage({ day, mode }: { day?: string; mode?: "morni
         </h1>
         {!isHistory && <span className="page-header__sub">{format(parseDateStr(today), "EEEE d MMMM")}</span>}
         <div className="page-header__actions">
+          <CatchupMenu />
           <Segmented
             size="sm"
             value={view}
@@ -425,5 +428,19 @@ function HistoricView({ day, kind }: { day: string; kind: "morning" | "evening" 
         </Section>
       )}
     </>
+  );
+}
+
+/** Catch up on a project from the rundown (recently active projects first). */
+function CatchupMenu() {
+  const { data: projects } = useProjects();
+  const recent = [...(projects ?? [])].sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0)).slice(0, 12);
+  if (!recent.length) return null;
+  return (
+    <Dropdown align="end" items={[{ type: "label", label: "Catch up on…" }, ...recent.map((p) => ({ label: p.name, onSelect: () => openCatchup(p.id) }))]}>
+      <Button size="sm" variant="ghost" icon={Sparkles}>
+        Catch up
+      </Button>
+    </Dropdown>
   );
 }

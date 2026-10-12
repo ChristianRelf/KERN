@@ -24,6 +24,7 @@ import { useCommands, useEnvProfiles } from "./hooks";
 import { TechIcon } from "./TechIcon";
 import { EnvProfilesSection } from "./EnvProfiles";
 import { ServicesSection } from "./Services";
+import { joinArgs, splitArgs } from "./args";
 
 type Part = "commands" | "environment" | "services";
 
@@ -268,31 +269,6 @@ function CommandRow({ c, trusted, onRun, onEdit }: { c: SavedCommand; trusted: b
     </ContextMenu>
   );
 }
-
-/** Splits an argument string, honouring quotes: `run "my file"` → ["run", "my file"]. */
-export function splitArgs(s: string): string[] {
-  const out: string[] = [];
-  let cur = "";
-  let quote: string | null = null;
-  let any = false;
-  for (const ch of s) {
-    if (quote) {
-      if (ch === quote) quote = null;
-      else cur += ch;
-    } else if (ch === '"' || ch === "'") {
-      quote = ch;
-      any = true;
-    } else if (/\s/.test(ch)) {
-      if (cur || any) out.push(cur);
-      cur = "";
-      any = false;
-    } else cur += ch;
-  }
-  if (cur || any) out.push(cur);
-  return out;
-}
-
-export const joinArgs = (args: string[]) => args.map((a) => (/[\s"']/.test(a) || a === "" ? `"${a.replace(/"/g, "'")}"` : a)).join(" ");
 
 function CommandDialog({ project, initial, onClose }: { project: Project; initial: Partial<CommandInput>; onClose: () => void }) {
   const { data: repos } = useQuery({ queryKey: ["repos", project.id], queryFn: () => api.repos.list(project.id) });

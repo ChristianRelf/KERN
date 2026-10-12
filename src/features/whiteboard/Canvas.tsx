@@ -2,6 +2,7 @@
 // undo/redo, clipboard, grouping into areas, alignment guides, file drops,
 // debounced persistence with explicit flushes, and export.
 
+import { takeWhiteboardFocus } from "./focus";
 import {
   Background,
   BackgroundVariant,
@@ -447,6 +448,7 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
       case "project":
       case "board":
       case "note":
+      case "milestone":
         return create(t, at, { editing: false });
       default:
         if (t.startsWith("shape:")) return create("shape", at, { shape: t.slice(6) as WbData["shape"], editing: false });
@@ -682,8 +684,16 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
 
   useEffect(() => {
     const vp = scene.whiteboard.viewport;
+    const focusId = takeWhiteboardFocus(scene.whiteboard.id);
     const t = window.setTimeout(() => {
-      if (nodesRef.current.length && (s["wb.autoFit"] || !vp)) void rf.fitView({ padding: 0.15, maxZoom: Math.max(1, s["wb.defaultZoom"]) });
+      const target = focusId ? nodesRef.current.find((n) => n.id === focusId) : undefined;
+      if (target) {
+        const w = target.measured?.width ?? target.width ?? 200;
+        const h = target.measured?.height ?? target.height ?? 100;
+        const abs = rf.getInternalNode(target.id)?.internals.positionAbsolute ?? target.position;
+        void rf.setCenter(abs.x + w / 2, abs.y + h / 2, { zoom: Math.max(1, s["wb.defaultZoom"]) });
+        setNodes((ns) => ns.map((n) => ({ ...n, selected: n.id === target.id })));
+      } else if (nodesRef.current.length && (s["wb.autoFit"] || !vp)) void rf.fitView({ padding: 0.15, maxZoom: Math.max(1, s["wb.defaultZoom"]) });
       else if (vp) void rf.setViewport(vp);
       else void rf.setViewport({ x: 0, y: 0, zoom: s["wb.defaultZoom"] });
     }, 30);

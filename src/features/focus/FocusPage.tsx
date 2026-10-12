@@ -1,4 +1,6 @@
 import { Timer, Minus, Plus } from "lucide-react";
+import { useSessions } from "@/features/sessions/store";
+import { startSession } from "@/features/sessions/SessionUi";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useFocusClock, KindSwitch, TaskSelector, TransportControls } from "./FocusControls";
@@ -86,6 +88,7 @@ export default function FocusPage() {
             </div>
           )}
           <TransportControls />
+          {f.kind === "focus" && <TrackSession taskId={f.taskId} />}
         </div>
         <aside className="focus-side">
           {!tracking ? (
@@ -147,3 +150,14 @@ function SessionRow({ taskId, startedAt, secs, completed }: { taskId: string | n
   );
 }
 
+
+/** Offers to log focus time as a work session too (never automatically). */
+function TrackSession({ taskId }: { taskId: string | null }) {
+  const active = useSessions((s) => s.active);
+  if (active) return <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>Work session running: {active.taskTitle ?? active.projectName ?? "untitled"}</span>;
+  return (
+    <button type="button" className="mini-more" onClick={() => void startSession({ taskId })}>
+      Also track this as a work session
+    </button>
+  );
+}

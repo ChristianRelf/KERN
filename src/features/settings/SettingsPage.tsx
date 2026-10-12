@@ -23,6 +23,7 @@ import {
   Shield,
   KeyRound,
   Blocks,
+  SquareTerminal,
 } from "lucide-react";
 import { IntegrationsSection } from "@/features/github/IntegrationsSection";
 import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
@@ -54,6 +55,7 @@ import { BrandMark } from "@/app/BrandMark";
 import { comboFromEvent } from "@/lib/shortcuts";
 import { ACCENTS } from "@/features/projects/ProjectGlyph";
 import { PluginsSection } from "@/features/plugins/PluginsSection";
+import { developerGroups } from "./DeveloperSection";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: typeof Settings }[] = [
   { id: "general", label: "General", icon: Settings },
@@ -71,6 +73,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: typeof Settings }[] 
   { id: "api", label: "API", icon: KeyRound },
   { id: "integrations", label: "Integrations", icon: Blocks },
   { id: "plugins", label: "Plugins", icon: Puzzle },
+  { id: "developer", label: "Developer Tools", icon: SquareTerminal },
   { id: "performance", label: "Performance", icon: Gauge },
   { id: "about", label: "About", icon: Info },
 ];
@@ -553,7 +556,24 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
       {
         title: "Projects",
         rows: [
-          { label: "Open projects on", control: <SSelect k="projects.defaultTab" options={[{ value: "overview", label: "Overview" }, { value: "tasks", label: "Tasks" }, { value: "board", label: "Board" }, { value: "whiteboard", label: "Whiteboard" }, { value: "notes", label: "Notes" }]} /> },
+          { label: "Open projects on", control: <SSelect k="projects.defaultTab" options={[{ value: "overview", label: "Overview" }, { value: "tasks", label: "Tasks" }, { value: "board", label: "Board" }, { value: "whiteboard", label: "Whiteboard" }, { value: "notes", label: "Notes" }, { value: "milestones", label: "Milestones" }]} /> },
+          {
+            label: "When reopening a project",
+            hint: "Resuming restores the tab, board, whiteboard, open task and file you had. It never runs commands.",
+            keywords: "resume workspace remember last tab",
+            control: (
+              <SSelect
+                k="projects.resume"
+                width={220}
+                options={[
+                  { value: "resume", label: "Resume where I left off" },
+                  { value: "lastTab", label: "Open the last tab" },
+                  { value: "overview", label: "Always open the overview" },
+                  { value: "ask", label: "Ask each time" },
+                ]}
+              />
+            ),
+          },
           { label: "Show progress in sidebar", control: <SToggle k="projects.showProgress" /> },
           { label: "Archived projects", control: <SSegmented k="projects.archivedDisplay" options={[{ value: "section", label: "Show in a section" }, { value: "hide", label: "Hide" }]} /> },
           { label: "Group projects", control: <SSegmented k="projects.grouping" options={[{ value: "groups", label: "By group" }, { value: "none", label: "No grouping" }]} /> },
@@ -716,6 +736,7 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
     ],
     integrations: <IntegrationsSection />,
     plugins: <PluginsSection />,
+    developer: developerGroups(),
     api: (
       <Suspense fallback={<Skeleton height={120} />}>
         <ApiPage tab={apiTab} />
