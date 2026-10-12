@@ -1,13 +1,17 @@
 import { BaseEdge, EdgeLabelRenderer, MarkerType, getBezierPath, getSmoothStepPath, getStraightPath, type EdgeProps } from "@xyflow/react";
-import { memo, useContext, useState } from "react";
-import type { WbEdge } from "./model";
+import { memo, useContext, useEffect, useState } from "react";
+import { colorVar, type WbEdge } from "./model";
 import { EdgeApiContext } from "./edgeContext";
 
 export const WbEdgeView = memo(function WbEdgeView(props: EdgeProps<WbEdge>) {
   const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, selected, markerEnd, markerStart } = props;
   const api = useContext(EdgeApiContext);
-  const [editing, setEditing] = useState(false);
+  const editing = api.editingId === id;
   const [label, setLabel] = useState(data?.label ?? "");
+  useEffect(() => {
+    if (editing) setLabel(data?.label ?? "");
+  }, [editing]);
+  const ink = colorVar(data?.color, "");
   const pathKind = data?.path ?? "smooth";
   const [path, labelX, labelY] =
     pathKind === "straight"
@@ -23,7 +27,7 @@ export const WbEdgeView = memo(function WbEdgeView(props: EdgeProps<WbEdge>) {
         path={path}
         markerEnd={markerEnd}
         markerStart={markerStart}
-        style={{ stroke: selected ? "var(--text)" : "var(--text-3)", strokeDasharray: dash, strokeLinecap: "round" }}
+        style={{ stroke: ink || (selected ? "var(--text)" : "var(--text-3)"), strokeDasharray: dash, strokeLinecap: "round" }}
         interactionWidth={18}
       />
       {(data?.label || editing) && (
@@ -41,10 +45,7 @@ export const WbEdgeView = memo(function WbEdgeView(props: EdgeProps<WbEdge>) {
               color: "var(--text-2)",
               border: selected ? "1px solid var(--border-strong)" : "1px solid transparent",
             }}
-            onDoubleClick={() => {
-              setLabel(data?.label ?? "");
-              setEditing(true);
-            }}
+            onDoubleClick={() => api.setEditingId(id)}
           >
             {editing ? (
               <input
@@ -52,8 +53,8 @@ export const WbEdgeView = memo(function WbEdgeView(props: EdgeProps<WbEdge>) {
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 onBlur={() => {
-                  setEditing(false);
-                  api.updateEdge(id, { label: label.trim() || undefined });
+                  api.setEditingId(null);
+                  if (label.trim() !== (data?.label ?? "")) api.updateEdge(id, { label: label.trim() || undefined });
                 }}
                 onKeyDown={(e) => (e.key === "Enter" || e.key === "Escape") && (e.target as HTMLInputElement).blur()}
                 style={{ border: "none", background: "transparent", width: Math.max(60, label.length * 7), fontSize: "inherit", color: "var(--text)" }}
@@ -71,7 +72,8 @@ export const WbEdgeView = memo(function WbEdgeView(props: EdgeProps<WbEdge>) {
 export const EDGE_TYPES = { wb: WbEdgeView };
 
 /** Adds arrow markers (rendered inside React Flow's SVG so exports include them). */
-export function withMarkers(e: WbEdge, color: string): WbEdge {
+export function withMarkers(e: WbEdge, fallback: string): WbEdge {
+  const color = colorVar(e.data?.color, fallback);
   const marker = { type: MarkerType.ArrowClosed, color, width: 16, height: 16 };
   const directed = e.data?.directed !== false || e.data?.both;
   return { ...e, markerEnd: directed ? marker : undefined, markerStart: e.data?.both ? marker : undefined };

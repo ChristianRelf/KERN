@@ -12,6 +12,8 @@ import { ProjectGlyph } from "@/features/projects/ProjectGlyph";
 import { relativeTime } from "@/lib/dates";
 import { useUi } from "@/stores/ui";
 import { ToggleRow } from "./RundownWidget";
+import { colorVar, type WbColor } from "@/features/whiteboard/model";
+import { inkPath } from "@/features/whiteboard/ink";
 
 // ------------------------------------------------------------- Projects
 
@@ -146,10 +148,20 @@ export function WhiteboardThumb({ scene, height = "100%" }: { scene: WhiteboardS
           const common = { x: n.x, y: n.y, width: n.w, height: n.h, rx: 10 };
           if (n.type === "area")
             return <rect key={n.id} {...common} fill="var(--hover)" stroke="var(--border-strong)" strokeDasharray="8 6" vectorEffect="non-scaling-stroke" />;
+          const ink = colorVar(n.data.color as WbColor | undefined, "var(--text-3)");
+          if (n.type === "draw") {
+            const vw = (n.data.vw as number) || n.w;
+            const vh = (n.data.vh as number) || n.h;
+            return <path key={n.id} transform={`translate(${n.x} ${n.y})`} d={inkPath((n.data.points as number[]) ?? [], n.w / vw, n.h / vh)} fill="none" stroke={ink} strokeWidth={2} strokeLinecap="round" vectorEffect="non-scaling-stroke" />;
+          }
           if (n.type === "shape") {
             const shape = (n.data.shape as string) ?? "rect";
-            if (shape === "circle") return <ellipse key={n.id} cx={n.x + n.w / 2} cy={n.y + n.h / 2} rx={n.w / 2} ry={n.h / 2} fill="none" stroke="var(--text-3)" vectorEffect="non-scaling-stroke" />;
-            return <rect key={n.id} {...common} rx={shape === "rounded" ? 16 : 2} fill="none" stroke="var(--text-3)" vectorEffect="non-scaling-stroke" />;
+            if (shape === "circle") return <ellipse key={n.id} cx={n.x + n.w / 2} cy={n.y + n.h / 2} rx={n.w / 2} ry={n.h / 2} fill="none" stroke={ink} vectorEffect="non-scaling-stroke" />;
+            if (shape === "line" || shape === "arrow") {
+              const [x1, y1, x2, y2] = n.data.flip ? [0, n.h, n.w, 0] : n.h < 24 ? [0, n.h / 2, n.w, n.h / 2] : n.w < 24 ? [n.w / 2, 0, n.w / 2, n.h] : [0, 0, n.w, n.h];
+              return <line key={n.id} x1={n.x + x1} y1={n.y + y1} x2={n.x + x2} y2={n.y + y2} stroke={ink} strokeWidth={2} vectorEffect="non-scaling-stroke" />;
+            }
+            return <rect key={n.id} {...common} rx={shape === "rounded" ? 16 : 2} fill="none" stroke={ink} vectorEffect="non-scaling-stroke" />;
           }
           const fill = n.type === "sticky" ? "var(--surface-3)" : n.type === "image" ? "var(--border-strong)" : "var(--surface-2)";
           return <rect key={n.id} {...common} fill={fill} stroke="var(--border)" vectorEffect="non-scaling-stroke" />;

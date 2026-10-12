@@ -51,6 +51,10 @@
   font-weight: 650;
   letter-spacing: -0.015em;
 }
+/* Collapsed rail: shrink to the mark so the centred top bar actually centres it. */
+.sidebar[data-collapsed="true"] .brand {
+  flex: none;
+}
 .brand__mark {
   width: 20px;
   height: 20px;

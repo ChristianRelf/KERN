@@ -55,6 +55,7 @@ import {
   StickyNote,
   Type,
   Scan,
+  ScanSearch,
 } from "lucide-react";
 import { api, describeError } from "@/lib/ipc";
 import { invalidate, queryClient } from "@/lib/query";
@@ -71,6 +72,7 @@ import { EDGE_TYPES, withMarkers } from "./edges";
 import { EdgeApiContext } from "./edgeContext";
 import {
   absolutePosition,
+  colorVar,
   edgeDefaults,
   fromRecords,
   isDescendant,
@@ -84,18 +86,53 @@ import {
   type WbEdge,
   type WbEdgeData,
   type WbNode,
+  type WbColor,
   type WbNodeType,
 } from "./model";
-import { Toolbar, TopBar, type Tool } from "./Toolbar";
+import { Toolbar, TopBar, type ShapeKind, type Tool } from "./Toolbar";
 import { PropsPanel } from "./PropsPanel";
+import { inkHit, inkPath, makeDrawing } from "./ink";
 
 interface Snap {
   nodes: WbNode[];
   edges: WbEdge[];
 }
 
+type Pt = { x: number; y: number };
+
+/** In-progress gesture on the drawing layer, in flow coordinates. */
+type Draft = { kind: "ink"; points: number[] } | { kind: "box"; a: Pt; b: Pt };
+
 const CLIP_PREFIX = "kern-wb:";
 let memoryClipboard: Snap | null = null;
+// Pen options survive switching whiteboards within a session.
+let penMemory: { color: WbColor; width: number } = { color: "default", width: 4 };
+
+/** Smallest size a dragged-out object may take; anything smaller counts as a click. */
+const DRAW_MIN: Partial<Record<WbNodeType, [number, number]>> = {
+  text: [140, 60],
+  sticky: [100, 80],
+  area: [160, 120],
+  shape: [20, 20],
+};
+
+/** Types that open their inline editor on Enter. */
+const EDITABLE = new Set<WbNodeType>(["text", "sticky", "shape", "area", "link"]);
+
+const isLineTool = (t: Tool) => t === "shape:line" || t === "shape:arrow";
+
+/** Shift while dragging: square boxes, 45° lines. */
+function constrain(a: Pt, b: Pt, line: boolean): Pt {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  if (line) {
+    const angle = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
+    const len = Math.hypot(dx, dy);
+    return { x: a.x + Math.round(Math.cos(angle) * len), y: a.y + Math.round(Math.sin(angle) * len) };
+  }
+  const side = Math.max(Math.abs(dx), Math.abs(dy));
+  return { x: a.x + Math.sign(dx || 1) * side, y: a.y + Math.sign(dy || 1) * side };
+}
 
 const clean = (n: WbNode): WbNode => {
   const { selected: _s, dragging: _d, ...rest } = n;
@@ -134,6 +171,12 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
   const [nodes, setNodes] = useState<WbNode[]>(initial.nodes);
   const [edges, setEdges] = useState<WbEdge[]>(initial.edges);
   const [tool, setTool] = useState<Tool>("select");
+  const [toolLock, setToolLock] = useState(false);
+  const [lastShape, setLastShape] = useState<ShapeKind>("rounded");
+  const [pen, setPenState] = useState(penMemory);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [eraserAt, setEraserAt] = useState<Pt | null>(null);
+  const [editingEdge, setEditingEdge] = useState<string | null>(null);
   const [spacePan, setSpacePan] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [guides, setGuides] = useState<{ x?: number; y?: number }>({});
@@ -243,6 +286,11 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
     [requestCommit, scheduleSave],
   );
   const nodeApi = useMemo(() => ({ update: updateNode, projectId }), [updateNode, projectId]);
+  const updateNodes = (ids: string[], patch: Partial<WbData>) => {
+    const set = new Set(ids);
+    setNodes((ns) => ns.map((n) => (set.has(n.id) ? { ...n, data: { ...n.data, ...patch } } : n)));
+    requestCommit();
+  };
   const updateEdge = useCallback(
     (id: string, patch: Partial<WbEdgeData>) => {
       setEdges((es) => es.map((e) => (e.id === id ? { ...e, data: { ...e.data, ...patch } } : e)));
@@ -250,7 +298,7 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
     },
     [requestCommit],
   );
-  const edgeApi = useMemo(() => ({ updateEdge }), [updateEdge]);
+  const edgeApi = useMemo(() => ({ updateEdge, editingId: editingEdge, setEditingId: setEditingEdge }), [updateEdge, editingEdge]);
 
   // ------------------------------------------------------------ alignment guides
   const zoom = useStore((st) => st.transform[2]);
@@ -339,26 +387,45 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
     [requestCommit],
   );
 
+  /** The innermost area containing a flow point (skipping `exclude` and its descendants). */
+  const areaAt = (p: Pt, exclude?: string): WbNode | undefined => {
+    const all = nodesRef.current;
+    const byId = new Map(all.map((n) => [n.id, n]));
+    let best: WbNode | undefined;
+    let bestArea = Infinity;
+    for (const a of all) {
+      if (a.type !== "area" || a.id === exclude || (exclude && isDescendant(a.id, exclude, byId))) continue;
+      const ap = absolutePosition(a, byId);
+      const as = sizeOf(a);
+      if (p.x < ap.x || p.x > ap.x + as.w || p.y < ap.y || p.y > ap.y + as.h || as.w * as.h >= bestArea) continue;
+      best = a;
+      bestArea = as.w * as.h;
+    }
+    return best;
+  };
+
+  /** Re-homes a freshly placed (top-level) node into the area under its centre. */
+  const adopt = (n: WbNode): WbNode => {
+    if (n.type === "area") return n;
+    const { w, h } = sizeOf(n);
+    const host = areaAt({ x: n.position.x + w / 2, y: n.position.y + h / 2 });
+    if (!host) return n;
+    const hp = absolutePosition(host, new Map(nodesRef.current.map((x) => [x.id, x])));
+    return { ...n, parentId: host.id, position: { x: n.position.x - hp.x, y: n.position.y - hp.y } };
+  };
+
   // Move nodes into / out of areas after dragging.
   const onNodeDragStop = useCallback(
     (_: unknown, __: WbNode, dragged: WbNode[]) => {
       setGuides({});
       const all = nodesRef.current;
       const byId = new Map(all.map((n) => [n.id, n]));
-      const areas = all.filter((n) => n.type === "area").sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0));
       let changed = false;
       const next = all.map((n) => {
         if (!dragged.some((d) => d.id === n.id) || n.type === "area") return n;
         const abs = absolutePosition(n, byId);
         const { w, h } = sizeOf(n);
-        const cx = abs.x + w / 2;
-        const cy = abs.y + h / 2;
-        const host = areas.find((a) => {
-          if (a.id === n.id || isDescendant(a.id, n.id, byId)) return false;
-          const ap = absolutePosition(a, byId);
-          const as = sizeOf(a);
-          return cx >= ap.x && cx <= ap.x + as.w && cy >= ap.y && cy <= ap.y + as.h;
-        });
+        const host = areaAt({ x: abs.x + w / 2, y: abs.y + h / 2 }, n.id);
         if ((host?.id ?? undefined) === n.parentId) return n;
         changed = true;
         if (host) {
@@ -394,11 +461,12 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
     requestCommit();
   };
 
-  const create = (type: WbNodeType, at: { x: number; y: number }, data: Partial<WbData> = {}) => {
-    const n = makeNode(type, at, { editing: true, ...data });
-    n.position = snapPos(n.position);
-    addNodes([n]);
-    return n;
+  const create = (type: WbNodeType, at: { x: number; y: number }, data: Partial<WbData> = {}, size?: { w: number; h: number }) => {
+    const n = makeNode(type, at, { editing: true, ...data }, size);
+    if (!size) n.position = snapPos(n.position);
+    const placed = adopt(n);
+    addNodes([placed]);
+    return placed;
   };
 
   const importImages = async (paths: string[], at: { x: number; y: number }) => {
@@ -455,12 +523,120 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
     }
   };
 
-  const onPaneClick = (e: React.MouseEvent) => {
-    setMenu(null);
-    if (tool === "select" || tool === "hand" || tool === "connector") return;
-    placeTool(tool, flowAt(e.clientX, e.clientY));
-    if (!e.shiftKey) setTool("select");
+  /** Places the current tool into a dragged-out box (a → b, flow coordinates). */
+  const placeBox = (t: Tool, a: Pt, b: Pt) => {
+    if (s["wb.snapToGrid"]) {
+      a = snapPos(a);
+      b = snapPos(b);
+    }
+    let x = Math.min(a.x, b.x);
+    let y = Math.min(a.y, b.y);
+    let w = Math.abs(b.x - a.x);
+    let h = Math.abs(b.y - a.y);
+    if (isLineTool(t)) {
+      // Lines live in their bounding box; flip/reverse recover the drawn direction.
+      const data: Partial<WbData> = { shape: t.slice(6) as WbData["shape"], editing: false, flip: false, reverse: false };
+      if (h < 12) {
+        y = a.y - 8;
+        h = 16;
+        data.reverse = b.x < a.x;
+      } else if (w < 12) {
+        x = a.x - 8;
+        w = 16;
+        data.reverse = b.y < a.y;
+      } else {
+        data.flip = (b.x - a.x) * (b.y - a.y) < 0;
+        data.reverse = b.x < a.x;
+      }
+      return create("shape", { x: x + w / 2, y: y + h / 2 }, data, { w: Math.max(w, 20), h });
+    }
+    const type: WbNodeType = t.startsWith("shape:") ? "shape" : (t as WbNodeType);
+    const [mw, mh] = DRAW_MIN[type] ?? [180, 60];
+    w = Math.max(w, mw);
+    h = Math.max(h, mh);
+    const center = { x: x + w / 2, y: y + h / 2 };
+    if (type === "shape") return create("shape", center, { shape: t.slice(6) as WbData["shape"], editing: false }, { w, h });
+    const data: Partial<WbData> = type === "area" || type === "project" || type === "board" || type === "note" || type === "milestone" ? { editing: false } : {};
+    return create(type, center, data, { w, h });
   };
+
+  const onPaneClick = () => setMenu(null);
+
+  // ------------------------------------------------------------ drawing layer
+  // While a placing tool, the pen or the eraser is active, a transparent layer
+  // over the canvas takes the pointer: click to place, drag to size, ink, erase.
+  const gesture = useRef<{ start: Pt; client: Pt; pts: number[]; moved: boolean; erased: Set<string> } | null>(null);
+
+  const eraseAt = (p: Pt) => {
+    const g = gesture.current;
+    if (!g) return;
+    const byId = new Map(nodesRef.current.map((n) => [n.id, n]));
+    const hits = nodesRef.current.filter((n) => n.type === "draw" && !n.data.locked && !g.erased.has(n.id) && inkHit(n, absolutePosition(n, byId), p, 8 / zoom));
+    if (!hits.length) return;
+    const ids = new Set(hits.map((n) => n.id));
+    ids.forEach((id) => g.erased.add(id));
+    setNodes((ns) => ns.filter((n) => !ids.has(n.id)));
+    setEdges((es) => es.filter((e) => !ids.has(e.source) && !ids.has(e.target)));
+  };
+
+  const onLayerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    wrapper.current?.focus({ preventScroll: true });
+    setMenu(null);
+    const p = flowAt(e.clientX, e.clientY);
+    gesture.current = { start: p, client: { x: e.clientX, y: e.clientY }, pts: [p.x, p.y], moved: false, erased: new Set() };
+    if (tool === "pen") setDraft({ kind: "ink", points: gesture.current.pts });
+    if (tool === "eraser") eraseAt(p);
+  };
+
+  const onLayerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (tool === "eraser") {
+      const r = wrapper.current?.getBoundingClientRect();
+      if (r) setEraserAt({ x: e.clientX - r.left, y: e.clientY - r.top });
+    }
+    const g = gesture.current;
+    if (!g) return;
+    const p = flowAt(e.clientX, e.clientY);
+    if (!g.moved && Math.hypot(e.clientX - g.client.x, e.clientY - g.client.y) > 4) g.moved = true;
+    if (tool === "pen") {
+      const n = g.pts.length;
+      if (Math.hypot(p.x - g.pts[n - 2], p.y - g.pts[n - 1]) < 1.5 / zoom) return;
+      g.pts.push(p.x, p.y);
+      setDraft({ kind: "ink", points: g.pts.slice() });
+    } else if (tool === "eraser") eraseAt(p);
+    else if (g.moved) setDraft({ kind: "box", a: g.start, b: e.shiftKey ? constrain(g.start, p, isLineTool(tool)) : p });
+  };
+
+  const onLayerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = gesture.current;
+    gesture.current = null;
+    setDraft(null);
+    if (!g) return;
+    if (tool === "pen") {
+      addNodes([adopt(makeDrawing(g.pts, pen.width, pen.color))], false);
+      return;
+    }
+    if (tool === "eraser") {
+      if (g.erased.size) requestCommit();
+      return;
+    }
+    const p = flowAt(e.clientX, e.clientY);
+    if (g.moved) placeBox(tool, g.start, e.shiftKey ? constrain(g.start, p, isLineTool(tool)) : p);
+    else placeTool(tool, p);
+    // Shift-click keeps the tool for one more placement; the lock keeps it until released.
+    if (!toolLock && !(e.shiftKey && !g.moved)) setTool("select");
+  };
+
+  const setPen = (patch: Partial<typeof pen>) => {
+    penMemory = { ...pen, ...patch };
+    setPenState(penMemory);
+  };
+
+  useEffect(() => {
+    if (tool.startsWith("shape:")) setLastShape(tool.slice(6) as ShapeKind);
+    if (tool !== "eraser") setEraserAt(null);
+  }, [tool]);
 
   // Double-click on empty canvas adds a text card.
   const onDoubleClick = (e: React.MouseEvent) => {
@@ -680,6 +856,11 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
 
   // ------------------------------------------------------------ view
   const fit = () => void rf.fitView({ padding: 0.15, duration: 220, maxZoom: 1.5 });
+  const zoomToSelection = () => {
+    const sel = selectedNodes();
+    if (!sel.length) return fit();
+    void rf.fitView({ nodes: sel.map((n) => ({ id: n.id })), padding: 0.3, duration: 220, maxZoom: 2 });
+  };
   const resetZoom = () => void rf.zoomTo(1, { duration: 160 });
 
   useEffect(() => {
@@ -778,10 +959,32 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
     if (mod && k === "0") return handled(), resetZoom();
     if (mod && (k === "=" || k === "+")) return handled(), void rf.zoomIn({ duration: 120 });
     if (mod && k === "-") return handled(), void rf.zoomOut({ duration: 120 });
+    if (mod && e.shiftKey && k === "l") {
+      handled();
+      const sel = selectedNodes();
+      if (sel.length) setLocked(!sel.every((n) => n.data.locked));
+      return;
+    }
+    if (e.key === "]" || e.key === "[") return handled(), zOrder(e.key === "]" ? (mod ? "front" : "forward") : mod ? "back" : "backward");
     if (e.shiftKey && e.code === "Digit1") return handled(), fit();
+    if (e.shiftKey && e.code === "Digit2") return handled(), zoomToSelection();
     if (e.key === "Delete" || e.key === "Backspace") return handled(), deleteSelection();
+    if (e.key === "Enter" && !mod) {
+      const sel = selectedNodes();
+      const n = sel.length === 1 ? sel[0] : undefined;
+      if (n?.type && EDITABLE.has(n.type) && !n.data.locked) {
+        handled();
+        updateNode(n.id, { editing: true }, false);
+      }
+      return;
+    }
     if (e.key === "Escape") {
-      setTool("select");
+      // First Escape drops the tool (and its lock); the next clears the selection.
+      if (tool !== "select") {
+        setTool("select");
+        setToolLock(false);
+        return;
+      }
       setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n)));
       return;
     }
@@ -799,7 +1002,8 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
       return;
     }
     if (mod || e.altKey) return;
-    const tools: Record<string, Tool> = { v: "select", h: "hand", t: "text", s: "sticky", r: "shape:rounded", c: "connector", k: "task", a: "area", l: "link" };
+    if (k === "q") return handled(), setToolLock((l) => !l);
+    const tools: Record<string, Tool> = { v: "select", h: "hand", t: "text", s: "sticky", r: `shape:${lastShape}`, p: "pen", e: "eraser", c: "connector", k: "task", a: "area", l: "link" };
     if (tools[k]) return handled(), setTool(tools[k]);
   };
 
@@ -840,7 +1044,8 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
           label: "Path",
           items: (["smooth", "straight", "step"] as const).map((p) => ({ label: { smooth: "Curved", straight: "Straight", step: "Elbow" }[p], checked: (d.path ?? "smooth") === p, onSelect: () => updateEdge(e.id, { path: p }) })),
         },
-        { label: d.label ? "Edit label" : "Add label", icon: Pencil, onSelect: () => updateEdge(e.id, { label: d.label || "Label" }) },
+        // Defer past the menu's close so its focus restore doesn't blur the label input.
+        { label: d.label ? "Edit label" : "Add label", icon: Pencil, onSelect: () => window.setTimeout(() => setEditingEdge(e.id), 0) },
         { type: "separator" },
         {
           label: "Delete connector",
@@ -861,9 +1066,10 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
       n.type === "task" && !!n.data.taskId && { label: "Open task", icon: SquareCheckBig, onSelect: () => openTask(n.data.taskId!) },
       { label: "Copy", icon: Copy, shortcut: "Mod+C", onSelect: () => copySelection() },
       { label: "Duplicate", icon: CopyPlus, shortcut: "Mod+D", onSelect: duplicate },
+      { label: "Zoom to selection", icon: ScanSearch, shortcut: "Shift+2", onSelect: zoomToSelection },
       { type: "separator" },
-      { label: "Bring to front", icon: BringToFront, onSelect: () => zOrder("front") },
-      { label: "Send to back", icon: SendToBack, onSelect: () => zOrder("back") },
+      { label: "Bring to front", icon: BringToFront, shortcut: "Mod+]", onSelect: () => zOrder("front") },
+      { label: "Send to back", icon: SendToBack, shortcut: "Mod+[", onSelect: () => zOrder("back") },
       sel.length > 1 && {
         type: "submenu",
         label: "Align",
@@ -887,7 +1093,7 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
       },
       { label: "Group into area", icon: Group, shortcut: "Mod+G", onSelect: group },
       (n.type === "area" || !!n.parentId) && { label: n.type === "area" ? "Ungroup" : "Remove from area", icon: Ungroup, shortcut: "Mod+Shift+G", onSelect: ungroup },
-      { label: locked ? "Unlock" : "Lock", icon: locked ? LockOpen : Lock, onSelect: () => setLocked(!locked) },
+      { label: locked ? "Unlock" : "Lock", icon: locked ? LockOpen : Lock, shortcut: "Mod+Shift+L", onSelect: () => setLocked(!locked) },
       { type: "separator" },
       !locked && { label: "Delete", icon: Trash, danger: true, shortcut: "Delete", onSelect: deleteSelection },
     ];
@@ -947,9 +1153,26 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
   // ------------------------------------------------------------ render
   const displayEdges = useMemo(() => edges.map((e) => withMarkers(e, e.selected ? "var(--text)" : "var(--text-3)")), [edges]);
   const transform = useStore((st) => st.transform);
-  const placing = tool !== "select" && tool !== "hand" && tool !== "connector";
+  const placing = tool !== "select" && tool !== "hand" && tool !== "connector" && tool !== "pen" && tool !== "eraser";
   const panWithLeft = tool === "hand" || spacePan;
+  const drawLayer = (placing || tool === "pen" || tool === "eraser") && !spacePan;
   const limited = s["wb.limitEffects"];
+
+  const draftPreview = () => {
+    if (!draft) return null;
+    const ink = "var(--accent-line)";
+    if (draft.kind === "ink")
+      return <path d={inkPath(draft.points)} fill="none" stroke={colorVar(pen.color, "var(--text)")} strokeWidth={pen.width} strokeLinecap="round" strokeLinejoin="round" />;
+    const { a, b } = draft;
+    const common = { fill: "var(--accent-soft)", stroke: ink, strokeWidth: 1.5 / transform[2], strokeDasharray: `${5 / transform[2]} ${4 / transform[2]}` };
+    if (isLineTool(tool)) return <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} {...common} />;
+    const x = Math.min(a.x, b.x);
+    const y = Math.min(a.y, b.y);
+    const w = Math.abs(b.x - a.x);
+    const h = Math.abs(b.y - a.y);
+    if (tool === "shape:circle") return <ellipse cx={x + w / 2} cy={y + h / 2} rx={w / 2} ry={h / 2} {...common} />;
+    return <rect x={x} y={y} width={w} height={h} rx={tool === "shape:rect" ? 2 : 10} {...common} />;
+  };
 
   return (
     <WbContext.Provider value={nodeApi}>
@@ -959,7 +1182,7 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
             <div
               ref={wrapper}
               className="wb"
-              data-tool={panWithLeft ? "hand" : tool === "connector" ? "connector" : "select"}
+              data-tool={panWithLeft ? "hand" : tool === "connector" || tool === "pen" || tool === "eraser" ? tool : "select"}
               data-placing={placing || undefined}
               data-effects={limited ? "limited" : undefined}
               data-lod={transform[2] < 0.4 ? "low" : undefined}
@@ -988,6 +1211,7 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
                   setMenu({ kind: "node", id: n.id, flow: flowAt(e.clientX, e.clientY) });
                 }}
                 onEdgeContextMenu={(e, ed) => setMenu({ kind: "edge", id: ed.id, flow: flowAt(e.clientX, e.clientY) })}
+                onEdgeDoubleClick={(_, ed) => setEditingEdge(ed.id)}
                 onPaneContextMenu={(e) => setMenu({ kind: "pane", flow: flowAt(e.clientX, e.clientY) })}
                 onMoveEnd={(_: unknown, vp: RFViewport) => {
                   void api.whiteboards.update(wbId, { viewport: vp as Viewport }).catch(() => undefined);
@@ -1019,6 +1243,25 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
                   {guides.x !== undefined && <line x1={guides.x * transform[2] + transform[0]} x2={guides.x * transform[2] + transform[0]} y1={0} y2="100%" stroke="var(--accent-line)" strokeDasharray="4 3" />}
                   {guides.y !== undefined && <line y1={guides.y * transform[2] + transform[1]} y2={guides.y * transform[2] + transform[1]} x1={0} x2="100%" stroke="var(--accent-line)" strokeDasharray="4 3" />}
                 </svg>
+              )}
+              {drawLayer && (
+                <div
+                  className="wb-draw-layer"
+                  onPointerDown={onLayerDown}
+                  onPointerMove={onLayerMove}
+                  onPointerUp={onLayerUp}
+                  onPointerCancel={() => {
+                    gesture.current = null;
+                    setDraft(null);
+                  }}
+                  onPointerLeave={() => setEraserAt(null)}
+                  onContextMenu={(e) => setMenu({ kind: "pane", flow: flowAt(e.clientX, e.clientY) })}
+                >
+                  <svg>
+                    <g transform={`translate(${transform[0]} ${transform[1]}) scale(${transform[2]})`}>{draftPreview()}</g>
+                    {eraserAt && <circle className="wb-eraser" cx={eraserAt.x} cy={eraserAt.y} r={8} />}
+                  </svg>
+                </div>
               )}
               {!nodes.length && (
                 <div className="wb-empty">
@@ -1055,6 +1298,7 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
                   nodes={nodes.filter((n) => selection.nodes.includes(n.id))}
                   edges={edges.filter((e) => selection.edges.includes(e.id))}
                   onUpdateNode={updateNode}
+                  onUpdateNodes={updateNodes}
                   onUpdateEdge={updateEdge}
                   onAlign={align}
                   onGroup={group}
@@ -1067,6 +1311,11 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
               <Toolbar
                 tool={tool}
                 onTool={setTool}
+                lastShape={lastShape}
+                locked={toolLock}
+                onToggleLock={() => setToolLock(!toolLock)}
+                pen={pen}
+                onPen={setPen}
                 onImage={() => void pickImage()}
                 onFile={() => void pickFile()}
                 onInsert={(t) => placeTool(t, viewCenter())}

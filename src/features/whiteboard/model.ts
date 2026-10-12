@@ -14,20 +14,47 @@ export type WbNodeType =
   | "project"
   | "board"
   | "note"
-  | "milestone";
+  | "milestone"
+  | "draw";
+
+/** Ink colours, mapped onto the muted series hues so both themes stay legible. */
+export type WbColor = "default" | "blue" | "green" | "amber" | "red" | "purple" | "teal";
+
+export const WB_COLORS: { value: WbColor; label: string; css: string }[] = [
+  { value: "default", label: "Default", css: "var(--text-2)" },
+  { value: "blue", label: "Blue", css: "var(--hue-0)" },
+  { value: "green", label: "Green", css: "var(--hue-2)" },
+  { value: "amber", label: "Amber", css: "var(--hue-1)" },
+  { value: "red", label: "Red", css: "var(--hue-5)" },
+  { value: "purple", label: "Purple", css: "var(--hue-3)" },
+  { value: "teal", label: "Teal", css: "var(--hue-4)" },
+];
+
+export const colorVar = (c: WbColor | undefined, fallback = "var(--text-2)") => (c && c !== "default" ? WB_COLORS.find((x) => x.value === c)?.css ?? fallback : fallback);
+
+/** Node types that take an ink colour. */
+export const COLORABLE = new Set<WbNodeType>(["shape", "draw", "area", "text"]);
 
 export interface WbData extends Record<string, unknown> {
   title?: string;
   text?: string;
   label?: string;
   locked?: boolean;
+  color?: WbColor;
   // sticky
   tone?: "plain" | "warm" | "cool";
   // shapes
   shape?: "rect" | "rounded" | "circle" | "line" | "arrow";
   flip?: boolean;
+  /** Line/arrow: run from the far end back to the start. */
+  reverse?: boolean;
   stroke?: "solid" | "dashed";
   fill?: boolean;
+  // freehand: flat [x, y, ...] in a vw x vh box; scaled to the node's size
+  points?: number[];
+  vw?: number;
+  vh?: number;
+  strokeWidth?: number;
   // area
   areaFill?: "dashed" | "solid";
   // references
@@ -56,6 +83,7 @@ export interface WbEdgeData extends Record<string, unknown> {
   line?: "solid" | "dashed" | "dotted";
   path?: "smooth" | "straight" | "step";
   label?: string;
+  color?: WbColor;
 }
 
 export type WbEdge = Edge<WbEdgeData>;
@@ -75,6 +103,7 @@ export const DEFAULT_SIZES: Record<WbNodeType, { w: number; h: number }> = {
   board: { w: 260, h: 84 },
   note: { w: 280, h: 140 },
   milestone: { w: 280, h: 110 },
+  draw: { w: 100, h: 100 },
 };
 
 export const newNodeId = () => `n_${crypto.randomUUID()}`;

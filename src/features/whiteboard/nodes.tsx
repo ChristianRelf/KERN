@@ -1,5 +1,5 @@
 import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
-import { createContext, memo, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, memo, useContext, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { assetUrl } from "@/lib/platform";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -15,7 +15,8 @@ import {
   SquareKanban,
   Flag,
 } from "lucide-react";
-import type { WbData, WbNode } from "./model";
+import { colorVar, type WbData, type WbNode } from "./model";
+import { inkPath } from "./ink";
 import { useAppInfo, useNotes, useProjectMap, useProjects, useTask } from "@/hooks/data";
 import { api } from "@/lib/ipc";
 import { TaskCheck, TaskTitle, Progress, Select } from "@/components/ui/Controls";
@@ -124,22 +125,34 @@ function toggleLine(text: string, idx: number) {
   return lines.join("\n");
 }
 
-function useEditing(id: string, data: WbData) {
+/** Inline-edit state. `data.editing` (set on creation, or by Enter on a selection) opens the editor. */
+function useEditing(id: string, data: WbData, onStart?: () => void) {
   const { update } = useWb();
   const [editing, setEditing] = useState(!!data.editing);
   useEffect(() => {
-    if (data.editing) update(id, { editing: undefined }, false);
-  }, []);
+    if (!data.editing) return;
+    if (!data.locked) {
+      onStart?.();
+      setEditing(true);
+    }
+    update(id, { editing: undefined }, false);
+  }, [data.editing]);
   return [editing, setEditing] as const;
 }
+
+/** Exposes a node's ink colour to CSS as --wb-ink. */
+const inkStyle = (data: WbData) => (data.color && data.color !== "default" ? ({ "--wb-ink": colorVar(data.color) } as CSSProperties) : undefined);
 
 // ------------------------------------------------------------- text card
 
 export const TextNode = memo(function TextNode({ id, data, selected }: NodeProps<WbNode>) {
   const { update } = useWb();
-  const [editing, setEditing] = useEditing(id, data);
   const [title, setTitle] = useState(data.title ?? "");
   const [text, setText] = useState(data.text ?? "");
+  const [editing, setEditing] = useEditing(id, data, () => {
+    setTitle(data.title ?? "");
+    setText(data.text ?? "");
+  });
   const commit = () => {
     setEditing(false);
     if (title !== (data.title ?? "") || text !== (data.text ?? "")) update(id, { title, text });
@@ -151,6 +164,8 @@ export const TextNode = memo(function TextNode({ id, data, selected }: NodeProps
       <div
         className="wbn wbn--text"
         data-locked={data.locked}
+        data-color={inkStyle(data) ? true : undefined}
+        style={inkStyle(data)}
         onDoubleClick={() => {
           if (data.locked) return;
           setTitle(data.title ?? "");
@@ -198,8 +213,8 @@ export const TextNode = memo(function TextNode({ id, data, selected }: NodeProps
 
 export const StickyNode = memo(function StickyNode({ id, data, selected }: NodeProps<WbNode>) {
   const { update } = useWb();
-  const [editing, setEditing] = useEditing(id, data);
   const [text, setText] = useState(data.text ?? "");
+  const [editing, setEditing] = useEditing(id, data, () => setText(data.text ?? ""));
   const commit = () => {
     setEditing(false);
     if (text !== (data.text ?? "")) update(id, { text });
@@ -242,13 +257,13 @@ export const StickyNode = memo(function StickyNode({ id, data, selected }: NodeP
 
 export const AreaNode = memo(function AreaNode({ id, data, selected }: NodeProps<WbNode>) {
   const { update } = useWb();
-  const [editing, setEditing] = useEditing(id, data);
   const [label, setLabel] = useState(data.label ?? "");
+  const [editing, setEditing] = useEditing(id, data, () => setLabel(data.label ?? ""));
   return (
     <>
       <Resizer selected={selected} data={data} min={[160, 120]} />
       <Handles />
-      <div className="wbn wbn--area" data-fill={data.areaFill ?? "dashed"} data-locked={data.locked}>
+      <div className="wbn wbn--area" data-fill={data.areaFill ?? "dashed"} data-locked={data.locked} data-color={inkStyle(data) ? true : undefined} style={inkStyle(data)}>
         {editing ? (
           <input
             className="wbn__area-label wbn__edit nodrag"
@@ -283,18 +298,20 @@ export const AreaNode = memo(function AreaNode({ id, data, selected }: NodeProps
 
 export const ShapeNode = memo(function ShapeNode({ id, data, selected, width, height }: NodeProps<WbNode>) {
   const { update } = useWb();
-  const [editing, setEditing] = useEditing(id, data);
   const [label, setLabel] = useState(data.label ?? "");
+  const [editing, setEditing] = useEditing(id, data, () => setLabel(data.label ?? ""));
   const w = width ?? 160;
   const h = height ?? 110;
   const shape = data.shape ?? "rounded";
+  const isLine = shape === "line" || shape === "arrow";
   const dash = data.stroke === "dashed" ? "6 5" : undefined;
-  const stroke = "var(--text-2)";
-  const fill = data.fill ? "var(--surface-2)" : "transparent";
+  const stroke = colorVar(data.color);
+  const fill = !data.fill ? "transparent" : data.color && data.color !== "default" ? `color-mix(in srgb, ${stroke} 18%, var(--surface-2))` : "var(--surface-2)";
   let el: ReactNode;
   if (shape === "circle") el = <ellipse cx={w / 2} cy={h / 2} rx={w / 2 - 1} ry={h / 2 - 1} fill={fill} stroke={stroke} strokeWidth={1.75} strokeDasharray={dash} />;
-  else if (shape === "line" || shape === "arrow") {
-    const [x1, y1, x2, y2] = data.flip ? [0, h, w, 0] : h < 24 ? [0, h / 2, w, h / 2] : [0, 0, w, h];
+  else if (isLine) {
+    const coords = data.flip ? [0, h, w, 0] : h < 24 ? [0, h / 2, w, h / 2] : w < 24 ? [w / 2, 0, w / 2, h] : [0, 0, w, h];
+    const [x1, y1, x2, y2] = data.reverse ? [coords[2], coords[3], coords[0], coords[1]] : coords;
     el = (
       <>
         <defs>
@@ -302,6 +319,7 @@ export const ShapeNode = memo(function ShapeNode({ id, data, selected, width, he
             <path d="M0,0 L10,5 L0,10 z" fill={stroke} />
           </marker>
         </defs>
+        <line className="wbn__ink-hit" x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={14} />
         <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={2} strokeDasharray={dash} markerEnd={shape === "arrow" ? `url(#arrow-${id})` : undefined} />
       </>
     );
@@ -309,12 +327,13 @@ export const ShapeNode = memo(function ShapeNode({ id, data, selected, width, he
   return (
     <>
       <Resizer selected={selected} data={data} min={[20, 8]} />
-      {shape !== "line" && shape !== "arrow" && <Handles />}
+      {!isLine && <Handles />}
       <div
         className="wbn wbn--shape"
+        data-line={isLine || undefined}
         data-locked={data.locked}
         onDoubleClick={() => {
-          if (data.locked || shape === "line" || shape === "arrow") return;
+          if (data.locked || isLine) return;
           setLabel(data.label ?? "");
           setEditing(true);
         }}
@@ -448,8 +467,8 @@ export const ImageNode = memo(function ImageNode({ data, selected }: NodeProps<W
 
 export const LinkNode = memo(function LinkNode({ id, data, selected }: NodeProps<WbNode>) {
   const { update } = useWb();
-  const [editing, setEditing] = useEditing(id, data);
   const [url, setUrl] = useState(data.url ?? "");
+  const [editing, setEditing] = useEditing(id, data, () => setUrl(data.url ?? ""));
   const host = (() => {
     try {
       return new URL(data.url ?? "").host;
@@ -686,6 +705,28 @@ export const MilestoneRefNode = memo(function MilestoneRefNode({ id, data, selec
   );
 });
 
+// ------------------------------------------------------------- freehand ink
+
+export const DrawNode = memo(function DrawNode({ data, selected, width, height }: NodeProps<WbNode>) {
+  const w = width ?? data.vw ?? 100;
+  const h = height ?? data.vh ?? 100;
+  const sx = data.vw ? w / data.vw : 1;
+  const sy = data.vh ? h / data.vh : 1;
+  const d = useMemo(() => inkPath(data.points ?? [], sx, sy), [data.points, sx, sy]);
+  const sw = data.strokeWidth ?? 3;
+  return (
+    <>
+      <Resizer selected={selected} data={data} min={[8, 8]} />
+      <div className="wbn wbn--draw" data-locked={data.locked}>
+        <svg width={w} height={h}>
+          <path className="wbn__ink-hit" d={d} strokeWidth={Math.max(sw + 10, 14)} />
+          <path d={d} fill="none" stroke={colorVar(data.color, "var(--text)")} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+    </>
+  );
+});
+
 export const NODE_TYPES = {
   text: TextNode,
   sticky: StickyNode,
@@ -699,4 +740,5 @@ export const NODE_TYPES = {
   board: BoardRefNode,
   note: NoteRefNode,
   milestone: MilestoneRefNode,
+  draw: DrawNode,
 };

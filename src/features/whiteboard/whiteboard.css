@@ -207,6 +207,22 @@
   border-style: solid;
   background: var(--surface);
 }
+.wbn--area[data-color] {
+  border-color: var(--wb-ink);
+  background: color-mix(in srgb, var(--wb-ink) 7%, transparent);
+}
+.wbn--area[data-color][data-fill="solid"] {
+  background: color-mix(in srgb, var(--wb-ink) 12%, var(--surface));
+}
+.wbn--area[data-color] .wbn__area-label {
+  color: var(--wb-ink);
+}
+.wbn--text[data-color] {
+  box-shadow: inset 3px 0 0 var(--wb-ink), var(--shadow-sm);
+}
+.wb .react-flow__node.selected > .wbn--text[data-color] {
+  box-shadow: inset 3px 0 0 var(--wb-ink), 0 0 0 1.5px var(--accent-line), var(--shadow-md);
+}
 .wbn__area-label {
   position: absolute;
   top: -24px;
@@ -223,6 +239,34 @@
   width: 100%;
   height: 100%;
   overflow: visible;
+}
+/* Ink (freehand strokes, lines, arrows) is hit only along its stroke, so its
+   bounding box doesn't swallow clicks meant for the canvas or nodes behind. */
+.wb .react-flow__node-draw,
+.wb .react-flow__node-shape:has(> .wbn--shape[data-line]) {
+  pointer-events: none !important;
+}
+.wb .react-flow__node-draw.selected,
+.wb .react-flow__node-shape.selected:has(> .wbn--shape[data-line]),
+.wb .react-flow__node .react-flow__resize-control {
+  pointer-events: all !important;
+}
+.wbn__ink-hit {
+  pointer-events: stroke;
+  stroke: transparent;
+  fill: none;
+}
+.wbn--draw {
+  overflow: visible;
+}
+.wbn--draw svg {
+  display: block;
+  overflow: visible;
+}
+.wb .react-flow__node.selected > .wbn--draw {
+  box-shadow: none;
+  outline: 1px dashed var(--accent-line);
+  outline-offset: 2px;
 }
 .wbn__shape-label {
   position: absolute;
@@ -290,13 +334,27 @@
 }
 
 /* ---------- Floating chrome */
-.wb-toolbar {
+/* Full-width so the toolbar centres (and wraps) against the whole canvas; the
+   strip itself lets clicks through to the canvas beside the toolbar. */
+.wb-dock {
   position: absolute;
-  left: 50%;
+  left: 12px;
+  right: 12px;
   bottom: 16px;
-  transform: translateX(-50%);
   z-index: 10;
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.wb-dock > * {
+  pointer-events: auto;
+}
+.wb-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
   gap: 2px;
   padding: 4px;
@@ -304,11 +362,63 @@
   background: var(--surface-2);
   box-shadow: var(--shadow-pop);
 }
-.wb-toolbar .sep {
+.wb-toolbar .sep,
+.wb-toolopts .sep {
   width: 1px;
   height: 20px;
   background: var(--divider);
   margin: 0 3px;
+}
+.wb-toolopts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-pop);
+  animation: pop-in var(--t-menu) var(--ease-out);
+}
+.wb-split {
+  display: inline-flex;
+  align-items: center;
+}
+.wb-split__caret {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 28px;
+  margin-left: -2px;
+  border-radius: var(--r-sm);
+  color: var(--text-3);
+}
+.wb-split__caret:hover,
+.wb-split__caret[data-state="open"] {
+  background: var(--hover);
+  color: var(--text);
+}
+.wb-split__caret svg {
+  width: 11px;
+  height: 11px;
+}
+.wb-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.wb-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+  transition: transform var(--t-hover) var(--ease);
+}
+.wb-swatch:hover {
+  transform: scale(1.12);
+}
+.wb-swatch[data-state="on"] {
+  box-shadow: 0 0 0 2px var(--surface-2), 0 0 0 3.5px var(--swatch);
 }
 .wb-topbar {
   position: absolute;
@@ -363,6 +473,30 @@
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
+}
+.wb-draw-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+.wb[data-tool="eraser"] .wb-draw-layer {
+  cursor: none;
+}
+.wb-draw-layer svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.wb-eraser {
+  fill: var(--hover-strong);
+  stroke: var(--text-2);
+  stroke-width: 1.25;
 }
 .helper-lines {
   position: absolute;

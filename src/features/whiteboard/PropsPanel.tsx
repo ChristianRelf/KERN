@@ -15,8 +15,10 @@ import {
   Trash,
   Ungroup,
   FlipHorizontal2,
+  ArrowLeftRight,
 } from "lucide-react";
-import type { WbData, WbEdge, WbEdgeData, WbNode } from "./model";
+import { COLORABLE, type WbData, type WbEdge, type WbEdgeData, type WbNode } from "./model";
+import { PEN_WIDTHS, SHAPES, Swatches } from "./Toolbar";
 import { IconButton } from "@/components/ui/Button";
 import { Segmented, Switch } from "@/components/ui/Controls";
 
@@ -33,6 +35,7 @@ const TYPE_LABEL: Record<string, string> = {
   board: "Board",
   note: "Note",
   milestone: "Milestone",
+  draw: "Drawing",
 };
 
 /** Floating properties for the current whiteboard selection. */
@@ -40,6 +43,7 @@ export function PropsPanel({
   nodes,
   edges,
   onUpdateNode,
+  onUpdateNodes,
   onUpdateEdge,
   onAlign,
   onGroup,
@@ -51,6 +55,7 @@ export function PropsPanel({
   nodes: WbNode[];
   edges: WbEdge[];
   onUpdateNode: (id: string, patch: Partial<WbData>) => void;
+  onUpdateNodes: (ids: string[], patch: Partial<WbData>) => void;
   onUpdateEdge: (id: string, patch: Partial<WbEdgeData>) => void;
   onAlign: (m: "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom" | "hdist" | "vdist") => void;
   onGroup: () => void;
@@ -63,6 +68,8 @@ export function PropsPanel({
   const edge = !nodes.length && edges.length === 1 ? edges[0] : null;
   const allLocked = nodes.length > 0 && nodes.every((n) => n.data.locked);
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  const colorable = nodes.filter((n) => n.type && COLORABLE.has(n.type));
+  const sharedColor = colorable.length && colorable.every((n) => (n.data.color ?? "default") === (colorable[0].data.color ?? "default")) ? colorable[0].data.color : undefined;
 
   return (
     <div className="wb-props" onDoubleClick={stop} onContextMenu={(e) => e.preventDefault()} onKeyDown={stop}>
@@ -85,6 +92,24 @@ export function PropsPanel({
         </Field>
       )}
 
+      {colorable.length > 0 && (
+        <div className="col" style={{ gap: 6 }}>
+          <span className="faint">Colour</span>
+          <Swatches value={sharedColor} onChange={(color) => onUpdateNodes(colorable.map((n) => n.id), { color })} />
+        </div>
+      )}
+
+      {single?.type === "draw" && (
+        <Field label="Width">
+          <Segmented
+            size="sm"
+            value={String(single.data.strokeWidth ?? 4) as "2" | "4" | "8"}
+            onChange={(v) => onUpdateNode(single.id, { strokeWidth: Number(v) })}
+            options={[...PEN_WIDTHS]}
+          />
+        </Field>
+      )}
+
       {single?.type === "shape" && (
         <>
           <Field label="Shape">
@@ -92,13 +117,7 @@ export function PropsPanel({
               size="sm"
               value={single.data.shape ?? "rounded"}
               onChange={(v) => onUpdateNode(single.id, { shape: v })}
-              options={[
-                { value: "rect", label: "▭" },
-                { value: "rounded", label: "▢" },
-                { value: "circle", label: "◯" },
-                { value: "line", label: "╱" },
-                { value: "arrow", label: "→" },
-              ]}
+              options={SHAPES.map((x) => ({ value: x.value, icon: x.icon, tooltip: x.label }))}
             />
           </Field>
           <Field label="Stroke">
@@ -114,7 +133,10 @@ export function PropsPanel({
           </Field>
           {single.data.shape === "line" || single.data.shape === "arrow" ? (
             <Field label="Direction">
-              <IconButton icon={FlipHorizontal2} label="Flip" size="sm" onClick={() => onUpdateNode(single.id, { flip: !single.data.flip })} />
+              <span className="row" style={{ gap: 2 }}>
+                <IconButton icon={FlipHorizontal2} label="Flip" size="sm" onClick={() => onUpdateNode(single.id, { flip: !single.data.flip })} />
+                {single.data.shape === "arrow" && <IconButton icon={ArrowLeftRight} label="Reverse arrow" size="sm" onClick={() => onUpdateNode(single.id, { reverse: !single.data.reverse })} />}
+              </span>
             </Field>
           ) : (
             <Field label="Fill">
@@ -146,6 +168,10 @@ export function PropsPanel({
 
       {edge && (
         <>
+          <div className="col" style={{ gap: 6 }}>
+            <span className="faint">Colour</span>
+            <Swatches value={edge.data?.color} onChange={(color) => onUpdateEdge(edge.id, { color })} />
+          </div>
           <Field label="Arrow">
             <Segmented
               size="sm"

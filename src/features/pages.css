@@ -1957,6 +1957,11 @@
   flex-direction: column;
   gap: 14px;
 }
+/* The tab is also the scroll container: keep sections at their natural height
+   so tall ones (history, run) scroll instead of squashing the section switcher. */
+.code-tab > * {
+  flex-shrink: 0;
+}
 .code-bar,
 .code-banner {
   display: flex;

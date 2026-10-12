@@ -1,7 +1,9 @@
 import {
   ArrowRight,
+  ChevronUp,
   Circle,
   Download,
+  Eraser,
   FileText,
   File,
   FolderKanban,
@@ -9,13 +11,15 @@ import {
   Globe,
   Hand,
   Image,
+  Lock,
+  LockOpen,
   Map as MapIcon,
   Minus,
   MousePointer2,
+  Pen,
   Plus,
   Redo2,
   Scan,
-  Shapes,
   Spline,
   Square,
   SquareCheckBig,
@@ -32,7 +36,11 @@ import {
 } from "lucide-react";
 import { IconButton } from "@/components/ui/Button";
 import { Dropdown } from "@/components/ui/Menu";
+import { Segmented } from "@/components/ui/Controls";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { WB_COLORS, type WbColor } from "./model";
+
+export type ShapeKind = "rect" | "rounded" | "circle" | "line" | "arrow";
 
 export type Tool =
   | "select"
@@ -47,16 +55,60 @@ export type Tool =
   | "board"
   | "note"
   | "milestone"
-  | `shape:${"rect" | "rounded" | "circle" | "line" | "arrow"}`;
+  | "pen"
+  | "eraser"
+  | `shape:${ShapeKind}`;
+
+export const SHAPES: { value: ShapeKind; label: string; icon: typeof Square }[] = [
+  { value: "rect", label: "Rectangle", icon: Square },
+  { value: "rounded", label: "Rounded rectangle", icon: RectangleHorizontal },
+  { value: "circle", label: "Circle", icon: Circle },
+  { value: "line", label: "Line", icon: Minus },
+  { value: "arrow", label: "Arrow", icon: ArrowRight },
+];
+
+export const PEN_WIDTHS = [
+  { value: "2", label: "Fine" },
+  { value: "4", label: "Medium" },
+  { value: "8", label: "Bold" },
+] as const;
 
 const stop = (e: React.SyntheticEvent) => {
   e.preventDefault();
   e.stopPropagation();
 };
 
+/** Colour swatches shared by the pen options and the properties panel. */
+export function Swatches({ value, onChange }: { value: WbColor | undefined; onChange: (c: WbColor) => void }) {
+  const current = value ?? "default";
+  return (
+    <div className="wb-swatches" role="radiogroup" aria-label="Colour">
+      {WB_COLORS.map((c) => (
+        <Tooltip key={c.value} content={c.label} side="top">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={current === c.value}
+            aria-label={c.label}
+            className="wb-swatch"
+            data-state={current === c.value ? "on" : "off"}
+            style={{ "--swatch": c.css } as React.CSSProperties}
+            onClick={() => onChange(c.value)}
+          />
+        </Tooltip>
+      ))}
+    </div>
+  );
+}
+
 export function Toolbar({
   tool,
   onTool,
+  lastShape,
+  locked,
+  onToggleLock,
+  pen,
+  onPen,
   onImage,
   onFile,
   onInsert,
@@ -67,6 +119,11 @@ export function Toolbar({
 }: {
   tool: Tool;
   onTool: (t: Tool) => void;
+  lastShape: ShapeKind;
+  locked: boolean;
+  onToggleLock: () => void;
+  pen: { color: WbColor; width: number };
+  onPen: (p: Partial<{ color: WbColor; width: number }>) => void;
   onImage: () => void;
   onFile: () => void;
   onInsert: (t: Tool) => void;
@@ -79,58 +136,61 @@ export function Toolbar({
     <IconButton icon={icon} label={label} shortcut={key} tooltipSide="top" active={tool === t} onClick={() => onTool(t)} />
   );
   const shapeActive = tool.startsWith("shape:");
+  const shown = SHAPES.find((x) => x.value === (shapeActive ? tool.slice(6) : lastShape)) ?? SHAPES[1];
   return (
-    <div className="wb-toolbar" role="toolbar" aria-label="Whiteboard tools" onContextMenu={stop} onDoubleClick={(e) => e.stopPropagation()}>
-      {btn("select", MousePointer2, "Select", "V")}
-      {btn("hand", Hand, "Hand · hold Space", "H")}
-      <span className="sep" />
-      {btn("text", Type, "Text card", "T")}
-      {btn("sticky", StickyNote, "Sticky note", "S")}
-      <Dropdown
-        side="top"
-        items={[
-          { label: "Rectangle", icon: Square, onSelect: () => onTool("shape:rect") },
-          { label: "Rounded rectangle", icon: RectangleHorizontal, onSelect: () => onTool("shape:rounded") },
-          { label: "Circle", icon: Circle, onSelect: () => onTool("shape:circle") },
-          { label: "Line", icon: Minus, onSelect: () => onTool("shape:line") },
-          { label: "Arrow", icon: ArrowRight, onSelect: () => onTool("shape:arrow") },
-        ]}
-      >
-        <span>
-          <Tooltip content="Shape" shortcut="R" side="top">
-            <button type="button" className="icon-btn" data-active={shapeActive || undefined} aria-label="Shape">
-              <Shapes strokeWidth={1.75} />
+    <div className="wb-dock" onContextMenu={stop} onDoubleClick={(e) => e.stopPropagation()}>
+      {tool === "pen" && (
+        <div className="wb-toolopts" role="group" aria-label="Pen options">
+          <Swatches value={pen.color} onChange={(color) => onPen({ color })} />
+          <span className="sep" />
+          <Segmented size="sm" ariaLabel="Stroke width" value={String(pen.width) as "2" | "4" | "8"} onChange={(v) => onPen({ width: Number(v) })} options={[...PEN_WIDTHS]} />
+        </div>
+      )}
+      <div className="wb-toolbar" role="toolbar" aria-label="Whiteboard tools">
+        {btn("select", MousePointer2, "Select", "V")}
+        {btn("hand", Hand, "Hand · hold Space", "H")}
+        <span className="sep" />
+        {btn("text", Type, "Text card", "T")}
+        {btn("sticky", StickyNote, "Sticky note", "S")}
+        <span className="wb-split">
+          <IconButton icon={shown.icon} label={`${shown.label} - click or drag to draw`} shortcut="R" tooltipSide="top" active={shapeActive} onClick={() => onTool(`shape:${shown.value}`)} />
+          <Dropdown side="top" items={SHAPES.map((x) => ({ label: x.label, icon: x.icon, checked: shown.value === x.value, onSelect: () => onTool(`shape:${x.value}`) }))}>
+            <button type="button" className="wb-split__caret" aria-label="Choose shape">
+              <ChevronUp strokeWidth={2} />
             </button>
-          </Tooltip>
+          </Dropdown>
         </span>
-      </Dropdown>
-      {btn("connector", Spline, "Connector - drag between objects", "C")}
-      {btn("task", SquareCheckBig, "Task card", "K")}
-      {btn("area", Frame, "Area", "A")}
-      <Dropdown
-        side="top"
-        items={[
-          { label: "Image…", icon: Image, onSelect: onImage },
-          { label: "Link", icon: Globe, shortcut: "L", onSelect: () => onInsert("link") },
-          { label: "File reference…", icon: File, onSelect: onFile },
-          { type: "separator" },
-          { label: "Note", icon: FileText, onSelect: () => onInsert("note") },
-          { label: "Project", icon: FolderKanban, onSelect: () => onInsert("project") },
-          { label: "Board", icon: SquareKanban, onSelect: () => onInsert("board") },
-          { label: "Milestone", icon: Flag, onSelect: () => onInsert("milestone") },
-        ]}
-      >
-        <span>
-          <Tooltip content="Insert" side="top">
-            <button type="button" className="icon-btn" aria-label="Insert">
-              <Plus strokeWidth={1.75} />
-            </button>
-          </Tooltip>
-        </span>
-      </Dropdown>
-      <span className="sep" />
-      <IconButton icon={Undo2} label="Undo" shortcut="Mod+Z" tooltipSide="top" disabled={!canUndo} onClick={onUndo} />
-      <IconButton icon={Redo2} label="Redo" shortcut="Mod+Y" tooltipSide="top" disabled={!canRedo} onClick={onRedo} />
+        {btn("pen", Pen, "Pen", "P")}
+        {btn("eraser", Eraser, "Eraser - drag across pen strokes", "E")}
+        {btn("connector", Spline, "Connector - drag between objects", "C")}
+        {btn("task", SquareCheckBig, "Task card", "K")}
+        {btn("area", Frame, "Area - click or drag to draw", "A")}
+        <Dropdown
+          side="top"
+          items={[
+            { label: "Image…", icon: Image, onSelect: onImage },
+            { label: "Link", icon: Globe, shortcut: "L", onSelect: () => onInsert("link") },
+            { label: "File reference…", icon: File, onSelect: onFile },
+            { type: "separator" },
+            { label: "Note", icon: FileText, onSelect: () => onInsert("note") },
+            { label: "Project", icon: FolderKanban, onSelect: () => onInsert("project") },
+            { label: "Board", icon: SquareKanban, onSelect: () => onInsert("board") },
+            { label: "Milestone", icon: Flag, onSelect: () => onInsert("milestone") },
+          ]}
+        >
+          <span>
+            <Tooltip content="Insert" side="top">
+              <button type="button" className="icon-btn" aria-label="Insert">
+                <Plus strokeWidth={1.75} />
+              </button>
+            </Tooltip>
+          </span>
+        </Dropdown>
+        <span className="sep" />
+        <IconButton icon={locked ? Lock : LockOpen} label={locked ? "Tool stays active - click to release" : "Keep tool active"} shortcut="Q" tooltipSide="top" active={locked} onClick={onToggleLock} />
+        <IconButton icon={Undo2} label="Undo" shortcut="Mod+Z" tooltipSide="top" disabled={!canUndo} onClick={onUndo} />
+        <IconButton icon={Redo2} label="Redo" shortcut="Mod+Y" tooltipSide="top" disabled={!canRedo} onClick={onRedo} />
+      </div>
     </div>
   );
 }
