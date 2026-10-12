@@ -1,0 +1,257 @@
+// App-wide side effects: appearance attributes, OS integration sync,
+// backend events, briefing prompts and global keyboard shortcuts.
+
+import { useEffect } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { enable as enableAutostart, disable as disableAutostart, isEnabled as autostartEnabled } from "@tauri-apps/plugin-autostart";
+import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
+import { useSettings } from "@/stores/settings";
+import { useUi } from "@/stores/ui";
+import { navigate, useRouter } from "@/stores/router";
+import { useUndo } from "@/stores/undo";
+import { api, isTauri } from "@/lib/ipc";
+import { queryClient } from "@/lib/query";
+import { comboFromEvent, isTextInput, resolveBindings } from "@/lib/shortcuts";
+import { todayStr } from "@/lib/dates";
+import { useFocus } from "@/features/focus/store";
+import { toastError } from "@/stores/toast";
+import { setSetting } from "@/stores/settings";
+
+const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const prefersDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+export function useAppearance() {
+  const v = useSettings((s) => s.values);
+  useEffect(() => {
+    const root = document.documentElement;
+    const apply = () => {
+      const theme = v["appearance.theme"] === "system" ? (prefersDark() ? "dark" : "light") : v["appearance.theme"];
+      root.dataset.theme = theme;
+      root.dataset.accent = v["appearance.accent"];
+      root.dataset.density = v["appearance.density"];
+      root.dataset.radius = v["appearance.radius"];
+      root.dataset.font = v["appearance.font"];
+      root.dataset.scrollbars = v["appearance.scrollbars"];
+      const motion = v["appearance.motion"] === "system" ? (prefersReducedMotion() ? "reduced" : "full") : v["appearance.motion"];
+      root.dataset.motion = motion;
+      root.style.setProperty("--fs", String(v["appearance.fontScale"]));
+      document.body.style.background = theme === "light" ? "#f6f6f6" : "#111111";
+    };
+    apply();
+    const mq1 = window.matchMedia("(prefers-color-scheme: dark)");
+    const mq2 = window.matchMedia("(prefers-reduced-motion: reduce)");
+    mq1.addEventListener("change", apply);
+    mq2.addEventListener("change", apply);
+    return () => {
+      mq1.removeEventListener("change", apply);
+      mq2.removeEventListener("change", apply);
+    };
+  }, [v]);
+
+  // Query cache lifetime (Performance settings).
+  const cacheMinutes = v["performance.cacheMinutes"];
+  useEffect(() => {
+    queryClient.setDefaultOptions({
+      ...queryClient.getDefaultOptions(),
+      queries: { ...queryClient.getDefaultOptions().queries, gcTime: cacheMinutes * 60_000 },
+    });
+  }, [cacheMinutes]);
+}
+
+/** Keeps OS integration (autostart, tray, global shortcut) in sync with settings. */
+export function useOsIntegration() {
+  const launchAtLogin = useSettings((s) => s.values["general.launchAtLogin"]);
+  const showTray = useSettings((s) => s.values["general.showTray"]);
+  const globalCapture = useSettings((s) => s.values["general.globalCaptureShortcut"]);
+  const loaded = useSettings((s) => s.loaded);
+
+  useEffect(() => {
+    if (!loaded || !isTauri) return;
+    void (async () => {
+      try {
+        const on = await autostartEnabled();
+        if (launchAtLogin && !on) await enableAutostart();
+        if (!launchAtLogin && on) await disableAutostart();
+      } catch {
+        toastError("Couldn't change the launch-at-login setting.");
+      }
+    })();
+  }, [launchAtLogin, loaded]);
+
+  useEffect(() => {
+    if (!loaded || !isTauri) return;
+    void api.system.setTrayVisible(showTray).catch(() => undefined);
+  }, [showTray, loaded]);
+
+  useEffect(() => {
+    if (!loaded || !isTauri || !globalCapture) return;
+    const accel = globalCapture.replace("Mod", "CommandOrControl");
+    let registered = false;
+    void register(accel, (e) => {
+      if (e.state !== "Pressed") return;
+      void api.system.showWindow().then(() => useUi.getState().openCapture());
+    })
+      .then(() => (registered = true))
+      .catch(() => toastError(`Couldn't register ${globalCapture} system-wide — another app may be using it.`));
+    return () => {
+      if (registered) void unregister(accel).catch(() => undefined);
+    };
+  }, [globalCapture, loaded]);
+}
+
+async function maybePromptBriefing() {
+  const v = useSettings.getState().values;
+  if (!v["rundown.enabled"]) return;
+  const now = new Date();
+  const [h, m] = v["rundown.time"].split(":").map(Number);
+  if (now.getHours() * 60 + now.getMinutes() < h * 60 + m) return;
+  const snap = await api.daily.getSnapshot(todayStr(), "morning").catch(() => null);
+  if (snap?.viewedAt) return;
+  if (useRouter.getState().route.name === "rundown") return;
+  if (v["rundown.autoOpen"]) navigate({ name: "rundown" });
+  else useUi.getState().set({ briefingPrompt: "morning" });
+}
+
+/** Listens for backend events and handles the morning/evening prompts. */
+export function useBackendEvents() {
+  const loaded = useSettings((s) => s.loaded);
+  useEffect(() => {
+    if (!loaded || !isTauri) return;
+    const unlisten: Promise<() => void>[] = [
+      listen("kern://briefing-due", () => void maybePromptBriefing()),
+      listen("kern://evening-due", () => {
+        if (useSettings.getState().values["rundown.eveningEnabled"]) useUi.getState().set({ briefingPrompt: "evening" });
+      }),
+      listen("kern://quick-capture", () => useUi.getState().openCapture()),
+      listen("kern://focus-ended", () => useFocus.getState().checkCompletion()),
+      listen("kern://data-changed", () => void queryClient.invalidateQueries()),
+      listen<string>("kern://backup-failed", (e) => toastError(`Automatic backup failed: ${e.payload}`)),
+    ];
+    // On launch the scheduler only emits once per day, so check directly too.
+    const t = window.setTimeout(() => void maybePromptBriefing(), 1500);
+    return () => {
+      window.clearTimeout(t);
+      unlisten.forEach((p) => void p.then((f) => f()));
+    };
+  }, [loaded]);
+
+  // Refresh time-sensitive data when the window regains focus.
+  useEffect(() => {
+    const onFocus = () => {
+      useFocus.getState().checkCompletion();
+      if (useSettings.getState().values["dashboard.refreshOnFocus"]) {
+        void queryClient.invalidateQueries({ queryKey: ["rundown"] });
+        void queryClient.invalidateQueries({ queryKey: ["stats"] });
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+}
+
+/** Remembers the last route for "remember last workspace". */
+export function useRememberRoute() {
+  useEffect(
+    () =>
+      useRouter.subscribe((s) => {
+        if (s.route.name !== "task") void api.settings.set({ "internal.lastRoute": s.route }).catch(() => undefined);
+      }),
+    [],
+  );
+}
+
+const NAV_ACTIONS: Record<string, () => void> = {
+  goDashboard: () => navigate({ name: "dashboard" }),
+  goTasks: () => navigate({ name: "tasks" }),
+  goInbox: () => navigate({ name: "inbox" }),
+  goProjects: () => navigate({ name: "projects" }),
+  goWhiteboards: () => navigate({ name: "whiteboards" }),
+  goNotes: () => navigate({ name: "notes" }),
+  goSettings: () => navigate({ name: "settings" }),
+  focusMode: () => navigate({ name: "focus" }),
+  rundown: () => navigate({ name: "rundown" }),
+};
+
+export function useGlobalShortcuts() {
+  const overrides = useSettings((s) => s.values["keyboard.shortcuts"]);
+  useEffect(() => {
+    const bindings = resolveBindings(overrides);
+    const byCombo = new Map<string, string>();
+    for (const [id, combo] of Object.entries(bindings)) if (combo) byCombo.set(combo, id);
+    const global = new Set(["palette", "quickCapture", "newTask"]);
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      const action = byCombo.get(combo);
+      const typing = isTextInput(e.target);
+      if (e.key === "Escape" && !typing && useUi.getState().inspector && !document.querySelector("[role=dialog],[role=menu]")) {
+        useUi.getState().closeInspector();
+        return;
+      }
+      if (!action) return;
+      if (typing && !global.has(action)) return;
+      const ui = useUi.getState();
+      const run = (): boolean => {
+        switch (action) {
+          case "palette":
+            ui.setPalette(!ui.paletteOpen);
+            return true;
+          case "quickCapture":
+            ui.openCapture(ui.capture.mode);
+            return true;
+          case "newTask":
+            ui.openCapture("task");
+            return true;
+          case "newNote":
+            ui.openCapture("note");
+            return true;
+          case "newProject":
+            ui.set({ createProjectOpen: true });
+            return true;
+          case "toggleSidebar":
+            void setSetting("appearance.sidebarCollapsed", !useSettings.getState().values["appearance.sidebarCollapsed"]);
+            return true;
+          case "closeInspector":
+            ui.closeInspector();
+            return true;
+          case "shortcuts":
+            ui.set({ shortcutsOpen: !ui.shortcutsOpen });
+            return true;
+          case "undo":
+            void useUndo.getState().undoLast();
+            return true;
+          case "back":
+            useRouter.getState().goBack();
+            return true;
+          case "forward":
+            useRouter.getState().goForward();
+            return true;
+          default:
+            if (NAV_ACTIONS[action]) {
+              NAV_ACTIONS[action]();
+              return true;
+            }
+            return false;
+        }
+      };
+      if (run()) e.preventDefault();
+    };
+    const onMouse = (e: MouseEvent) => {
+      if (e.button === 3) {
+        e.preventDefault();
+        useRouter.getState().goBack();
+      } else if (e.button === 4) {
+        e.preventDefault();
+        useRouter.getState().goForward();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mouseup", onMouse);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mouseup", onMouse);
+    };
+  }, [overrides]);
+}

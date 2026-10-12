@@ -1,0 +1,251 @@
+// The single source of truth for user settings: keys, types and defaults.
+// Settings persist in SQLite (settings table); the Rust side reads a few of
+// these keys (notifications, backups, window behaviour) with identical
+// defaults.
+
+import type { ProjectTab, TaskStatus } from "@/lib/types";
+
+export type Density = "compact" | "comfortable" | "relaxed";
+export type Theme = "dark" | "light" | "system";
+export type Accent = "none" | "blue" | "violet" | "green" | "amber" | "rose" | "teal";
+export type MotionPref = "system" | "full" | "reduced" | "off";
+export type NavItemId = "dashboard" | "tasks" | "inbox" | "projects" | "whiteboards" | "notes" | "search" | "focus" | "rundown";
+
+export interface ColumnTemplate {
+  name: string;
+  status: TaskStatus | null;
+}
+
+export interface Settings {
+  // General
+  "general.launchAtLogin": boolean;
+  "general.launchMinimized": boolean;
+  "general.minimizeToTray": boolean;
+  "general.closeBehavior": "quit" | "tray";
+  "general.showTray": boolean;
+  "general.rememberWindow": boolean;
+  "general.startMaximized": boolean;
+  "general.landing": "dashboard" | "last" | "tasks" | "inbox";
+  "general.confirmPermanentDelete": boolean;
+  "general.detailMode": "inspector" | "modal" | "page";
+  "general.globalCaptureShortcut": string | null;
+  "general.onboarded": boolean;
+  // Appearance
+  "appearance.theme": Theme;
+  "appearance.accent": Accent;
+  "appearance.font": "inter" | "geist" | "system";
+  "appearance.fontScale": number;
+  "appearance.density": Density;
+  "appearance.radius": "sharp" | "default" | "round";
+  "appearance.motion": MotionPref;
+  "appearance.sidebarWidth": number;
+  "appearance.sidebarCollapsed": boolean;
+  "appearance.navItems": NavItemId[];
+  "appearance.taskRowStyle": "compact" | "expanded";
+  "appearance.taskMeta": { project: boolean; due: boolean; priority: boolean; labels: boolean; subtasks: boolean; estimate: boolean };
+  "appearance.scrollbars": "thin" | "hover" | "wide";
+  "appearance.inspectorWidth": number;
+  // Dashboard
+  "dashboard.refreshOnFocus": boolean;
+  "dashboard.showHeader": boolean;
+  // Tasks
+  "tasks.defaultPriority": number;
+  "tasks.defaultDestination": "inbox" | "today" | "noDate";
+  "tasks.defaultView": "list" | "today" | "upcoming" | "calendar" | "board";
+  "tasks.weekStart": 0 | 1;
+  "tasks.dateFormat": "relative" | "dmy" | "mdy" | "iso";
+  "tasks.timeFormat": "24h" | "12h";
+  "tasks.showCompleted": boolean;
+  "tasks.autoArchiveDays": number;
+  "tasks.defaultSort": "manual" | "due" | "priority" | "created" | "title";
+  "tasks.recurrenceFromCompletion": boolean;
+  "tasks.maxSubtaskDepth": number;
+  // Projects & boards
+  "projects.defaultTab": ProjectTab;
+  "projects.defaultColumns": ColumnTemplate[];
+  "projects.showProgress": boolean;
+  "projects.archivedDisplay": "hide" | "section";
+  "projects.grouping": "groups" | "none";
+  "projects.sidebarOrder": "manual" | "recent" | "name";
+  "projects.progressIncludeArchived": boolean;
+  "boards.defaultCardDensity": "compact" | "expanded";
+  "boards.columnWidth": number;
+  // Whiteboards
+  "wb.snapToGrid": boolean;
+  "wb.showGrid": boolean;
+  "wb.gridSize": number;
+  "wb.defaultZoom": number;
+  "wb.connectorStyle": "smooth" | "straight" | "step";
+  "wb.connectorArrow": boolean;
+  "wb.stickySize": "s" | "m" | "l";
+  "wb.stickyTone": "plain" | "warm" | "cool";
+  "wb.alignGuides": boolean;
+  "wb.panSensitivity": number;
+  "wb.zoomSensitivity": number;
+  "wb.autoFit": boolean;
+  "wb.interactionMode": "mouse" | "trackpad";
+  "wb.limitEffects": boolean;
+  // Notifications
+  "notifications.enabled": boolean;
+  "notifications.dueReminders": boolean;
+  "notifications.dueLeadMinutes": number;
+  "notifications.overdue": boolean;
+  "notifications.overdueTime": string;
+  "notifications.focus": boolean;
+  "notifications.quietHours": { enabled: boolean; start: string; end: string };
+  // Daily rundown
+  "rundown.enabled": boolean;
+  "rundown.time": string;
+  "rundown.notify": boolean;
+  "rundown.autoOpen": boolean;
+  "rundown.includeOverdue": boolean;
+  "rundown.includeUpcoming": boolean;
+  "rundown.includeCompleted": boolean;
+  "rundown.includeProjects": boolean;
+  "rundown.maxTasks": number;
+  "rundown.upcomingDays": number;
+  "rundown.projectIds": string[] | null;
+  "rundown.eveningEnabled": boolean;
+  "rundown.eveningTime": string;
+  "rundown.eveningNotify": boolean;
+  // Focus
+  "focus.focusMinutes": number;
+  "focus.shortBreakMinutes": number;
+  "focus.longBreakMinutes": number;
+  "focus.longBreakEvery": number;
+  "focus.autoStartBreaks": boolean;
+  "focus.autoStartFocus": boolean;
+  "focus.trackHistory": boolean;
+  // Keyboard
+  "keyboard.shortcuts": Record<string, string | null>;
+  // Data & backups
+  "backups.frequency": "off" | "daily" | "weekly";
+  "backups.dir": string | null;
+  "backups.keep": number;
+  "data.trashRetentionDays": number;
+  "data.activityRetentionDays": number;
+  "data.linkPreviews": boolean;
+  // Performance
+  "performance.reduceBackground": boolean;
+  "performance.cacheMinutes": number;
+}
+
+export const DEFAULTS: Settings = {
+  "general.launchAtLogin": false,
+  "general.launchMinimized": false,
+  "general.minimizeToTray": false,
+  "general.closeBehavior": "quit",
+  "general.showTray": true,
+  "general.rememberWindow": true,
+  "general.startMaximized": false,
+  "general.landing": "dashboard",
+  "general.confirmPermanentDelete": true,
+  "general.detailMode": "inspector",
+  "general.globalCaptureShortcut": null,
+  "general.onboarded": false,
+
+  "appearance.theme": "dark",
+  "appearance.accent": "none",
+  "appearance.font": "inter",
+  "appearance.fontScale": 1,
+  "appearance.density": "comfortable",
+  "appearance.radius": "default",
+  "appearance.motion": "system",
+  "appearance.sidebarWidth": 236,
+  "appearance.sidebarCollapsed": false,
+  "appearance.navItems": ["dashboard", "tasks", "inbox", "projects", "whiteboards", "notes"],
+  "appearance.taskRowStyle": "compact",
+  "appearance.taskMeta": { project: true, due: true, priority: true, labels: true, subtasks: true, estimate: false },
+  "appearance.scrollbars": "thin",
+  "appearance.inspectorWidth": 380,
+
+  "dashboard.refreshOnFocus": true,
+  "dashboard.showHeader": true,
+
+  "tasks.defaultPriority": 0,
+  "tasks.defaultDestination": "inbox",
+  "tasks.defaultView": "list",
+  "tasks.weekStart": 1,
+  "tasks.dateFormat": "relative",
+  "tasks.timeFormat": "24h",
+  "tasks.showCompleted": false,
+  "tasks.autoArchiveDays": 0,
+  "tasks.defaultSort": "manual",
+  "tasks.recurrenceFromCompletion": false,
+  "tasks.maxSubtaskDepth": 3,
+
+  "projects.defaultTab": "overview",
+  "projects.defaultColumns": [
+    { name: "Backlog", status: null },
+    { name: "To Do", status: "todo" },
+    { name: "In Progress", status: "in_progress" },
+    { name: "Done", status: "completed" },
+  ],
+  "projects.showProgress": true,
+  "projects.archivedDisplay": "section",
+  "projects.grouping": "groups",
+  "projects.sidebarOrder": "manual",
+  "projects.progressIncludeArchived": false,
+  "boards.defaultCardDensity": "compact",
+  "boards.columnWidth": 288,
+
+  "wb.snapToGrid": false,
+  "wb.showGrid": true,
+  "wb.gridSize": 20,
+  "wb.defaultZoom": 1,
+  "wb.connectorStyle": "smooth",
+  "wb.connectorArrow": true,
+  "wb.stickySize": "m",
+  "wb.stickyTone": "plain",
+  "wb.alignGuides": true,
+  "wb.panSensitivity": 1,
+  "wb.zoomSensitivity": 1,
+  "wb.autoFit": true,
+  "wb.interactionMode": "mouse",
+  "wb.limitEffects": false,
+
+  "notifications.enabled": true,
+  "notifications.dueReminders": true,
+  "notifications.dueLeadMinutes": 15,
+  "notifications.overdue": true,
+  "notifications.overdueTime": "13:00",
+  "notifications.focus": true,
+  "notifications.quietHours": { enabled: false, start: "22:00", end: "07:00" },
+
+  "rundown.enabled": true,
+  "rundown.time": "09:00",
+  "rundown.notify": true,
+  "rundown.autoOpen": false,
+  "rundown.includeOverdue": true,
+  "rundown.includeUpcoming": true,
+  "rundown.includeCompleted": true,
+  "rundown.includeProjects": true,
+  "rundown.maxTasks": 6,
+  "rundown.upcomingDays": 7,
+  "rundown.projectIds": null,
+  "rundown.eveningEnabled": false,
+  "rundown.eveningTime": "18:00",
+  "rundown.eveningNotify": true,
+
+  "focus.focusMinutes": 25,
+  "focus.shortBreakMinutes": 5,
+  "focus.longBreakMinutes": 15,
+  "focus.longBreakEvery": 4,
+  "focus.autoStartBreaks": false,
+  "focus.autoStartFocus": false,
+  "focus.trackHistory": true,
+
+  "keyboard.shortcuts": {},
+
+  "backups.frequency": "daily",
+  "backups.dir": null,
+  "backups.keep": 10,
+  "data.trashRetentionDays": 30,
+  "data.activityRetentionDays": 180,
+  "data.linkPreviews": true,
+
+  "performance.reduceBackground": false,
+  "performance.cacheMinutes": 5,
+};
+
+export type SettingKey = keyof Settings;

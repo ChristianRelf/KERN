@@ -1,0 +1,121 @@
+import { QueryClient } from "@tanstack/react-query";
+import type { BoardData, Task, TaskPatch } from "./types";
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Local data: no network retries, no flashing refetches.
+      retry: 1,
+      staleTime: 30_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      networkMode: "always",
+    },
+    mutations: { networkMode: "always" },
+  },
+});
+
+export type Domain =
+  | "tasks"
+  | "task"
+  | "board"
+  | "boards"
+  | "projects"
+  | "project"
+  | "groups"
+  | "rundown"
+  | "stats"
+  | "labels"
+  | "activity"
+  | "notes"
+  | "note"
+  | "inbox"
+  | "whiteboards"
+  | "whiteboard"
+  | "recent"
+  | "views"
+  | "trash"
+  | "dashboards"
+  | "attachments"
+  | "focus"
+  | "snapshots"
+  | "backups"
+  | "search";
+
+export function invalidate(...domains: Domain[]) {
+  for (const d of domains) void queryClient.invalidateQueries({ queryKey: [d] });
+}
+
+export const TASK_DOMAINS: Domain[] = ["tasks", "task", "board", "projects", "project", "rundown", "stats", "activity", "labels"];
+
+export function invalidateTasks() {
+  invalidate(...TASK_DOMAINS);
+}
+
+/** Applies a patch to a task object the way the backend would (best effort). */
+export function applyPatch(t: Task, p: TaskPatch): Task {
+  const next: Task = { ...t };
+  const keys: (keyof TaskPatch & keyof Task)[] = [
+    "title",
+    "description",
+    "status",
+    "priority",
+    "projectId",
+    "columnId",
+    "parentId",
+    "dueDate",
+    "dueTime",
+    "startDate",
+    "estimateMinutes",
+    "reminderMinutes",
+    "recurrence",
+    "sortOrder",
+    "boardOrder",
+    "pinned",
+    "labelIds",
+  ];
+  for (const k of keys) {
+    if (p[k] !== undefined) (next as unknown as Record<string, unknown>)[k] = p[k];
+  }
+  if (p.status === "completed" && t.status !== "completed") next.completedAt = Date.now();
+  if (p.status && p.status !== "completed") next.completedAt = null;
+  if (p.archived !== undefined) next.archivedAt = p.archived ? Date.now() : null;
+  if (p.addLabelIds) next.labelIds = Array.from(new Set([...next.labelIds, ...p.addLabelIds]));
+  if (p.removeLabelIds) next.labelIds = next.labelIds.filter((l) => !p.removeLabelIds!.includes(l));
+  if (p.dueDate === null) next.dueTime = null;
+  return next;
+}
+
+/** Optimistically patches tasks in every cached list/board/detail. Returns a rollback. */
+export function optimisticPatch(ids: string[], patch: TaskPatch | ((t: Task) => TaskPatch)): () => void {
+  const idSet = new Set(ids);
+  const snapshots: [readonly unknown[], unknown][] = [];
+  const patchOf = (t: Task) => (typeof patch === "function" ? patch(t) : patch);
+
+  for (const [key, data] of queryClient.getQueriesData<Task[]>({ queryKey: ["tasks"] })) {
+    if (!Array.isArray(data)) continue;
+    if (!data.some((t) => idSet.has(t.id))) continue;
+    snapshots.push([key, data]);
+    queryClient.setQueryData<Task[]>(key, data.map((t) => (idSet.has(t.id) ? applyPatch(t, patchOf(t)) : t)));
+  }
+  for (const [key, data] of queryClient.getQueriesData<BoardData>({ queryKey: ["board"] })) {
+    if (!data || !Array.isArray(data.tasks)) continue;
+    if (!data.tasks.some((t) => idSet.has(t.id))) continue;
+    snapshots.push([key, data]);
+    queryClient.setQueryData<BoardData>(key, {
+      ...data,
+      tasks: data.tasks.map((t) => (idSet.has(t.id) ? applyPatch(t, patchOf(t)) : t)),
+    });
+  }
+  for (const id of ids) {
+    const key = ["task", id];
+    const data = queryClient.getQueryData<Task>(key);
+    if (data) {
+      snapshots.push([key, data]);
+      queryClient.setQueryData<Task>(key, applyPatch(data, patchOf(data)));
+    }
+  }
+  return () => {
+    for (const [key, data] of snapshots) queryClient.setQueryData(key, data);
+  };
+}
