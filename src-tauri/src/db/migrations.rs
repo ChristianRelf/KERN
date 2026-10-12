@@ -3,7 +3,7 @@
 //! interrupted migration rolls back cleanly; additionally a full database
 //! copy is taken before migrating an existing database (see `db::open`).
 
-pub const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3];
+pub const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4];
 
 const MIGRATION_1: &str = r#"
 CREATE TABLE settings (
@@ -502,4 +502,309 @@ CREATE TABLE task_issue_links (
 );
 CREATE UNIQUE INDEX idx_issue_links_task ON task_issue_links(task_id) WHERE task_id IS NOT NULL;
 CREATE INDEX idx_issue_links_project ON task_issue_links(project_id);
+"#;
+
+/// Phase 3: multi-repository projects, worktree metadata, task ↔ development
+/// links, work sessions, workspace state and snapshots, Command Centre
+/// layouts, milestones and releases, saved commands, environment profiles,
+/// local services, development caches and the linked-file search index.
+/// Purely additive: existing tables, ids and relationships are unchanged.
+const MIGRATION_4: &str = r#"
+-- Repositories linked to a project: zero, one or many. A row has a local
+-- clone, a GitHub repository, or both. The project's folder link and its
+-- GitHub issue-sync connection (project_repos) stay as they are.
+CREATE TABLE project_repositories (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  alias TEXT,
+  local_path TEXT,
+  folder_key TEXT,
+  github TEXT,
+  is_primary INTEGER NOT NULL DEFAULT 0,
+  sort_order REAL NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  CHECK (local_path IS NOT NULL OR github IS NOT NULL)
+);
+CREATE INDEX idx_repositories_project ON project_repositories(project_id, sort_order);
+CREATE UNIQUE INDEX idx_repositories_local ON project_repositories(project_id, folder_key) WHERE folder_key IS NOT NULL;
+CREATE UNIQUE INDEX idx_repositories_github ON project_repositories(project_id, lower(github)) WHERE github IS NOT NULL;
+
+-- The folder whose repository was last adopted automatically, so unlinking
+-- an adopted repository doesn't bring it back.
+ALTER TABLE projects ADD COLUMN repo_adopted_key TEXT;
+-- Health rule preferences (JSON).
+ALTER TABLE projects ADD COLUMN health_prefs TEXT NOT NULL DEFAULT '{}';
+-- The open before the current one, for "since last opened".
+ALTER TABLE projects ADD COLUMN prev_opened_at INTEGER;
+
+-- Kern's metadata about git worktrees. The worktrees themselves are always
+-- read from git; a row only adds an alias and associations.
+CREATE TABLE git_worktrees (
+  id TEXT PRIMARY KEY,
+  repository_id TEXT NOT NULL REFERENCES project_repositories(id) ON DELETE CASCADE,
+  path TEXT NOT NULL,
+  folder_key TEXT NOT NULL,
+  alias TEXT,
+  task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+  agent TEXT,
+  created_by_kern INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX idx_worktrees_key ON git_worktrees(repository_id, folder_key);
+CREATE INDEX idx_worktrees_task ON git_worktrees(task_id);
+
+-- Milestones (any project) that may also represent a planned release.
+CREATE TABLE milestones (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  target_date TEXT,
+  status TEXT NOT NULL DEFAULT 'planned' CHECK (status IN ('planned', 'active', 'completed', 'cancelled')),
+  progress_mode TEXT NOT NULL DEFAULT 'tasks' CHECK (progress_mode IN ('tasks', 'manual')),
+  manual_progress INTEGER NOT NULL DEFAULT 0,
+  is_release INTEGER NOT NULL DEFAULT 0,
+  version TEXT,
+  repository_id TEXT REFERENCES project_repositories(id) ON DELETE SET NULL,
+  release_notes TEXT NOT NULL DEFAULT '',
+  release_url TEXT,
+  sort_order REAL NOT NULL DEFAULT 0,
+  completed_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX idx_milestones_project ON milestones(project_id, sort_order);
+
+CREATE TABLE milestone_deps (
+  milestone_id TEXT NOT NULL REFERENCES milestones(id) ON DELETE CASCADE,
+  depends_on TEXT NOT NULL REFERENCES milestones(id) ON DELETE CASCADE,
+  PRIMARY KEY (milestone_id, depends_on),
+  CHECK (milestone_id != depends_on)
+);
+
+CREATE TABLE release_links (
+  id TEXT PRIMARY KEY,
+  milestone_id TEXT NOT NULL REFERENCES milestones(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('pull', 'issue')),
+  ref TEXT NOT NULL,
+  title TEXT,
+  url TEXT,
+  created_at INTEGER NOT NULL,
+  UNIQUE (milestone_id, kind, ref)
+);
+
+-- A task belongs to at most one milestone; deleting the milestone keeps the task.
+ALTER TABLE tasks ADD COLUMN milestone_id TEXT REFERENCES milestones(id) ON DELETE SET NULL;
+CREATE INDEX idx_tasks_milestone ON tasks(milestone_id) WHERE milestone_id IS NOT NULL;
+
+CREATE TRIGGER milestones_fts_ai AFTER INSERT ON milestones BEGIN
+  INSERT INTO search_fts(kind, ref_id, parent_id, title, body)
+    VALUES ('milestone', new.id, new.project_id, new.title, new.description || ' ' || coalesce(new.version, ''));
+END;
+CREATE TRIGGER milestones_fts_au AFTER UPDATE OF title, description, version ON milestones BEGIN
+  DELETE FROM search_fts WHERE kind = 'milestone' AND ref_id = old.id;
+  INSERT INTO search_fts(kind, ref_id, parent_id, title, body)
+    VALUES ('milestone', new.id, new.project_id, new.title, new.description || ' ' || coalesce(new.version, ''));
+END;
+CREATE TRIGGER milestones_fts_ad AFTER DELETE ON milestones BEGIN
+  DELETE FROM search_fts WHERE kind = 'milestone' AND ref_id = old.id;
+END;
+
+-- Explicit links from a task to development resources. Only explicit links
+-- live here; inferred associations are computed and labelled as such.
+CREATE TABLE task_dev_links (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('repository', 'branch', 'worktree', 'pull', 'commit')),
+  repository_id TEXT REFERENCES project_repositories(id) ON DELETE CASCADE,
+  ref TEXT NOT NULL DEFAULT '',
+  title TEXT,
+  url TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX idx_dev_links_unique ON task_dev_links(task_id, kind, coalesce(repository_id, ''), ref);
+CREATE INDEX idx_dev_links_repo ON task_dev_links(repository_id, kind, ref);
+
+-- Work sessions for any project, with optional development context.
+-- Durations derive from timestamps; last_seen_at lets a gap (sleep, crash)
+-- be detected and excluded on request.
+CREATE TABLE work_sessions (
+  id TEXT PRIMARY KEY,
+  project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+  task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+  repository_id TEXT REFERENCES project_repositories(id) ON DELETE SET NULL,
+  branch TEXT,
+  worktree_id TEXT REFERENCES git_worktrees(id) ON DELETE SET NULL,
+  milestone_id TEXT REFERENCES milestones(id) ON DELETE SET NULL,
+  note TEXT NOT NULL DEFAULT '',
+  started_at INTEGER NOT NULL,
+  ended_at INTEGER,
+  paused_ms INTEGER NOT NULL DEFAULT 0,
+  paused_at INTEGER,
+  last_seen_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX idx_sessions_started ON work_sessions(started_at);
+CREATE INDEX idx_sessions_task ON work_sessions(task_id);
+CREATE INDEX idx_sessions_project ON work_sessions(project_id, started_at);
+CREATE INDEX idx_sessions_open ON work_sessions(ended_at) WHERE ended_at IS NULL;
+
+CREATE TABLE session_links (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES work_sessions(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('commit', 'pull', 'issue')),
+  repository_id TEXT,
+  ref TEXT NOT NULL,
+  title TEXT,
+  url TEXT,
+  created_at INTEGER NOT NULL,
+  UNIQUE (session_id, kind, ref)
+);
+
+-- Per-project UI context for "resume", and named snapshots of it. Only
+-- lightweight references (ids, paths, viewport), never file contents.
+CREATE TABLE workspace_state (
+  project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+  state TEXT NOT NULL DEFAULT '{}',
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE workspace_snapshots (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX idx_snapshots_project ON workspace_snapshots(project_id);
+
+-- Project Command Centre layouts (widget documents owned by the client).
+CREATE TABLE project_layouts (
+  project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+  preset TEXT,
+  widgets TEXT NOT NULL DEFAULT '[]',
+  layouts TEXT NOT NULL DEFAULT '{}',
+  updated_at INTEGER NOT NULL
+);
+
+-- Environment profiles. Secret values live in the OS credential store under
+-- secret_ref; only names and non-secret values are stored here.
+CREATE TABLE env_profiles (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  sort_order REAL NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX idx_env_profiles_project ON env_profiles(project_id);
+CREATE TABLE env_variables (
+  id TEXT PRIMARY KEY,
+  profile_id TEXT NOT NULL REFERENCES env_profiles(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('plain', 'secret', 'inherit')),
+  value TEXT,
+  secret_ref TEXT,
+  sort_order REAL NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (profile_id, name)
+);
+-- Credential-store entries whose variable is gone; the next sweep removes them.
+CREATE TABLE vault_tombstones (
+  ref TEXT PRIMARY KEY,
+  created_at INTEGER NOT NULL
+);
+CREATE TRIGGER env_variables_secret_ad AFTER DELETE ON env_variables WHEN old.secret_ref IS NOT NULL BEGIN
+  INSERT OR IGNORE INTO vault_tombstones(ref, created_at) VALUES (old.secret_ref, CAST(strftime('%s', 'now') AS INTEGER) * 1000);
+END;
+CREATE TRIGGER env_variables_secret_au AFTER UPDATE OF secret_ref ON env_variables
+  WHEN old.secret_ref IS NOT NULL AND (new.secret_ref IS NULL OR new.secret_ref != old.secret_ref) BEGIN
+  INSERT OR IGNORE INTO vault_tombstones(ref, created_at) VALUES (old.secret_ref, CAST(strftime('%s', 'now') AS INTEGER) * 1000);
+END;
+
+-- Saved project commands: a program and an argument list, never a shell string.
+CREATE TABLE project_commands (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  repository_id TEXT REFERENCES project_repositories(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  program TEXT NOT NULL,
+  args TEXT NOT NULL DEFAULT '[]',
+  cwd TEXT NOT NULL DEFAULT '',
+  env_profile_id TEXT REFERENCES env_profiles(id) ON DELETE SET NULL,
+  confirm INTEGER NOT NULL DEFAULT 0,
+  pinned INTEGER NOT NULL DEFAULT 0,
+  sort_order REAL NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX idx_commands_project ON project_commands(project_id, sort_order);
+
+-- Explicitly configured local services and a short check history.
+CREATE TABLE local_services (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  url TEXT NOT NULL,
+  health_path TEXT,
+  expect_status TEXT,
+  expect_text TEXT,
+  command_id TEXT REFERENCES project_commands(id) ON DELETE SET NULL,
+  repository_id TEXT REFERENCES project_repositories(id) ON DELETE SET NULL,
+  interval_secs INTEGER NOT NULL DEFAULT 30,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  last_status TEXT NOT NULL DEFAULT 'unknown',
+  last_detail TEXT,
+  last_latency_ms INTEGER,
+  last_checked_at INTEGER,
+  sort_order REAL NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX idx_services_project ON local_services(project_id);
+CREATE TABLE service_checks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  service_id TEXT NOT NULL REFERENCES local_services(id) ON DELETE CASCADE,
+  status TEXT NOT NULL,
+  latency_ms INTEGER,
+  detail TEXT,
+  checked_at INTEGER NOT NULL
+);
+CREATE INDEX idx_service_checks ON service_checks(service_id, checked_at);
+
+-- Disposable caches for development data (dependency scans, advisories,
+-- GitHub workflow runs and pull requests). Safe to clear at any time.
+CREATE TABLE dev_cache (
+  key TEXT PRIMARY KEY,
+  data TEXT NOT NULL,
+  fetched_at INTEGER NOT NULL
+);
+
+-- Search index for linked folders: file names, plus the text of small,
+-- non-sensitive text files. Updated incrementally from modification times.
+CREATE TABLE file_index_roots (
+  root_key TEXT PRIMARY KEY,
+  path TEXT NOT NULL,
+  indexed_at INTEGER NOT NULL,
+  file_count INTEGER NOT NULL DEFAULT 0,
+  complete INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE file_index (
+  id INTEGER PRIMARY KEY,
+  root_key TEXT NOT NULL,
+  rel TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  mtime INTEGER NOT NULL,
+  UNIQUE (root_key, rel)
+);
+CREATE VIRTUAL TABLE file_fts USING fts5(
+  name,
+  body,
+  tokenize = 'unicode61 remove_diacritics 2',
+  prefix = '2 3'
+);
 "#;

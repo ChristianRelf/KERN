@@ -1,12 +1,15 @@
-//! Git tools for a project's linked folder.
+//! Git tools for a project's repositories.
 //!
 //! Commands run the system `git` with an argument list (never a shell), no
 //! terminal prompts and a timeout. Git can execute code configured by the
 //! repository itself (hooks, fsmonitor, filters), so every git command needs
 //! a *trusted* folder. Reading the remote from `.git/config` and scanning
 //! for TODO comments don't execute anything and also work in restricted mode.
+//!
+//! Repository commands take a repository id (see `repos`), so a project can
+//! have several; nothing here is ever destructive (no reset, clean or force).
 
-use crate::domain::folders::{self, is_sensitive, Trust};
+use crate::domain::folders::{self, is_sensitive};
 use crate::error::{invalid, AppError, AppResult};
 use crate::state::AppState;
 use serde::Serialize;
@@ -72,14 +75,14 @@ pub fn run(mut cmd: Command, timeout: Duration, max_out: usize) -> AppResult<(bo
     Ok((status.success(), out, String::from_utf8_lossy(&err_t.join().unwrap_or_default()).trim().to_string()))
 }
 
-fn git_cmd(root: &Path, args: &[&str]) -> Command {
+pub fn git_cmd(root: &Path, args: &[&str]) -> Command {
     let mut c = command("git");
     c.arg("-c").arg("core.quotepath=off").arg("-c").arg("color.ui=false").args(args).current_dir(root);
     c.env("GIT_TERMINAL_PROMPT", "0").env("GIT_OPTIONAL_LOCKS", "0").env("LC_ALL", "C");
     c
 }
 
-fn git(root: &Path, args: &[&str], timeout_secs: u64) -> AppResult<String> {
+pub fn git(root: &Path, args: &[&str], timeout_secs: u64) -> AppResult<String> {
     let (ok, out, err) = run(git_cmd(root, args), Duration::from_secs(timeout_secs), 4 * 1024 * 1024)?;
     if !ok {
         let msg = err.lines().filter(|l| !l.trim().is_empty()).last().unwrap_or("git failed").trim_start_matches("fatal: ").trim_start_matches("error: ");
@@ -88,16 +91,14 @@ fn git(root: &Path, args: &[&str], timeout_secs: u64) -> AppResult<String> {
     Ok(out)
 }
 
-/// The project's folder root, which must be trusted for git commands.
-fn trusted_root(state: &AppState, project_id: &str) -> AppResult<PathBuf> {
-    let (root, trust) = state.with(|c| folders::root_of(c, project_id))?;
-    if trust != Trust::Trusted {
-        return invalid("Git tools need a trusted folder, because a repository can run its own scripts through git. Trust the folder first.");
-    }
-    Ok(root)
+/// A repository's local root, which must be trusted for git commands.
+fn trusted_root(state: &AppState, repo_id: &str) -> AppResult<PathBuf> {
+    crate::domain::repos::trusted_root(state, repo_id)
 }
 
-async fn blocking<T: Send + 'static>(app: &AppHandle, f: impl FnOnce(&AppState) -> AppResult<T> + Send + 'static) -> AppResult<T> {
+pub const TRUST_NEEDED: &str = "Git tools need a trusted folder, because a repository can run its own scripts through git. Trust the folder first.";
+
+pub async fn blocking<T: Send + 'static>(app: &AppHandle, f: impl FnOnce(&AppState) -> AppResult<T> + Send + 'static) -> AppResult<T> {
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || f(&app.state::<AppState>()))
         .await
@@ -164,6 +165,24 @@ pub fn read_remote(root: &Path) -> RemoteInfo {
         }
     }
     RemoteInfo { is_repo: true, github: origin.as_deref().and_then(github_slug), origin_url: origin }
+}
+
+/// The checked-out branch, read from HEAD without running git (works in
+/// restricted folders). A detached HEAD gives its short hash.
+pub fn read_head(root: &Path) -> Option<String> {
+    let dot = root.join(".git");
+    let git_dir = if dot.is_dir() {
+        dot
+    } else {
+        let s = std::fs::read_to_string(&dot).ok()?;
+        root.join(s.strip_prefix("gitdir:")?.trim())
+    };
+    let head = std::fs::read_to_string(git_dir.join("HEAD")).ok()?;
+    let head = head.trim();
+    match head.strip_prefix("ref:") {
+        Some(r) => Some(r.trim().trim_start_matches("refs/heads/").to_string()),
+        None => Some(head.chars().take(7).collect()),
+    }
 }
 
 #[tauri::command]
@@ -259,16 +278,16 @@ pub fn parse_status(raw: &str) -> GitStatus {
     st
 }
 
-#[tauri::command]
-pub async fn git_status(app: AppHandle, project_id: String) -> AppResult<GitStatus> {
-    blocking(&app, move |s| {
-        let root = trusted_root(s, &project_id)?;
-        Ok(parse_status(&git(&root, &["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=normal"], 30)?))
-    })
-    .await
+pub fn status_of(root: &Path) -> AppResult<GitStatus> {
+    Ok(parse_status(&git(root, &["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=normal"], 30)?))
 }
 
-fn safe_rel(rel: &str) -> AppResult<()> {
+#[tauri::command]
+pub async fn git_status(app: AppHandle, repo_id: String) -> AppResult<GitStatus> {
+    blocking(&app, move |s| status_of(&trusted_root(s, &repo_id)?)).await
+}
+
+pub fn safe_rel(rel: &str) -> AppResult<()> {
     if rel.is_empty() || rel.starts_with('-') || Path::new(rel).components().any(|c| !matches!(c, std::path::Component::Normal(_) | std::path::Component::CurDir)) {
         return invalid("That path isn't inside the repository.");
     }
@@ -276,10 +295,10 @@ fn safe_rel(rel: &str) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub async fn git_diff(app: AppHandle, project_id: String, path: String, staged: bool, untracked: bool) -> AppResult<String> {
+pub async fn git_diff(app: AppHandle, repo_id: String, path: String, staged: bool, untracked: bool) -> AppResult<String> {
     blocking(&app, move |s| {
         safe_rel(&path)?;
-        let root = trusted_root(s, &project_id)?;
+        let root = trusted_root(s, &repo_id)?;
         if untracked {
             // New file: show its start as an addition (text only, size-capped).
             let full = folders::resolve_inside(&root, &path)?;
@@ -338,24 +357,41 @@ pub fn parse_log(raw: &str) -> Vec<Commit> {
         .collect()
 }
 
+const LOG_FORMAT: &str = "--format=%H%x1f%h%x1f%an%x1f%aI%x1f%P%x1f%D%x1f%s%x1e";
+
+/// Commits in `range` (or HEAD), newest first. `all` includes every branch.
+pub fn log_of(root: &Path, limit: u32, all: bool, range: Option<&str>, since: Option<&str>) -> AppResult<Vec<Commit>> {
+    let n = format!("--max-count={}", limit.clamp(1, 500));
+    let since_arg = since.map(|s| format!("--since={s}"));
+    // Topological order keeps each branch's commits together, which is
+    // what the history graph needs to draw tidy lanes.
+    let mut args = vec!["log", n.as_str(), "--topo-order", "--decorate=full", "--date=iso-strict", LOG_FORMAT];
+    if let Some(s) = &since_arg {
+        args.push(s.as_str());
+    }
+    if all {
+        args.push("--all");
+    }
+    if let Some(r) = range {
+        if r.starts_with('-') {
+            return invalid("That isn't a valid revision range.");
+        }
+        args.push(r);
+        args.push("--");
+    }
+    // A brand-new repository has no commits yet.
+    match git(root, &args, 30) {
+        Ok(o) => Ok(parse_log(&o)),
+        Err(e) if e.to_string().contains("does not have any commits") || e.to_string().contains("unknown revision") => Ok(vec![]),
+        Err(e) => Err(e),
+    }
+}
+
 #[tauri::command]
-pub async fn git_log(app: AppHandle, project_id: String, limit: Option<u32>, all: Option<bool>) -> AppResult<Vec<Commit>> {
+pub async fn git_log(app: AppHandle, repo_id: String, limit: Option<u32>, all: Option<bool>, range: Option<String>) -> AppResult<Vec<Commit>> {
     blocking(&app, move |s| {
-        let root = trusted_root(s, &project_id)?;
-        let n = format!("--max-count={}", limit.unwrap_or(50).clamp(1, 500));
-        // Topological order keeps each branch's commits together, which is
-        // what the history graph needs to draw tidy lanes.
-        let mut args = vec!["log", n.as_str(), "--topo-order", "--decorate=full", "--date=iso-strict", "--format=%H%x1f%h%x1f%an%x1f%aI%x1f%P%x1f%D%x1f%s%x1e"];
-        if all.unwrap_or(false) {
-            args.push("--all");
-        }
-        let out = git(&root, &args, 30);
-        // A brand-new repository has no commits yet.
-        match out {
-            Ok(o) => Ok(parse_log(&o)),
-            Err(e) if e.to_string().contains("does not have any commits") => Ok(vec![]),
-            Err(e) => Err(e),
-        }
+        let root = trusted_root(s, &repo_id)?;
+        log_of(&root, limit.unwrap_or(50), all.unwrap_or(false), range.as_deref(), None)
     })
     .await
 }
@@ -371,10 +407,7 @@ pub struct Branch {
     pub date: String,
 }
 
-#[tauri::command]
-pub async fn git_branches(app: AppHandle, project_id: String) -> AppResult<Vec<Branch>> {
-    blocking(&app, move |s| {
-        let root = trusted_root(s, &project_id)?;
+pub fn branches_of(root: &Path) -> AppResult<Vec<Branch>> {
         let out = git(
             &root,
             &["for-each-ref", "--sort=-committerdate", "--format=%(HEAD)%1f%(refname)%1f%(refname:short)%1f%(upstream:short)%1f%(objectname:short)%1f%(committerdate:iso-strict)", "refs/heads", "refs/remotes"],
@@ -397,11 +430,14 @@ pub async fn git_branches(app: AppHandle, project_id: String) -> AppResult<Vec<B
                 })
             })
             .collect())
-    })
-    .await
 }
 
-fn valid_branch(root: &Path, name: &str) -> AppResult<()> {
+#[tauri::command]
+pub async fn git_branches(app: AppHandle, repo_id: String) -> AppResult<Vec<Branch>> {
+    blocking(&app, move |s| branches_of(&trusted_root(s, &repo_id)?)).await
+}
+
+pub fn valid_branch(root: &Path, name: &str) -> AppResult<()> {
     if name.starts_with('-') || name.trim().is_empty() {
         return invalid("That isn't a valid branch name.");
     }
@@ -411,9 +447,9 @@ fn valid_branch(root: &Path, name: &str) -> AppResult<()> {
 /// Switches to a branch (creating it when asked). Git refuses if local
 /// changes would be overwritten, and that message is passed on.
 #[tauri::command]
-pub async fn git_switch(app: AppHandle, project_id: String, name: String, create: bool) -> AppResult<()> {
+pub async fn git_switch(app: AppHandle, repo_id: String, name: String, create: bool) -> AppResult<()> {
     blocking(&app, move |s| {
-        let root = trusted_root(s, &project_id)?;
+        let root = trusted_root(s, &repo_id)?;
         valid_branch(&root, &name)?;
         let local = name.split_once('/').filter(|(r, _)| *r == "origin").map(|(_, b)| b.to_string());
         if create {
@@ -427,6 +463,69 @@ pub async fn git_switch(app: AppHandle, project_id: String, name: String, create
         Ok(())
     })
     .await
+}
+
+pub fn branch_exists(root: &Path, name: &str) -> bool {
+    git(root, &["show-ref", "--verify", "--quiet", &format!("refs/heads/{name}")], 10).is_ok()
+}
+
+/// Verifies `rev` names a commit (branch, tag or hash).
+pub fn valid_commitish(root: &Path, rev: &str) -> AppResult<()> {
+    if rev.starts_with('-') || rev.trim().is_empty() {
+        return invalid("That isn't a valid branch or commit.");
+    }
+    git(root, &["rev-parse", "--verify", "--quiet", &format!("{rev}^{{commit}}")], 10)
+        .map(|_| ())
+        .map_err(|_| AppError::Invalid(format!("'{rev}' isn't a branch or commit in this repository.")))
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchCheck {
+    pub valid: bool,
+    pub exists: bool,
+    pub message: Option<String>,
+}
+
+/// Checks a proposed branch name against git's rules and existing branches.
+#[tauri::command]
+pub async fn git_branch_check(app: AppHandle, repo_id: String, name: String) -> AppResult<BranchCheck> {
+    blocking(&app, move |s| {
+        let root = trusted_root(s, &repo_id)?;
+        Ok(match valid_branch(&root, &name) {
+            Err(e) => BranchCheck { valid: false, exists: false, message: Some(e.to_string()) },
+            Ok(()) => {
+                let exists = branch_exists(&root, &name);
+                BranchCheck { valid: true, exists, message: exists.then(|| "A branch with that name already exists.".to_string()) }
+            }
+        })
+    })
+    .await
+}
+
+/// Creates a branch from `base` (default: HEAD) without touching the
+/// working tree unless `switch` is set. Never overwrites an existing branch.
+pub fn create_branch(root: &Path, name: &str, base: Option<&str>, switch: bool) -> AppResult<()> {
+    valid_branch(root, name)?;
+    if branch_exists(root, name) {
+        return invalid(&format!("A branch named {name} already exists."));
+    }
+    if let Some(b) = base {
+        valid_commitish(root, b)?;
+    }
+    let base = base.unwrap_or("HEAD");
+    if switch {
+        // git refuses (and explains) if local changes would be overwritten.
+        git(root, &["switch", "-c", name, base], 60)?;
+    } else {
+        git(root, &["branch", "--no-track", name, base], 30)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn git_create_branch(app: AppHandle, repo_id: String, name: String, base: Option<String>, switch: bool) -> AppResult<()> {
+    blocking(&app, move |s| create_branch(&trusted_root(s, &repo_id)?, name.trim(), base.as_deref().filter(|b| !b.is_empty()), switch)).await
 }
 
 /// Lowercase slug for branch names: "Fix login bug!" → "fix-login-bug".
@@ -453,13 +552,13 @@ pub struct RemoteResult {
 
 /// fetch | pull (fast-forward only) | push (sets upstream on first push).
 #[tauri::command]
-pub async fn git_sync(app: AppHandle, project_id: String, action: String) -> AppResult<RemoteResult> {
+pub async fn git_sync(app: AppHandle, repo_id: String, action: String) -> AppResult<RemoteResult> {
     blocking(&app, move |s| {
         let network: bool = s.with(|c| Ok(crate::domain::settings::get_or(c, "privacy.network", true)))?;
         if !network {
             return invalid("External network requests are turned off in Privacy settings.");
         }
-        let root = trusted_root(s, &project_id)?;
+        let root = trusted_root(s, &repo_id)?;
         let (ok, out, err) = match action.as_str() {
             "fetch" => run(git_cmd(&root, &["fetch", "--prune"]), Duration::from_secs(180), 256 * 1024)?,
             "pull" => run(git_cmd(&root, &["pull", "--ff-only"]), Duration::from_secs(180), 256 * 1024)?,

@@ -51,6 +51,8 @@ pub struct AppState {
     pub storage: crate::domain::storage::ScanControl,
     /// AI credential vault, transport and in-flight request cancellation.
     pub ai: crate::domain::ai::router::AiService,
+    /// Integrated terminal processes.
+    pub pty: crate::domain::pty::PtyManager,
 }
 
 impl AppState {
@@ -62,6 +64,7 @@ impl AppState {
             quitting: std::sync::atomic::AtomicBool::new(false),
             storage: Default::default(),
             ai: crate::domain::ai::default_service(),
+            pty: Default::default(),
         }
     }
 

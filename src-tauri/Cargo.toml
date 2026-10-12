@@ -36,6 +36,10 @@ sha2 = "0.10"
 os_trash = { package = "trash", version = "5" }
 
 url = "2"
+# Integrated terminal: real pseudoterminals (ConPTY on Windows).
+portable-pty = "0.9"
+# Reading Cargo.toml / pyproject.toml / lockfiles for detection and the dependency explorer.
+toml = "0.8"
 
 # AI API keys live in the operating system's credential store, never in SQLite.
 [target.'cfg(windows)'.dependencies]

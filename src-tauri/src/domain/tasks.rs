@@ -49,6 +49,20 @@ pub struct Task {
     /// Linked GitHub issue, if any.
     #[serde(default)]
     pub issue: Option<IssueRef>,
+    #[serde(default)]
+    pub milestone_id: Option<String>,
+    /// Explicitly linked development resources (branches, worktrees, …).
+    #[serde(default)]
+    pub dev_links: Vec<DevLinkRef>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DevLinkRef {
+    pub kind: String,
+    pub repository_id: Option<String>,
+    #[serde(rename = "ref")]
+    pub reference: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -67,7 +81,9 @@ pub const TASK_SELECT: &str = "SELECT t.id, t.title, t.description, t.status, t.
   (SELECT count(*) FROM tasks s WHERE s.parent_id = t.id AND s.deleted_at IS NULL),
   (SELECT count(*) FROM tasks s WHERE s.parent_id = t.id AND s.deleted_at IS NULL AND s.status = 'completed'),
   (SELECT count(*) FROM attachments a WHERE a.task_id = t.id),
-  (SELECT l.repo || char(31) || l.issue_number || char(31) || l.html_url FROM task_issue_links l WHERE l.task_id = t.id)
+  (SELECT l.repo || char(31) || l.issue_number || char(31) || l.html_url FROM task_issue_links l WHERE l.task_id = t.id),
+  t.milestone_id,
+  (SELECT group_concat(d.kind || char(31) || coalesce(d.repository_id, '') || char(31) || d.ref, char(30)) FROM task_dev_links d WHERE d.task_id = t.id)
 FROM tasks t";
 
 pub fn map_task(r: &Row) -> rusqlite::Result<Task> {
@@ -108,7 +124,21 @@ pub fn map_task(r: &Row) -> rusqlite::Result<Task> {
             let mut p = s.split('\u{1f}');
             Some(IssueRef { repo: p.next()?.to_string(), number: p.next()?.parse().ok()?, url: p.next()?.to_string() })
         }),
+        milestone_id: r.get(29)?,
+        dev_links: r.get::<_, Option<String>>(30)?.map(|s| parse_dev_links(&s)).unwrap_or_default(),
     })
+}
+
+/// Decodes the `kind␟repository␟ref␞…` list built by TASK_SELECT.
+fn parse_dev_links(s: &str) -> Vec<DevLinkRef> {
+    s.split('\u{1e}')
+        .filter_map(|l| {
+            let mut p = l.split('\u{1f}');
+            let kind = p.next()?.to_string();
+            let repo = p.next()?;
+            Some(DevLinkRef { kind, repository_id: (!repo.is_empty()).then(|| repo.to_string()), reference: p.next()?.to_string() })
+        })
+        .collect()
 }
 
 pub fn get_task(conn: &Connection, id: &str) -> AppResult<Task> {
@@ -143,6 +173,8 @@ pub struct TaskQuery {
     pub top_level_only: bool,
     pub include_archived: bool,
     pub pinned: Option<bool>,
+    pub milestone_ids: Option<Vec<String>>,
+    pub no_milestone: bool,
     pub limit: Option<i64>,
     /// manual | due | priority | created | updated | title | completed
     pub order: Option<String>,
@@ -255,6 +287,14 @@ pub fn query_tasks(conn: &Connection, q: &TaskQuery) -> AppResult<Vec<Task>> {
     if let Some(p) = q.pinned {
         sql.push_str(if p { " AND t.pinned = 1" } else { " AND t.pinned = 0" });
     }
+    match (&q.milestone_ids, q.no_milestone) {
+        (Some(m), nm) if !m.is_empty() => {
+            sql.push_str(&format!(" AND (t.milestone_id IN ({}){})", placeholders(m.len()), if nm { " OR t.milestone_id IS NULL" } else { "" }));
+            args.extend(m.iter().map(|s| text(s)));
+        }
+        (_, true) => sql.push_str(" AND t.milestone_id IS NULL"),
+        _ => {}
+    }
     let order = match q.order.as_deref() {
         Some("due") => "t.due_date IS NULL, t.due_date, t.due_time IS NULL, t.due_time, t.priority DESC, t.sort_order",
         Some("priority") => "t.priority DESC, t.due_date IS NULL, t.due_date, t.sort_order",
@@ -296,6 +336,18 @@ pub struct TaskInput {
     pub reminder_minutes: Option<i64>,
     pub sort_order: Option<f64>,
     pub board_order: Option<f64>,
+    pub milestone_id: Option<String>,
+}
+
+/// A milestone may only hold tasks from its own project.
+fn check_milestone(conn: &Connection, milestone_id: &str, project_id: Option<&str>) -> AppResult<()> {
+    let owner: Option<String> =
+        conn.query_row("SELECT project_id FROM milestones WHERE id = ?1", [milestone_id], |r| r.get(0)).optional()?;
+    match owner {
+        None => Err(AppError::NotFound("Milestone".into())),
+        Some(p) if Some(p.as_str()) != project_id => invalid("A task can only belong to a milestone in its own project."),
+        _ => Ok(()),
+    }
 }
 
 fn validate_dates(due: Option<&str>, time: Option<&str>, start: Option<&str>) -> AppResult<()> {
@@ -418,11 +470,14 @@ pub fn create_task(conn: &Connection, input: &TaskInput) -> AppResult<Task> {
         _ => 0.0,
     };
     let completed_at = if status == "completed" { Some(now) } else { None };
+    if let Some(m) = &input.milestone_id {
+        check_milestone(conn, m, project_id.as_deref())?;
+    }
     conn.execute(
         "INSERT INTO tasks(id, title, description, status, priority, project_id, column_id, parent_id, due_date,
            due_time, start_date, estimate_minutes, sort_order, board_order, pinned, recurrence, series_id,
-           reminder_minutes, completed_at, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?20)",
+           reminder_minutes, completed_at, created_at, updated_at, milestone_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?20, ?21)",
         params![
             id,
             title,
@@ -443,7 +498,8 @@ pub fn create_task(conn: &Connection, input: &TaskInput) -> AppResult<Task> {
             recurrence.as_ref().map(|_| id.clone()),
             input.reminder_minutes,
             completed_at,
-            now
+            now,
+            input.milestone_id
         ],
     )?;
     if let Some(labels) = &input.label_ids {
@@ -496,6 +552,8 @@ pub struct TaskPatch {
     pub remove_label_ids: Option<Vec<String>>,
     /// Seconds to add to tracked time (focus sessions).
     pub add_tracked_seconds: Option<i64>,
+    #[serde(deserialize_with = "some")]
+    pub milestone_id: Option<Option<String>>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -632,6 +690,17 @@ pub fn update_task(conn: &Connection, id: &str, patch: &TaskPatch) -> AppResult<
         t.column_id = None;
     }
 
+    // Milestones belong to one project: an explicit assignment is checked,
+    // and moving the task elsewhere drops a milestone it can't keep.
+    if let Some(m) = &patch.milestone_id {
+        if let Some(mid) = m {
+            check_milestone(conn, mid, t.project_id.as_deref())?;
+        }
+        t.milestone_id = m.clone();
+    } else if t.project_id != prev.project_id {
+        t.milestone_id = None;
+    }
+
     // Status resolution: explicit status wins; otherwise a mapped column's.
     let requested = patch.status.clone().or(column_status);
     if let Some(s) = requested {
@@ -707,6 +776,7 @@ pub fn update_task(conn: &Connection, id: &str, patch: &TaskPatch) -> AppResult<
                 reminder_minutes: t.reminder_minutes,
                 sort_order: Some(t.sort_order + 0.001),
                 board_order: None,
+                milestone_id: t.milestone_id.clone(),
             };
             let mut next_task = create_task(conn, &input)?;
             let series = t.series_id.clone().unwrap_or_else(|| t.id.clone());
@@ -745,7 +815,8 @@ pub fn update_task(conn: &Connection, id: &str, patch: &TaskPatch) -> AppResult<
         "UPDATE tasks SET title = ?1, description = ?2, status = ?3, priority = ?4, project_id = ?5, column_id = ?6,
            parent_id = ?7, due_date = ?8, due_time = ?9, start_date = ?10, estimate_minutes = ?11,
            tracked_seconds = ?12, sort_order = ?13, board_order = ?14, pinned = ?15, recurrence = ?16,
-           series_id = ?17, reminder_minutes = ?18, completed_at = ?19, archived_at = ?20, updated_at = ?21
+           series_id = ?17, reminder_minutes = ?18, completed_at = ?19, archived_at = ?20, updated_at = ?21,
+           milestone_id = ?23
          WHERE id = ?22",
         params![
             t.title,
@@ -769,7 +840,8 @@ pub fn update_task(conn: &Connection, id: &str, patch: &TaskPatch) -> AppResult<
             t.completed_at,
             t.archived_at,
             now,
-            id
+            id,
+            t.milestone_id
         ],
     )?;
 
@@ -845,6 +917,7 @@ pub fn duplicate_task(conn: &Connection, id: &str, parent_override: Option<Optio
         reminder_minutes: src.reminder_minutes,
         sort_order: Some(src.sort_order + 0.0005),
         board_order: Some(src.board_order + 0.0005),
+        milestone_id: if parent_override.is_none() { src.milestone_id.clone() } else { None },
     };
     let copy = create_task(conn, &input)?;
     let mut stmt = conn.prepare("SELECT id FROM tasks WHERE parent_id = ?1 AND deleted_at IS NULL ORDER BY sort_order")?;

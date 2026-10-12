@@ -21,7 +21,7 @@ use crate::error::{invalid, AppError, AppResult};
 use crate::state::AppState;
 use crate::util::{new_id, now_ms};
 use rusqlite::{params, Connection, OptionalExtension};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{BTreeSet, HashMap};
 use std::time::Duration;
@@ -778,12 +778,54 @@ pub fn referenced_issues(title: &str, body: &str, branch: &str) -> Vec<i64> {
     out.into_iter().collect()
 }
 
+/// The GitHub repository an operation targets: `repo` when it's linked to
+/// the project, else the issue-sync connection, else the first linked
+/// repository on GitHub.
+pub fn project_slug(conn: &Connection, project_id: &str, repo: Option<&str>) -> AppResult<String> {
+    if let Some(r) = repo.map(str::trim).filter(|r| !r.is_empty()) {
+        let linked: bool = conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM project_repositories WHERE project_id = ?1 AND lower(github) = lower(?2))
+               OR EXISTS (SELECT 1 FROM project_repos WHERE project_id = ?1 AND lower(owner || '/' || name) = lower(?2))",
+            params![project_id, r],
+            |x| x.get(0),
+        )?;
+        if !linked {
+            return invalid("That repository isn't linked to this project.");
+        }
+        return Ok(r.to_string());
+    }
+    if let Some(r) = project_repo(conn, project_id)? {
+        return Ok(r.full_name);
+    }
+    crate::domain::repos::adopt(conn, project_id)?;
+    conn.query_row(
+        "SELECT github FROM project_repositories WHERE project_id = ?1 AND github IS NOT NULL ORDER BY is_primary DESC, sort_order LIMIT 1",
+        [project_id],
+        |r| r.get::<_, String>(0),
+    )
+    .optional()?
+    .ok_or_else(|| AppError::Invalid("This project isn't linked to a GitHub repository.".into()))
+}
+
+/// Stores a fetched GitHub result for offline use (health, catch-up, search).
+fn cache_put<T: Serialize>(state: &AppState, key: &str, value: &T) {
+    if let Ok(data) = serde_json::to_string(value) {
+        let _ = state.with(|c| {
+            c.execute(
+                "INSERT INTO dev_cache(key, data, fetched_at) VALUES (?1, ?2, ?3) ON CONFLICT(key) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at",
+                params![key, data, now_ms()],
+            )?;
+            Ok(())
+        });
+    }
+}
+
 #[tauri::command]
-pub async fn github_pulls(app: AppHandle, project_id: String) -> AppResult<Vec<PullInfo>> {
+pub async fn github_pulls(app: AppHandle, project_id: String, repo: Option<String>) -> AppResult<Vec<PullInfo>> {
     blocking(&app, move |s| {
-        let repo = s.with(|c| project_repo(c, &project_id))?.ok_or_else(|| AppError::Invalid("This project isn't connected to GitHub.".into()))?;
+        let full_name = s.with(|c| project_slug(c, &project_id, repo.as_deref()))?;
         let gh = Gh::new(s)?;
-        let full = &repo.full_name;
+        let full = &full_name;
         let pulls = gh.get(&format!("/repos/{full}/pulls?state=open&per_page=20&sort=updated&direction=desc"))?;
         let mut out = vec![];
         for p in pulls.as_array().cloned().unwrap_or_default().into_iter().take(12) {
@@ -869,9 +911,210 @@ pub async fn github_pulls(app: AppHandle, project_id: String) -> AppResult<Vec<P
                 linked_tasks,
             });
         }
+        cache_put(s, &format!("gh:pulls:{}", full.to_lowercase()), &out);
         Ok(out)
     })
     .await
+}
+
+// ------------------------------------------------------------ actions, issues, commits
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowRun {
+    pub id: i64,
+    pub workflow_id: i64,
+    pub workflow: String,
+    pub title: String,
+    pub branch: String,
+    pub event: String,
+    /// queued | in_progress | completed
+    pub status: String,
+    /// success | failure | cancelled | skipped | timed_out | action_required | null
+    pub conclusion: Option<String>,
+    pub html_url: String,
+    pub created_at: String,
+    pub run_number: i64,
+    pub actor: String,
+    pub head_sha: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionsOverview {
+    pub repository: String,
+    pub default_branch: Option<String>,
+    /// The latest run of each workflow (newest first).
+    pub latest: Vec<WorkflowRun>,
+    pub recent: Vec<WorkflowRun>,
+}
+
+fn run_of(v: &Value) -> WorkflowRun {
+    let s = |k: &str| v.pointer(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
+    WorkflowRun {
+        id: v.get("id").and_then(|x| x.as_i64()).unwrap_or(0),
+        workflow_id: v.get("workflow_id").and_then(|x| x.as_i64()).unwrap_or(0),
+        workflow: s("/name"),
+        title: s("/display_title"),
+        branch: s("/head_branch"),
+        event: s("/event"),
+        status: s("/status"),
+        conclusion: v.get("conclusion").and_then(|x| x.as_str()).map(String::from),
+        html_url: s("/html_url"),
+        created_at: s("/created_at"),
+        run_number: v.get("run_number").and_then(|x| x.as_i64()).unwrap_or(0),
+        actor: s("/actor/login"),
+        head_sha: s("/head_sha"),
+    }
+}
+
+/// Recent GitHub Actions runs and the latest run of each workflow.
+#[tauri::command]
+pub async fn github_actions(app: AppHandle, project_id: String, repo: Option<String>) -> AppResult<ActionsOverview> {
+    blocking(&app, move |s| {
+        let full = s.with(|c| project_slug(c, &project_id, repo.as_deref()))?;
+        let gh = Gh::new(s)?;
+        let info = gh.get(&format!("/repos/{full}"))?;
+        let default_branch = info.get("default_branch").and_then(|d| d.as_str()).map(String::from);
+        let runs = gh.get(&format!("/repos/{full}/actions/runs?per_page=40"))?;
+        let recent: Vec<WorkflowRun> = runs.get("workflow_runs").and_then(|r| r.as_array()).cloned().unwrap_or_default().iter().map(run_of).collect();
+        let mut seen = BTreeSet::new();
+        let latest = recent.iter().filter(|r| seen.insert(r.workflow_id)).cloned().collect();
+        let out = ActionsOverview { repository: full.clone(), default_branch, latest, recent };
+        cache_put(s, &format!("gh:actions:{}", full.to_lowercase()), &out);
+        Ok(out)
+    })
+    .await
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueSummary {
+    pub number: i64,
+    pub title: String,
+    pub html_url: String,
+    pub state: String,
+    pub labels: Vec<String>,
+    pub author: String,
+    pub comments: i64,
+    pub updated_at: String,
+    /// The Kern task synced with this issue, if any.
+    pub task_id: Option<String>,
+}
+
+/// Open issues of a linked repository (read-only; issue sync is separate).
+#[tauri::command]
+pub async fn github_issues(app: AppHandle, project_id: String, repo: Option<String>) -> AppResult<Vec<IssueSummary>> {
+    blocking(&app, move |s| {
+        let full = s.with(|c| project_slug(c, &project_id, repo.as_deref()))?;
+        let gh = Gh::new(s)?;
+        let list = gh.get(&format!("/repos/{full}/issues?state=open&per_page=30&sort=updated&direction=desc"))?;
+        let mut out = vec![];
+        for i in list.as_array().cloned().unwrap_or_default().iter().filter(|i| i.get("pull_request").is_none()) {
+            let n = i.get("number").and_then(|x| x.as_i64()).unwrap_or(0);
+            let task_id: Option<String> = s.with(|c| {
+                Ok(c.query_row("SELECT task_id FROM task_issue_links WHERE lower(repo) = lower(?1) AND issue_number = ?2", params![full, n], |r| r.get(0)).optional()?.flatten())
+            })?;
+            let st = |k: &str| i.pointer(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
+            out.push(IssueSummary {
+                number: n,
+                title: st("/title"),
+                html_url: st("/html_url"),
+                state: st("/state"),
+                labels: i.get("labels").and_then(|l| l.as_array()).map(|a| a.iter().filter_map(|l| l.get("name").and_then(|n| n.as_str()).map(String::from)).collect()).unwrap_or_default(),
+                author: st("/user/login"),
+                comments: i.get("comments").and_then(|x| x.as_i64()).unwrap_or(0),
+                updated_at: st("/updated_at"),
+                task_id,
+            });
+        }
+        cache_put(s, &format!("gh:issues:{}", full.to_lowercase()), &out);
+        Ok(out)
+    })
+    .await
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteCommit {
+    pub sha: String,
+    pub short: String,
+    pub subject: String,
+    pub author: String,
+    pub date: String,
+    pub html_url: String,
+}
+
+/// Recent commits on GitHub (for repositories without a local copy).
+#[tauri::command]
+pub async fn github_commits(app: AppHandle, project_id: String, repo: Option<String>) -> AppResult<Vec<RemoteCommit>> {
+    blocking(&app, move |s| {
+        let full = s.with(|c| project_slug(c, &project_id, repo.as_deref()))?;
+        let gh = Gh::new(s)?;
+        let list = gh.get(&format!("/repos/{full}/commits?per_page=20"))?;
+        let out: Vec<RemoteCommit> = list
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .map(|c| {
+                let st = |k: &str| c.pointer(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
+                let sha = st("/sha");
+                RemoteCommit {
+                    short: sha.chars().take(7).collect(),
+                    subject: st("/commit/message").lines().next().unwrap_or("").to_string(),
+                    author: c.pointer("/author/login").and_then(|x| x.as_str()).map(String::from).unwrap_or_else(|| st("/commit/author/name")),
+                    date: st("/commit/author/date"),
+                    html_url: st("/html_url"),
+                    sha,
+                }
+            })
+            .collect();
+        cache_put(s, &format!("gh:commits:{}", full.to_lowercase()), &out);
+        Ok(out)
+    })
+    .await
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CachedGithub {
+    pub repository: String,
+    pub pulls: Option<Value>,
+    pub actions: Option<Value>,
+    pub issues: Option<Value>,
+    pub commits: Option<Value>,
+    pub fetched_at: Option<i64>,
+}
+
+/// The last fetched GitHub data for a project's repositories (no network).
+#[tauri::command]
+pub fn github_cached(state: tauri::State<AppState>, project_id: String) -> AppResult<Vec<CachedGithub>> {
+    state.with(|c| {
+        crate::domain::repos::adopt(c, &project_id)?;
+        let mut stmt = c.prepare(
+            "SELECT DISTINCT lower(github) FROM project_repositories WHERE project_id = ?1 AND github IS NOT NULL
+             UNION SELECT lower(owner || '/' || name) FROM project_repos WHERE project_id = ?1",
+        )?;
+        let slugs: Vec<String> = stmt.query_map([&project_id], |r| r.get(0))?.collect::<Result<_, _>>()?;
+        let mut out = vec![];
+        for slug in slugs {
+            let mut newest: Option<i64> = None;
+            let mut load = |kind: &str| -> AppResult<Option<Value>> {
+                let row: Option<(String, i64)> = c.query_row("SELECT data, fetched_at FROM dev_cache WHERE key = ?1", [format!("gh:{kind}:{slug}")], |r| Ok((r.get(0)?, r.get(1)?))).optional()?;
+                Ok(row.map(|(d, t)| {
+                    newest = Some(newest.map_or(t, |n| n.max(t)));
+                    serde_json::from_str(&d).unwrap_or(Value::Null)
+                }))
+            };
+            let pulls = load("pulls")?;
+            let actions = load("actions")?;
+            let issues = load("issues")?;
+            let commits = load("commits")?;
+            out.push(CachedGithub { repository: slug, pulls, actions, issues, commits, fetched_at: newest });
+        }
+        Ok(out)
+    })
 }
 
 // ------------------------------------------------------------ overview
