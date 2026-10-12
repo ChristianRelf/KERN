@@ -39,6 +39,35 @@
 .sidebar[data-collapsed="true"] .sidebar__top {
   padding: 0;
   justify-content: center;
+  position: relative;
+}
+.update-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: var(--update);
+  transition: background-color 120ms ease;
+}
+.update-btn:hover {
+  background: var(--update-soft);
+}
+.update-btn:focus-visible {
+  outline: 2px solid var(--update);
+  outline-offset: 1px;
+}
+.sidebar[data-collapsed="true"] .update-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+}
+.sidebar[data-collapsed="true"] .update-btn svg {
+  width: 13px;
+  height: 13px;
 }
 .brand {
   display: flex;

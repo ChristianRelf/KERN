@@ -568,6 +568,13 @@ export interface RestorePreview {
   hasAttachments: boolean;
 }
 
+export interface UpdateInfo {
+  current: string;
+  /** Newest release when newer than the running version. */
+  latest: string | null;
+  url: string;
+}
+
 export interface AppInfo {
   name: string;
   version: string;

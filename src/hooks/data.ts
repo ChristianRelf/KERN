@@ -127,6 +127,18 @@ export function useDashboards() {
   return useQuery({ queryKey: ["dashboards"], queryFn: api.dashboards.list, staleTime: Infinity });
 }
 
+/** Polls GitHub releases for a newer version. Failures stay silent. */
+export function useUpdateCheck() {
+  return useQuery({
+    queryKey: ["updateCheck"],
+    queryFn: api.system.checkForUpdate,
+    staleTime: 60 * 60 * 1000,
+    refetchInterval: 6 * 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+}
+
 export function useAppInfo() {
   return useQuery({ queryKey: ["appInfo"], queryFn: api.system.info, staleTime: Infinity });
 }

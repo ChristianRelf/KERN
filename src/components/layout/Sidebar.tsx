@@ -2,6 +2,7 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
+  CircleArrowUp,
   Coffee,
   EyeOff,
   FolderKanban,
@@ -38,7 +39,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useGroups, useOverview, useProjects, useViews } from "@/hooks/data";
+import { useGroups, useOverview, useProjects, useUpdateCheck, useViews } from "@/hooks/data";
 import { useRouter, navigate, type Route } from "@/stores/router";
 import { useSetting, setSetting } from "@/stores/settings";
 import { useUi } from "@/stores/ui";
@@ -63,6 +64,25 @@ import { prompt, confirm } from "@/components/ui/Dialog";
 import { APP_NAME } from "@/app/brand";
 import { BrandMark } from "@/app/BrandMark";
 import { AUTO_SCROLL, DROP_ANIMATION, DragPreview, SORT_TRANSITION, SortableRow, announcements, restrictToVertical, useListSensors } from "./sortable";
+
+/** Blue arrow shown when a newer GitHub release exists; opens its page. */
+function UpdateButton() {
+  const { data } = useUpdateCheck();
+  if (!data?.latest) return null;
+  const label = `Update available: ${APP_NAME} ${data.latest} (you have ${data.current})`;
+  return (
+    <Tooltip content={label} side="right">
+      <button
+        type="button"
+        className="update-btn"
+        aria-label={label}
+        onClick={() => api.system.open(data.url).catch((e) => toastError(describeError(e, "Couldn't open the release page.")))}
+      >
+        <CircleArrowUp size={16} strokeWidth={2} />
+      </button>
+    </Tooltip>
+  );
+}
 
 export const NAV: Record<NavItemId, { label: string; icon: LucideIcon; route: Route; shortcut?: string }> = {
   dashboard: { label: "Dashboard", icon: LayoutGrid, route: { name: "dashboard" }, shortcut: "goDashboard" },
@@ -140,6 +160,7 @@ export function Sidebar() {
           </Tooltip>
           <span className="brand__name truncate">{APP_NAME}</span>
         </div>
+        <UpdateButton />
         <IconButton icon={Search} label="Search & commands" shortcut={shortcuts.palette} size="sm" onClick={() => useUi.getState().setPalette(true)} />
         <IconButton icon={Plus} label="Quick capture" shortcut={shortcuts.quickCapture} size="sm" onClick={() => useUi.getState().openCapture()} />
       </div>
