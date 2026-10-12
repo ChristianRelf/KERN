@@ -50,14 +50,16 @@ import { Popover } from "@/components/ui/Controls";
 import { PageFallback } from "@/components/layout/PageFallback";
 import { openNewTask } from "@/features/tasks/creation";
 import { FolderBrowser, ProjectFolderCard, linkFolder } from "./folders";
-import { ProjectAiSettings } from "@/features/ai/ProjectAiSettings";
+
 import { RichLink } from "@/features/links/links";
-import { CodeTab } from "@/features/github/CodeTab";
+
 import { addLinkAttachment } from "@/features/tasks/TaskDetail";
 import { LINK_MIME } from "@/lib/types";
 
 const ProjectWhiteboard = lazy(() => import("@/features/whiteboard/ProjectWhiteboard"));
 const NotesPage = lazy(() => import("@/features/notes/NotesPage"));
+const CodeTab = lazy(() => import("@/features/github/CodeTab").then((m) => ({ default: m.CodeTab })));
+const ProjectAiSettings = lazy(() => import("@/features/ai/ProjectAiSettings").then((m) => ({ default: m.ProjectAiSettings })));
 
 const TABS: { id: ProjectTab; label: string; icon: typeof ListTodo }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -193,7 +195,11 @@ export function ProjectPage({ id, tab, boardId, whiteboardId }: { id: string; ta
         </Suspense>
       )}
       {current === "files" && <Files project={p} />}
-      {current === "code" && <CodeTab project={p} />}
+      {current === "code" && (
+        <Suspense fallback={<PageFallback />}>
+          <CodeTab project={p} />
+        </Suspense>
+      )}
       {current === "activity" && <ActivityList projectId={id} full />}
     </div>
   );
@@ -356,7 +362,9 @@ function Overview({ p }: { p: Project }) {
               </div>
               <span className="props__label">AI</span>
               <div style={{ minWidth: 0 }}>
-                <ProjectAiSettings project={p} />
+                <Suspense fallback={<Skeleton height={24} width={120} />}>
+                  <ProjectAiSettings project={p} />
+                </Suspense>
               </div>
               <span className="props__label">Appearance</span>
               <div>

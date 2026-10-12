@@ -562,14 +562,17 @@ pub fn scan_todos(root: &Path, limit: usize) -> Vec<TodoItem> {
             for (i, line) in text.lines().enumerate() {
                 for kind in ["TODO", "FIXME", "HACK", "XXX"] {
                     if let Some(pos) = line.find(kind) {
-                        let before = line[..pos].chars().last();
+                        // Only a marker that opens a comment counts ("// TODO: …",
+                        // "# FIXME(x) …"), not prose that mentions the word.
+                        let before = line[..pos].trim_end();
+                        let opens_comment = ["//", "#", "/*", "*", "--", "<!--", ";", "'", "%", "{-", "\"\"\"", "REM"].iter().any(|m| before.ends_with(m));
                         let after = line[pos + kind.len()..].chars().next();
-                        let word = before.map_or(true, |c| !c.is_alphanumeric()) && after.map_or(true, |c| matches!(c, ':' | '(' | ' ' | '!' | '-'));
+                        let word = opens_comment && after.map_or(true, |c| matches!(c, ':' | '(' | ' ' | '!' | '-'));
                         if word {
                             let rest = line[pos + kind.len()..].trim_start_matches(|c: char| c == ':' || c == ' ' || c == '-' || c == '!');
                             let rest = rest.split_once(')').filter(|_| rest.starts_with('(')).map(|(_, r)| r.trim_start_matches([':', ' '])).unwrap_or(rest);
                             let text = rest.trim().trim_end_matches("*/").trim_end_matches("-->").trim().chars().take(200).collect::<String>();
-                            if !text.is_empty() {
+                            if text.chars().next().is_some_and(|c| c.is_alphanumeric() || c == '`' || c == '"') {
                                 out.push(TodoItem { path: rel.clone(), line: i + 1, kind: kind.into(), text });
                             }
                             break;
@@ -635,12 +638,16 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join("src")).unwrap();
         std::fs::create_dir_all(dir.path().join("node_modules/x")).unwrap();
-        std::fs::write(dir.path().join("src/main.rs"), "fn main() {\n    // TODO: handle errors\n    // FIXME(chris): flaky\n    let todo_list = 1; // not a TODOS marker\n}\n").unwrap();
+        std::fs::write(
+            dir.path().join("src/main.rs"),
+            "//! Docs that mention TODO comments aren't tasks.\n/// Scans TODO / FIXME markers.\nfn main() {\n    // TODO: handle errors\n    // FIXME(chris): flaky\n    let todo_list = 1; // not a TODOS marker\n}\n",
+        )
+        .unwrap();
         std::fs::write(dir.path().join("node_modules/x/i.js"), "// TODO vendor").unwrap();
         std::fs::write(dir.path().join(".env"), "# TODO rotate key").unwrap();
         let t = scan_todos(dir.path(), 100);
         assert_eq!(t.len(), 2);
-        assert_eq!((t[0].path.as_str(), t[0].line, t[0].text.as_str()), ("src/main.rs", 2, "handle errors"));
+        assert_eq!((t[0].path.as_str(), t[0].line, t[0].text.as_str()), ("src/main.rs", 4, "handle errors"));
         assert_eq!((t[1].kind.as_str(), t[1].text.as_str()), ("FIXME", "flaky"));
     }
 

@@ -5,31 +5,8 @@ import { Extension } from "@tiptap/react";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { api, isTauri } from "@/lib/ipc";
 import { measureTone, originOf } from "./links";
-
-// One lookup per site for the whole session (the backend caches on disk).
-const sources = new Map<string, Promise<string | null>>();
-
-function iconFor(url: string): Promise<string | null> {
-  const origin = originOf(url);
-  if (!origin || !isTauri) return Promise.resolve(null);
-  let p = sources.get(origin);
-  if (!p) {
-    p = api.system
-      .favicon(url)
-      .then((f) => (f.path ? convertFileSrc(f.path) : null))
-      .catch(() => null);
-    sources.set(origin, p);
-  }
-  return p;
-}
-
-/** Forget cached lookups (after the favicon cache is cleared). */
-export function resetNoteFavicons() {
-  sources.clear();
-}
+import { faviconSrc } from "./faviconCache";
 
 const GLOBE =
   '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>';
@@ -39,7 +16,7 @@ function widget(href: string): HTMLElement {
   el.className = "note-favicon";
   el.contentEditable = "false";
   el.innerHTML = GLOBE;
-  void iconFor(href).then((src) => {
+  void faviconSrc(href).then((src) => {
     if (!src) return;
     const img = document.createElement("img");
     img.alt = "";

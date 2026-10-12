@@ -2198,3 +2198,6 @@
 .issue-link:hover {
   color: var(--text);
 }
+.code-tab > .segmented {
+  align-self: flex-start;
+}

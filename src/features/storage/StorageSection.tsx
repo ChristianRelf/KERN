@@ -17,7 +17,7 @@ import { useSetting } from "@/stores/settings";
 import { copyText, shortPath } from "@/features/projects/folders";
 import { SToggle, type GroupDef } from "@/features/settings/controls";
 import { CATEGORY_HINT, CATEGORY_LABEL, displayCategories } from "./categories";
-import { resetNoteFavicons } from "@/features/links/noteFavicons";
+import { resetNoteFavicons } from "@/features/links/faviconCache";
 
 const StorageChart = lazy(() => import("./StorageChart"));
 

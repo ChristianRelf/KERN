@@ -62,7 +62,10 @@ Memory after loading the 5,000-task list was about 368 MB private.
 |---|---|
 | NSIS installer | 3.6 MB |
 | MSI installer | 4.4 MB |
-| Main JS chunk (React, query, dashboard, tasks) | 691 KB (211 KB gzip) |
+| Main JS chunk (React, query, dashboard, tasks) | 816 KB (256 KB gzip) — was 691 KB (211 KB gzip) before phase 2 |
+| Storage chart (Chart.js), lazy | 141 KB (49 KB gzip) |
+| API account pages, lazy | 19 KB (6 KB gzip) |
+| Project Code tab (GitHub & git), lazy | 18 KB (6 KB gzip) |
 | Whiteboard chunk (React Flow + editor), lazy | 271 KB (87 KB gzip) |
 | Notes chunk (TipTap/ProseMirror), lazy | 521 KB (181 KB gzip) |
 | Settings chunk, lazy | 42 KB |
@@ -85,6 +88,21 @@ Fitting the whole board on screen (23% zoom) shows all 600 objects at once. Belo
 shadows (level of detail), since they're unreadable at that scale. Above
 150 objects, React Flow also renders only visible elements. Rich editors mount only
 while a card is being edited.
+
+## Phase 2 additions (debug build, dev machine, single runs)
+
+| Operation | Result |
+|---|---|
+| Storage scan of Kern's data (848 files incl. WebView data) | 38–60 ms, background thread |
+| Rescan after adding one attachment (unchanged folders served from the scan cache) | 38 ms |
+| Favicon, first fetch (page + icon) | 140–610 ms, background thread |
+| Favicon, cached lookup | 3 ms |
+| GitHub issue import (4 issues) / no-op re-sync | 1.0 s / 0.4 s |
+| Strikethrough animation | 260 ms transform (standard intensity), no layout reads per frame |
+
+The main chunk grew by ~125 KB for the sidebar reordering, task composer, inspector
+behaviour, folders, links and the dashboard storage widget. Everything heavy added in
+this phase (chart library, API pages, Code tab, note-editor link icons) loads lazily.
 
 ## Not measured here
 

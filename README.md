@@ -18,6 +18,10 @@ npm test             # frontend unit tests (Vitest)
 cd src-tauri && cargo test   # backend unit and integration tests
 ```
 
+To run a development or test instance against a separate data folder (so your
+real data is never touched), set `KERN_DATA_DIR` before launching. Such an
+instance runs alongside the normal one and uses its own credential-store namespace.
+
 ## Renaming the app
 
 The name "Kern" is provisional. To change it:
@@ -35,14 +39,16 @@ src/                     React + TypeScript (strict), Vite
   app/                   bootstrap, routes, global effects and shortcuts
   components/ui|layout   design-system controls (Radix primitives, custom styling) and the shell
   features/<feature>/    dashboard, tasks, boards, projects, whiteboard, notes, inbox,
-                         daily-briefing, focus, search, capture, settings, trash, onboarding
+                         daily-briefing, focus, search, capture, settings, trash, onboarding,
+                         storage, links, ai (API accounts), github (GitHub & git)
   lib/                   typed IPC client, query layer, dates, shortcuts, fuzzy matching
   stores/                Zustand stores for transient UI state, settings, router, undo, toasts
   styles/                design tokens (CSS variables), base, controls, layout
 src-tauri/src/
   db/                    connection setup, versioned migrations
   domain/                one module per area: pure service functions on &Connection plus
-                         thin #[tauri::command] wrappers
+                         thin #[tauri::command] wrappers (incl. folders, storage, links,
+                         ai/{vault,provider,router,accounts}, git, github)
   scheduler.rs           single low-frequency thread: briefings, reminders, backups, housekeeping
   window.rs              window state persistence, tray, close/minimise behaviour
 ```
@@ -51,8 +57,10 @@ src-tauri/src/
   back as `{ code, message }` and are shown as actionable messages with Retry.
 - Persisted data uses TanStack Query (keys are grouped by domain for invalidation).
   Mutations are optimistic, roll back on failure, and offer Undo where reversible.
-- Heavy modules (whiteboard renderer, rich-text editor, settings, calendar) are
-  lazy-loaded chunks.
+- Heavy modules (whiteboard renderer, rich-text editor, settings, calendar, storage
+  chart, API pages, Code tab) are lazy-loaded chunks.
+- Network and filesystem work (storage scans, favicon/link fetching, AI requests,
+  git, GitHub) runs in async commands on background threads, never the UI thread.
 
 ## Data
 
@@ -78,12 +86,23 @@ as CSV, notes as Markdown and projects as JSON.
 
 ## Privacy and permissions
 
-- No network access is needed. The only optional network use is fetching a link's
-  title or favicon when you add a link (Settings → Data & Backups → Privacy).
+- No network access is needed. Every network use is optional and controlled in
+  Settings → Privacy, with a master switch that turns all of it off:
+  - website favicons and link titles, fetched directly from the linked site (never
+    a third-party proxy), cached locally; private/local addresses are refused;
+  - AI requests and connection tests, only when you make them (no polling);
+  - GitHub issue sync and pull requests, only for projects you connect.
+- AI API keys and the GitHub token live in the OS credential store (Windows
+  Credential Manager / macOS Keychain / Secret Service), never in SQLite, logs or
+  backups. Only the backend uses them. GitHub can also use the GitHub CLI's login.
+- Linked project folders are separate from projects: deleting a project never
+  touches its folder. Folders are restricted by default; programs, git commands
+  and file changes need an explicit "trusted" decision, recorded per exact folder.
 - Tauri capabilities are limited to window show/focus, native open/save dialogs,
   notifications, autostart and the optional global quick-capture shortcut. Opening
   files and URLs, and all file writes, go through Kern's own commands.
-- The asset protocol can only read the app's `attachments` folder.
+- The asset protocol can only read the app's `attachments` folder and the favicon
+  cache, and the CSP no longer allows remote images.
 
 ## Key behaviours
 
@@ -97,5 +116,14 @@ as CSV, notes as Markdown and projects as JSON.
   back-filled. "From completion" schedules relative to the completion day.
 - **Focus timer**: timestamp-based, so it stays accurate when minimised. The
   completion notification is fired from a native thread.
+
+- **Task completion**: a left-to-right strikethrough (CSS only, no layout
+  measurement); writes are ordered and coalesced per task so rapid clicks always
+  converge on the last click. Instant with reduced motion.
+- **AI routing**: Manual, Automatic failover, Priority or Cost-conscious. Failover
+  only replays requests that produced no output, honours retry-after, never rotates
+  between keys in the same organisation after a pool-wide limit, and is bounded.
+- **GitHub issues**: two-way, three-way-merged per field (newer edit wins when
+  both sides changed). Deleting a task unlinks it; it never closes the issue.
 
 See `PERFORMANCE.md` for measurements.
