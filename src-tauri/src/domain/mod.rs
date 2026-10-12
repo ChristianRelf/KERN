@@ -26,5 +26,6 @@ pub mod storage;
 pub mod system;
 pub mod tasks;
 pub mod trash;
+pub mod updates;
 pub mod views;
 pub mod whiteboards;

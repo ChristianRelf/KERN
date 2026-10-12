@@ -274,6 +274,7 @@ pub fn run() {
             system::tray_set_visible,
             system::quit_app,
             system::show_main_window,
+            updates::check_for_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Kern");

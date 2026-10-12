@@ -1,6 +1,6 @@
 [package]
 name = "kern"
-version = "0.1.0"
+version = "0.1.1-beta"
 description = "Kern — a local-first personal productivity workspace"
 authors = ["Christian Relf"]
 edition = "2021"
@@ -30,6 +30,7 @@ zip = { version = "9", default-features = false, features = ["deflate"] }
 thiserror = "2"
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 base64 = "0.22"
+semver = "1"
 
 url = "2"
 
