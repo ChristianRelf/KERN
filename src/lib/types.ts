@@ -294,6 +294,8 @@ export interface ProjectGroup {
 export interface BoardSettings {
   cardDensity?: "compact" | "expanded";
   hiddenMeta?: string[];
+  /** Opt-in card details that are off by default (milestone, branch). */
+  showMeta?: string[];
   sort?: "manual" | "due" | "priority" | "created" | "title";
   groupBy?: "none" | "priority" | "label";
   background?: "plain" | "dots" | "lines" | "sunken";
@@ -550,7 +552,7 @@ export interface RecentItem {
 export type SearchScope = "all" | "tasks" | "projects" | "notes" | "files" | "code" | "github" | "commands";
 
 export interface SearchHit {
-  kind: "task" | "project" | "note" | "board" | "whiteboard" | "wb_node" | "label" | "view" | "milestone" | "command" | "snapshot" | "issue" | "pull";
+  kind: "task" | "project" | "note" | "board" | "whiteboard" | "wb_node" | "label" | "view" | "milestone" | "command" | "snapshot" | "issue" | "pull" | "commit";
   id: string;
   parentId: string | null;
   title: string;

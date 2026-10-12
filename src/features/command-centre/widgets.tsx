@@ -60,7 +60,7 @@ import { ProjectGlyph } from "@/features/projects/ProjectGlyph";
 import { linkFolder } from "@/features/projects/folders";
 import { openLink, normalizeUrl } from "@/features/links/links";
 import { HealthPanel } from "@/features/health/Health";
-import { openCatchup } from "@/features/catchup/CatchupDialog";
+import { openCatchup } from "@/features/catchup/open";
 import { useGithubCached, useRepos } from "@/features/dev/hooks";
 import { startSession } from "@/features/sessions/SessionUi";
 import { formatElapsed, liveElapsed, useSessions } from "@/features/sessions/store";

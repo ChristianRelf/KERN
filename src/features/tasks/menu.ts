@@ -26,11 +26,11 @@ import {
   CircleDot,
   CircleSlash,
   Circle,
+  Play,
 } from "lucide-react";
 import type { MenuEntry, MenuItems } from "@/components/ui/Menu";
 import { api, describeError } from "@/lib/ipc";
-import { invalidate, invalidateTasks } from "@/lib/query";
-import { slug } from "@/features/github/push";
+import { invalidateTasks } from "@/lib/query";
 import type { Label, Project, Task, TaskStatus } from "@/lib/types";
 import { deleteTasks, duplicateTask, quickDates, rescheduleTasks, setCompleted, updateTask, updateTasks } from "./actions";
 import { PRIORITY_LABELS, STATUS_LABELS } from "./meta";
@@ -137,6 +137,7 @@ export function taskMenu(
       icon: task.pinned ? PinOff : Pin,
       onSelect: () => void updateTask(task.id, { pinned: !task.pinned }),
     },
+    !multi && !done && { label: "Start work", icon: Play, onSelect: () => void import("@/features/sessions/StartWork").then((m) => m.startWork(task)) },
     !multi && !done && { label: "Start focus session", icon: Timer, onSelect: () => startFocusOn(task) },
     !multi && { label: "Duplicate", icon: CopyPlus, shortcut: "Mod+D", onSelect: () => void duplicateTask(task.id) },
     !multi && githubSubmenu(task, ctx.projects.find((p) => p.id === task.projectId)),
@@ -189,22 +190,6 @@ function githubSubmenu(task: Task, project: Project | undefined): MenuEntry | fa
           toast("Issue created", { action: { label: "Open", run: () => void api.system.open(url) } });
         } catch (e) {
           toastError(describeError(e, "Couldn't create the issue."));
-        }
-      },
-    });
-  }
-  if (project?.folderPath && project.folderTrust === "trusted") {
-    const name = task.issue ? `${task.issue.number}-${slug(task.title)}` : `task/${slug(task.title) || "work"}`;
-    items.push({
-      label: "Create branch for this task",
-      icon: GitBranch,
-      onSelect: async () => {
-        try {
-          await api.git.switch(project.id, name, true);
-          invalidate("git");
-          toast(`Created and switched to ${name}`);
-        } catch (e) {
-          toastError(describeError(e, "Couldn't create the branch."));
         }
       },
     });

@@ -33,10 +33,10 @@ export const viewableInApp = (e: FileEntry) => !e.isDir && (isImage(e) || !BINAR
 
 // ------------------------------------------------------------ images
 
-function useImage(projectId: string, e: FileEntry, enabled = true) {
+function useImage(projectId: string, e: FileEntry, enabled = true, repositoryId: string | null = null) {
   return useQuery({
-    queryKey: ["files", "image", projectId, e.rel, e.modified],
-    queryFn: () => api.folders.image(projectId, e.rel),
+    queryKey: ["files", "image", projectId, repositoryId, e.rel, e.modified],
+    queryFn: () => api.folders.image(projectId, e.rel, repositoryId),
     enabled,
     staleTime: Infinity,
     gcTime: 2 * 60_000,
@@ -102,8 +102,8 @@ export function ImageHoverCard({ projectId, entry, anchor }: { projectId: string
 
 export const canHoverPreview = (e: FileEntry) => isImage(e) && (e.size ?? 0) <= PREVIEW_MAX_BYTES;
 
-function ImageViewer({ projectId, entry }: { projectId: string; entry: FileEntry }) {
-  const { data, error } = useImage(projectId, entry);
+function ImageViewer({ projectId, entry, repositoryId }: { projectId: string; entry: FileEntry; repositoryId: string | null }) {
+  const { data, error } = useImage(projectId, entry, true, repositoryId);
   const [actual, setActual] = useState(false);
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
   if (error) return <EmptyState compact>{describeError(error, "Couldn't load the image.")}</EmptyState>;
@@ -135,10 +135,10 @@ function ImageViewer({ projectId, entry }: { projectId: string; entry: FileEntry
 
 // ------------------------------------------------------------ text
 
-function TextViewer({ projectId, entry, onDirty, onOpenExternal }: { projectId: string; entry: FileEntry; onDirty: (d: boolean) => void; onOpenExternal: () => void }) {
+function TextViewer({ projectId, entry, onDirty, onOpenExternal, repositoryId }: { projectId: string; entry: FileEntry; onDirty: (d: boolean) => void; onOpenExternal: () => void; repositoryId: string | null }) {
   const { data, error, refetch } = useQuery({
-    queryKey: ["files", "text", projectId, entry.rel],
-    queryFn: () => api.folders.read(projectId, entry.rel),
+    queryKey: ["files", "text", projectId, repositoryId, entry.rel],
+    queryFn: () => api.folders.read(projectId, entry.rel, repositoryId),
     staleTime: 0,
     gcTime: 0,
     retry: false,
@@ -164,7 +164,7 @@ function TextViewer({ projectId, entry, onDirty, onOpenExternal }: { projectId: 
     if (!file || !dirty || file.readOnly || saving) return;
     setSaving(true);
     try {
-      const modified = await api.folders.write(projectId, entry.rel, { ...file, text: draft });
+      const modified = await api.folders.write(projectId, entry.rel, { ...file, text: draft }, repositoryId);
       setFile({ ...file, text: draft, modified });
       invalidate("files");
       toast(`Saved ${entry.name}`);
@@ -232,12 +232,15 @@ function TextViewer({ projectId, entry, onDirty, onOpenExternal }: { projectId: 
 
 export function FileViewer({
   projectId,
+  repositoryId = null,
   folder,
   entry,
   onClose,
   onOpenExternal,
 }: {
   projectId: string;
+  /** Show a file from one of the project's repositories instead of its folder. */
+  repositoryId?: string | null;
   folder: ProjectFolder;
   entry: FileEntry | null;
   onClose: () => void;
@@ -276,11 +279,11 @@ export function FileViewer({
             <Button size="sm" variant="ghost" icon={ExternalLink} onClick={() => onOpenExternal(entry)} disabled={entry.program && !folder.capabilities.openPrograms}>
               Open in default app
             </Button>
-            <Button size="sm" variant="ghost" icon={FolderSearch} onClick={() => void api.folders.reveal(projectId, entry.rel).catch((e) => toastError(describeError(e)))}>
+            <Button size="sm" variant="ghost" icon={FolderSearch} onClick={() => void api.folders.reveal(projectId, entry.rel, repositoryId).catch((e) => toastError(describeError(e)))}>
               Show in file manager
             </Button>
           </div>
-          {isImage(entry) ? <ImageViewer projectId={projectId} entry={entry} /> : <TextViewer key={entry.rel} projectId={projectId} entry={entry} onDirty={setDirty} onOpenExternal={() => onOpenExternal(entry)} />}
+          {isImage(entry) ? <ImageViewer projectId={projectId} entry={entry} repositoryId={repositoryId} /> : <TextViewer key={entry.rel} projectId={projectId} entry={entry} onDirty={setDirty} onOpenExternal={() => onOpenExternal(entry)} repositoryId={repositoryId} />}
         </>
       )}
     </Dialog>

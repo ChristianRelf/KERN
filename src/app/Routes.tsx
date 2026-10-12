@@ -45,7 +45,7 @@ export function Routes() {
       page = <ProjectsPage />;
       break;
     case "project":
-      page = <ProjectPage key={route.id} id={route.id} tab={route.tab} boardId={route.boardId} whiteboardId={route.whiteboardId} />;
+      page = <ProjectPage key={route.id} id={route.id} tab={route.tab} boardId={route.boardId} whiteboardId={route.whiteboardId} column={route.column} />;
       break;
     case "whiteboards":
       page = <WhiteboardsPage />;

@@ -1,16 +1,23 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query";
 import { useSettings } from "@/stores/settings";
 import { useRouter, type Route } from "@/stores/router";
 import { useFocus } from "@/features/focus/store";
+import { useSessions } from "@/features/sessions/store";
+import { SessionGapHost } from "@/features/sessions/SessionUi";
+import { StartWorkHost } from "@/features/sessions/StartWork";
+import { FileViewerHost } from "@/features/files/FileViewerHost";
+import { useWorktreeDialog } from "@/features/dev/worktreeDialog";
+import { useTerminal, reattachTerminals } from "@/features/terminal/store";
+import { useUi } from "@/stores/ui";
 import { TooltipProvider } from "@/components/ui/Tooltip";
 import { Toaster } from "@/components/ui/Toaster";
 import { ConfirmHost, PromptHost } from "@/components/ui/Dialog";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Inspector } from "@/components/layout/Inspector";
 import { Routes } from "./Routes";
-import { useAppearance, useBackendEvents, useGlobalShortcuts, useOsIntegration, useRememberRoute } from "./effects";
+import { useAppearance, useBackendEvents, useGlobalShortcuts, useOsIntegration, useRememberRoute, useWorkSessions } from "./effects";
 import { CommandPalette } from "@/features/search/CommandPalette";
 import { QuickCapture } from "@/features/capture/QuickCapture";
 import { CreateProjectDialog } from "@/features/projects/CreateProjectDialog";
@@ -24,6 +31,31 @@ import { Onboarding } from "@/features/onboarding/Onboarding";
 import { Button } from "@/components/ui/Button";
 import { describeError } from "@/lib/ipc";
 import { BrandMark } from "./BrandMark";
+
+const TerminalPanel = lazy(() => import("@/features/terminal/TerminalPanel"));
+const CatchupHost = lazy(() => import("@/features/catchup/CatchupDialog"));
+const WorktreeDialogHost = lazy(() => import("@/features/dev/Worktrees"));
+
+/** Hosts that load their code only once they're needed. */
+function LazyHosts() {
+  const catchup = useUi((s) => !!s.catchupProjectId);
+  const worktree = useWorktreeDialog((s) => !!s.req);
+  return (
+    <Suspense fallback={null}>
+      {catchup && <CatchupHost />}
+      {worktree && <WorktreeDialogHost />}
+    </Suspense>
+  );
+}
+
+function TerminalDrawer() {
+  const needed = useTerminal((s) => s.open && s.tabs.length > 0);
+  return needed ? (
+    <Suspense fallback={null}>
+      <TerminalPanel />
+    </Suspense>
+  ) : null;
+}
 
 /** Fades out and removes the startup splash painted by index.html. */
 function hideSplash() {
@@ -59,11 +91,15 @@ function Shell() {
   useBackendEvents();
   useGlobalShortcuts();
   useRememberRoute();
+  useWorkSessions();
   return (
     <div className="shell">
       <Sidebar />
       <main className="workspace">
-        <Routes />
+        <div className="workspace__main">
+          <Routes />
+        </div>
+        <TerminalDrawer />
       </main>
       <Inspector />
       <CommandPalette />
@@ -76,6 +112,10 @@ function Shell() {
       <Onboarding />
       <TrustPromptHost />
       <RepoPickerHost />
+      <SessionGapHost />
+      <StartWorkHost />
+      <FileViewerHost />
+      <LazyHosts />
       <ConfirmHost />
       <PromptHost />
       <Toaster />
@@ -93,6 +133,8 @@ export function App() {
       await useSettings.getState().load();
       useRouter.setState({ route: initialRoute() });
       void useFocus.getState().hydrate();
+      void useSessions.getState().hydrate();
+      void reattachTerminals();
     } catch (e) {
       setError(describeError(e, "Couldn't load your data."));
     }

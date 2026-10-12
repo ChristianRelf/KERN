@@ -11,8 +11,9 @@ import {
   Trash,
   SlidersHorizontal,
   SquareKanban,
+  ListFilter,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Board, BoardSettings, Column, Task, TaskStatus } from "@/lib/types";
 import { useBoard, useBoards, useLabelMap, useLabels, useProjectMap, useProjects } from "@/hooks/data";
 import { useToday } from "@/hooks/useToday";
@@ -26,19 +27,23 @@ import { confirm, prompt } from "@/components/ui/Dialog";
 import { EmptyState, Segmented } from "@/components/ui/Controls";
 import { Kanban, type CardContext, type KanbanColumn } from "./Kanban";
 import { createTask, updateTask } from "@/features/tasks/actions";
-import { STATUS_LABELS } from "@/features/tasks/meta";
+import { PRIORITY_LABELS, STATUS_LABELS } from "@/features/tasks/meta";
 import { parseQuickTask } from "@/features/tasks/parse";
 import { inputFromParsed } from "@/features/tasks/QuickAdd";
 import { openNewTask } from "@/features/tasks/creation";
 import { navigate } from "@/stores/router";
+import { useMilestones, useRepos } from "@/features/dev/hooks";
+import { useSessions } from "@/features/sessions/store";
+import { addDaysStr } from "@/lib/dates";
 
-export function useCardContext(showProject: boolean, hidden: string[] = []): CardContext {
+export function useCardContext(showProject: boolean, hidden: string[] = [], optIn: string[] = [], milestoneTitles?: Map<string, string>): CardContext {
   const { data: projects } = useProjects();
   const { data: labels } = useLabels();
   const projectMap = useProjectMap();
   const labelMap = useLabelMap();
   const today = useToday();
   const hiddenKey = hidden.join(",");
+  const optKey = optIn.join(",");
   return useMemo(
     () => ({
       projects: projects ?? [],
@@ -48,8 +53,10 @@ export function useCardContext(showProject: boolean, hidden: string[] = []): Car
       hidden: new Set(hiddenKey ? hiddenKey.split(",") : []),
       showProject,
       today,
+      optIn: new Set(optKey ? optKey.split(",") : []),
+      milestoneTitles,
     }),
-    [projects, projectMap, labels, labelMap, hiddenKey, showProject, today],
+    [projects, projectMap, labels, labelMap, hiddenKey, optKey, milestoneTitles, showProject, today],
   );
 }
 
@@ -61,9 +68,15 @@ const META_KEYS: { key: string; label: string }[] = [
   { key: "description", label: "Description preview" },
 ];
 
+/** Details that are off unless a board turns them on. */
+const OPT_IN_META: { key: string; label: string }[] = [
+  { key: "milestone", label: "Milestone" },
+  { key: "branch", label: "Linked branch" },
+];
+
 const refreshBoard = () => invalidate("board", "boards", "tasks", "projects", "project");
 
-export function ProjectBoard({ projectId, boardId }: { projectId: string; boardId?: string }) {
+export function ProjectBoard({ projectId, boardId, column }: { projectId: string; boardId?: string; column?: string }) {
   const { data: boards } = useBoards(projectId);
   const current: Board | undefined = useMemo(
     () => boards?.find((b) => b.id === boardId) ?? boards?.find((b) => b.isDefault) ?? boards?.[0],
@@ -75,7 +88,7 @@ export function ProjectBoard({ projectId, boardId }: { projectId: string; boardI
     return (
       <EmptyState icon={SquareKanban} title="No board yet" action={<Button onClick={() => void api.boards.create(projectId, "Board").then(refreshBoard)}>Create board</Button>} />
     );
-  return <BoardInner key={current.id} projectId={projectId} boards={boards} board={data?.board ?? current} columns={data?.columns} tasks={data?.tasks} />;
+  return <BoardInner key={current.id} projectId={projectId} boards={boards} board={data?.board ?? current} columns={data?.columns} tasks={data?.tasks} focusColumn={column} />;
 }
 
 function BoardInner({
@@ -84,19 +97,39 @@ function BoardInner({
   board,
   columns,
   tasks,
+  focusColumn,
 }: {
   projectId: string;
   boards: Board[];
   board: Board;
   columns?: Column[];
   tasks?: Task[];
+  focusColumn?: string;
 }) {
   const s = board.settings ?? {};
   const defaultDensity = useSetting("boards.defaultCardDensity");
   const defaultWidth = useSetting("boards.columnWidth");
   const density = s.cardDensity ?? defaultDensity;
   const [search, setSearch] = useState(s.filter?.search ?? "");
-  const ctx = useCardContext(false, s.hiddenMeta ?? []);
+  const { data: milestones } = useMilestones(projectId);
+  const { data: repos } = useRepos(projectId);
+  const activeTaskId = useSessions((x) => x.active?.taskId ?? null);
+  const today = useToday();
+  const milestoneTitles = useMemo(() => new Map((milestones ?? []).map((m) => [m.id, m.title])), [milestones]);
+  const ctx = useCardContext(false, s.hiddenMeta ?? [], s.showMeta ?? [], milestoneTitles);
+  const f = s.filter ?? {};
+  const activeFilters = (f.milestoneIds?.length ? 1 : 0) + (f.repositoryIds?.length ? 1 : 0) + (f.hasBranch ? 1 : 0) + (f.inSession ? 1 : 0) + (f.due ? 1 : 0) + (f.priorities?.length ? 1 : 0);
+
+  // Bring a column into view when the overview asked for it.
+  useEffect(() => {
+    if (!focusColumn || !columns) return;
+    const el = document.querySelector(`[data-col-id="${CSS.escape(focusColumn)}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    el.classList.add("kcol--focus");
+    const t = window.setTimeout(() => el.classList.remove("kcol--focus"), 1600);
+    return () => window.clearTimeout(t);
+  }, [focusColumn, !!columns]);
 
   const saveSettings = (patch: BoardSettings) =>
     void api.boards.update(board.id, { settings: patch }).then(refreshBoard).catch((e) => toastError(describeError(e)));
@@ -114,9 +147,45 @@ function BoardInner({
       (t) =>
         (s.showCompleted !== false || t.status !== "completed") &&
         (!q || t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)) &&
-        (!s.filter?.priorities?.length || s.filter.priorities.includes(t.priority)),
+        (!f.priorities?.length || f.priorities.includes(t.priority)) &&
+        (!f.milestoneIds?.length || f.milestoneIds.includes(t.milestoneId ?? "none")) &&
+        (!f.repositoryIds?.length || (t.devLinks ?? []).some((l) => l.repositoryId && f.repositoryIds!.includes(l.repositoryId))) &&
+        (!f.hasBranch || (t.devLinks ?? []).some((l) => l.kind === "branch" || l.kind === "worktree")) &&
+        (!f.inSession || t.id === activeTaskId) &&
+        (!f.due || (f.due === "none" ? !t.dueDate : f.due === "overdue" ? !!t.dueDate && t.dueDate < today : !!t.dueDate && t.dueDate <= addDaysStr(today, 7))),
     );
-  }, [tasks, search, s.showCompleted, s.filter?.priorities]);
+  }, [tasks, search, s.showCompleted, f, activeTaskId, today]);
+
+  const setFilter = (patch: NonNullable<BoardSettings["filter"]>) => saveSettings({ filter: { ...f, ...patch } });
+  const toggleIn = (list: string[] | undefined, v: string) => (list?.includes(v) ? list.filter((x) => x !== v) : [...(list ?? []), v]);
+  const filterMenu: MenuItems = [
+    { type: "label", label: "Due" },
+    ...(["overdue", "week", "none"] as const).map((d) => ({ label: { overdue: "Overdue", week: "Due within a week", none: "No due date" }[d], checked: f.due === d, onSelect: () => setFilter({ due: f.due === d ? undefined : d }) })),
+    { type: "separator" },
+    {
+      type: "submenu",
+      label: "Priority",
+      items: [4, 3, 2, 1, 0].map((p) => ({ label: PRIORITY_LABELS[p], checked: !!f.priorities?.includes(p), onSelect: () => setFilter({ priorities: f.priorities?.includes(p) ? f.priorities.filter((x) => x !== p) : [...(f.priorities ?? []), p] }) })),
+    },
+    (milestones?.length ?? 0) > 0 && {
+      type: "submenu",
+      label: "Milestone",
+      items: [
+        ...(milestones ?? []).filter((m) => m.status !== "cancelled").map((m) => ({ label: m.title, checked: !!f.milestoneIds?.includes(m.id), onSelect: () => setFilter({ milestoneIds: toggleIn(f.milestoneIds, m.id) }) })),
+        { label: "No milestone", checked: !!f.milestoneIds?.includes("none"), onSelect: () => setFilter({ milestoneIds: toggleIn(f.milestoneIds, "none") }) },
+      ],
+    },
+    (repos?.length ?? 0) > 0 && { type: "separator" },
+    (repos?.length ?? 0) > 1 && {
+      type: "submenu",
+      label: "Repository",
+      items: (repos ?? []).map((r) => ({ label: r.name, checked: !!f.repositoryIds?.includes(r.id), onSelect: () => setFilter({ repositoryIds: toggleIn(f.repositoryIds, r.id) }) })),
+    },
+    (repos?.length ?? 0) > 0 && { label: "Linked to a branch", checked: !!f.hasBranch, onSelect: () => setFilter({ hasBranch: !f.hasBranch }) },
+    !!activeTaskId && { label: "In the current session", checked: !!f.inSession, onSelect: () => setFilter({ inSession: !f.inSession }) },
+    activeFilters > 0 && { type: "separator" },
+    activeFilters > 0 && { label: "Clear filters", onSelect: () => saveSettings({ filter: { search: f.search } }) },
+  ];
 
   const columnOf = (t: Task) => {
     if (t.columnId && colIds.has(t.columnId)) return t.columnId;
@@ -267,6 +336,10 @@ function BoardInner({
         },
       };
     }),
+    ...OPT_IN_META.filter((m) => m.key !== "branch" || (repos?.length ?? 0) > 0).map((m) => {
+      const on = (s.showMeta ?? []).includes(m.key);
+      return { label: m.label, checked: on, onSelect: () => saveSettings({ showMeta: on ? (s.showMeta ?? []).filter((k) => k !== m.key) : [...(s.showMeta ?? []), m.key] }) };
+    }),
     { label: "Completed cards", checked: s.showCompleted !== false, onSelect: () => saveSettings({ showCompleted: s.showCompleted === false }) },
     { type: "separator" },
     {
@@ -307,6 +380,12 @@ function BoardInner({
             aria-label="Filter cards"
           />
         </div>
+        <Dropdown items={filterMenu} align="start">
+          <button type="button" className="btn btn--ghost btn--sm" data-active={activeFilters > 0 || undefined}>
+            <ListFilter />
+            Filter{activeFilters > 0 && <span className="count">{activeFilters}</span>}
+          </button>
+        </Dropdown>
         <span className="spacer" />
         <Segmented
           size="sm"

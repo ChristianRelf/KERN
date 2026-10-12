@@ -18,6 +18,8 @@ import { toast, toastError } from "@/stores/toast";
 import { announce } from "@/lib/announce";
 import { setSetting } from "@/stores/settings";
 import { openNewTask } from "@/features/tasks/creation";
+import { useSessions } from "@/features/sessions/store";
+import { confirm } from "@/components/ui/Dialog";
 
 const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const prefersDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -128,6 +130,16 @@ export function useBackendEvents() {
       listen("kern://quick-capture", () => useUi.getState().openCapture()),
       listen("kern://focus-ended", () => useFocus.getState().checkCompletion()),
       listen("kern://data-changed", () => void queryClient.invalidateQueries()),
+      listen<number>("kern://confirm-quit", async (e) => {
+        const n = e.payload;
+        const ok = await confirm({
+          title: `Quit and stop ${n} terminal process${n === 1 ? "" : "es"}?`,
+          message: "Commands still running in Kern's terminal (and anything they started) will be stopped.",
+          confirmLabel: "Quit",
+          danger: true,
+        });
+        if (ok) void api.system.quit();
+      }),
       listen<string>("kern://backup-failed", (e) => toastError(`Automatic backup failed: ${e.payload}`)),
       listen<{ from: string; to: string; reason: string }>("kern://ai-switch", (e) => {
         if (!useSettings.getState().values["ai.notifySwitch"]) return;
@@ -158,6 +170,25 @@ export function useBackendEvents() {
   }, []);
 }
 
+/**
+ * Work sessions: a low-rate heartbeat while one runs (checking for a gap
+ * first, so sleep or a restart is noticed), and a check when the window
+ * regains focus. No polling when no session is running.
+ */
+export function useWorkSessions() {
+  const running = useSessions((s) => s.active?.status === "running");
+  useEffect(() => {
+    if (!running) return;
+    const id = window.setInterval(() => void useSessions.getState().tick(), 60_000);
+    return () => window.clearInterval(id);
+  }, [running]);
+  useEffect(() => {
+    const onFocus = () => void useSessions.getState().tick();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+}
+
 /** Remembers the last route for "remember last workspace". */
 export function useRememberRoute() {
   useEffect(
@@ -170,6 +201,11 @@ export function useRememberRoute() {
 }
 
 const NAV_ACTIONS: Record<string, () => void> = {
+  resumeWork: () => void import("@/features/workspace/store").then((m) => m.resumeWork()),
+  toggleTerminal: () => {
+    const r = useRouter.getState().route;
+    void import("@/features/terminal/store").then((m) => m.toggleTerminal(r.name === "project" ? r.id : null));
+  },
   goDashboard: () => navigate({ name: "dashboard" }),
   goTasks: () => navigate({ name: "tasks" }),
   goInbox: () => navigate({ name: "inbox" }),
@@ -187,7 +223,7 @@ export function useGlobalShortcuts() {
     const bindings = resolveBindings(overrides);
     const byCombo = new Map<string, string>();
     for (const [id, combo] of Object.entries(bindings)) if (combo) byCombo.set(combo, id);
-    const global = new Set(["palette", "quickCapture", "newTask"]);
+    const global = new Set(["palette", "quickCapture", "newTask", "toggleTerminal"]);
 
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;

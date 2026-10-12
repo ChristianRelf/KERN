@@ -29,7 +29,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS as DndCSS } from "@dnd-kit/utilities";
-import { ChevronsLeftRight, Ellipsis, Maximize2, ListChecks, Paperclip, Plus, Repeat, TriangleAlert } from "lucide-react";
+import { ChevronsLeftRight, Ellipsis, Maximize2, ListChecks, Paperclip, Plus, Repeat, TriangleAlert, Flag, GitBranch } from "lucide-react";
 import type { Label, Project, Task, TaskStatus } from "@/lib/types";
 import { TaskCheck, TaskTitle } from "@/components/ui/Controls";
 import { IconButton } from "@/components/ui/Button";
@@ -58,6 +58,9 @@ export interface CardContext {
   hidden: Set<string>;
   showProject: boolean;
   today: string;
+  /** Opt-in details shown on cards (e.g. "milestone", "branch"). */
+  optIn?: Set<string>;
+  milestoneTitles?: Map<string, string>;
 }
 
 export function between(a: number | undefined, b: number | undefined): number {
@@ -95,6 +98,8 @@ const KanbanCard = memo(function KanbanCard({
   const labels = show("labels") ? (task.labelIds.map((id) => ctx.labelMap.get(id)).filter(Boolean) as Label[]) : [];
   const project = ctx.showProject && task.projectId ? ctx.projectMap.get(task.projectId) : undefined;
   const desc = show("description") && task.description ? task.description.replace(/[#*>`[\]]/g, "").trim() : "";
+  const milestone = ctx.optIn?.has("milestone") && task.milestoneId ? ctx.milestoneTitles?.get(task.milestoneId) : undefined;
+  const branch = ctx.optIn?.has("branch") ? task.devLinks?.find((l) => l.kind === "branch")?.ref : undefined;
 
   const commit = () => {
     setEditing(false);
@@ -185,6 +190,18 @@ const KanbanCard = memo(function KanbanCard({
           {task.issue && (
             <span title={`${task.issue.repo}#${task.issue.number}`}>
               <GithubMark size={11} />#{task.issue.number}
+            </span>
+          )}
+          {milestone && (
+            <span className="truncate" style={{ maxWidth: 120 }} title={`Milestone: ${milestone}`}>
+              <Flag />
+              {milestone}
+            </span>
+          )}
+          {branch && (
+            <span className="truncate mono" style={{ maxWidth: 140 }} title={`Branch: ${branch}`}>
+              <GitBranch />
+              {branch}
             </span>
           )}
           {project && (
@@ -335,6 +352,7 @@ function ColumnView({
     return (
       <div
         ref={setNodeRef}
+        data-col-id={col.id}
         className="kcol kcol--collapsed"
         style={style}
         onClick={onToggleCollapse}
@@ -371,7 +389,7 @@ function ColumnView({
 
   let lastLane = -1;
   return (
-    <div ref={setNodeRef} className="kcol" style={style} data-dragging={isDragging || undefined} data-over={isOver || undefined}>
+    <div ref={setNodeRef} className="kcol" style={style} data-col-id={col.id} data-dragging={isDragging || undefined} data-over={isOver || undefined}>
       <div className="kcol__head" {...attributes} {...listeners} onDoubleClick={() => onRename && setRenaming(true)}>
         {renaming ? (
           <input

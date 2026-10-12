@@ -26,7 +26,7 @@ import {
   Trash2,
   Unlink,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
 import { useQuery } from "@tanstack/react-query";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -44,6 +44,7 @@ import { formatBytes, relativeTime } from "@/lib/dates";
 import { FileTypeIcon } from "./fileIcons";
 import { FileViewer, ImageHoverCard, canHoverPreview, isImage, viewableInApp } from "@/features/files/FileViewer";
 import { SyntaxPrompt } from "@/features/plugins/SyntaxPrompt";
+import { recordWorkspace } from "@/features/workspace/store";
 
 export async function copyText(text: string, what = "Path") {
   try {
@@ -423,6 +424,13 @@ export function FolderBrowser({ project }: { project: Project }) {
   const [showHidden, setShowHidden] = useState(false);
   const [query, setQuery] = useState("");
   const [viewing, setViewing] = useState<FileEntry | null>(null);
+  // Remember the open file so the workspace can reopen it.
+  const viewed = useRef(false);
+  useEffect(() => {
+    if (!viewing && !viewed.current) return;
+    viewed.current = true;
+    recordWorkspace(project.id, { openFile: viewing ? { rel: viewing.rel } : null });
+  }, [project.id, viewing?.rel]);
   const [hover, setHover] = useState<{ entry: FileEntry; rect: DOMRect } | null>(null);
   const hoverTimer = useRef<number | undefined>(undefined);
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean; dirsFirst: boolean }>({ key: "name", desc: false, dirsFirst: true });

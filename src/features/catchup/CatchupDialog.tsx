@@ -32,10 +32,6 @@ const SECTIONS: { key: "whatChanged" | "completed" | "needsAttention" | "nextSte
   { key: "nextSteps", title: "What to do next" },
 ];
 
-export function openCatchup(projectId: string) {
-  useUi.getState().set({ catchupProjectId: projectId });
-}
-
 function bounds(r: Range, prev: number | null, custom: [string, string]): [number, number] {
   const today = todayStr();
   const end = Date.now();
@@ -88,7 +84,7 @@ function toMarkdown(title: string, view: Pick<CatchupDigest, "whatChanged" | "co
   return md;
 }
 
-export function CatchupHost() {
+export default function CatchupHost() {
   const projectId = useUi((s) => s.catchupProjectId);
   if (!projectId) return null;
   return <CatchupDialog projectId={projectId} onClose={() => useUi.getState().set({ catchupProjectId: null })} />;

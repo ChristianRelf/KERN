@@ -23,7 +23,7 @@ import { useGithubCached, useRepoSummary, useRepos, useServices, useWorktrees } 
 import { RepoRow, linkGithubRepository, linkLocalRepository } from "./Repositories";
 import { ServiceRow } from "./Services";
 import { PinnedCommands } from "./RunSection";
-import { openWorktreeDialog } from "./Worktrees";
+import { openWorktreeDialog } from "./worktreeDialog";
 
 function openCode(project: Pick<Project, "id">, repo?: Repository, section?: string) {
   if (repo) recordWorkspace(project.id, { repositoryId: repo.id, ...(section ? { codeSection: section } : {}) });

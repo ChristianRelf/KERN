@@ -25,6 +25,7 @@ import {
   Trash,
   type LucideIcon,
 } from "lucide-react";
+import { SessionPill } from "@/features/sessions/SessionUi";
 import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   DndContext,
@@ -171,6 +172,7 @@ export function Sidebar() {
       </div>
 
       <div className="sidebar__bottom">
+        <SessionPill collapsed={collapsed} />
         <FocusPill collapsed={collapsed} />
         <NavButton icon={Trash} label="Trash" active={route.name === "trash"} collapsed={collapsed} onClick={() => navigate({ name: "trash" })} />
         <div className="row" style={{ gap: 2 }}>

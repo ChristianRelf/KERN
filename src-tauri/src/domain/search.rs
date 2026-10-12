@@ -149,6 +149,17 @@ pub fn search(state: State<AppState>, query: String, limit: Option<i64>, scope: 
                 let (repo, n, title, url, head) = row?;
                 out.push(SearchHit { kind: "pull".into(), id: url, parent_id: Some(repo.clone()), title, snippet: format!("{repo}#{n}{}", head.map(|h| format!(" · {h}")).unwrap_or_default()), meta: None });
             }
+            // Commit metadata from the last fetch (message, short hash).
+            let mut stmt = c.prepare(
+                "SELECT substr(d.key, 12), json_extract(j.value, '$.subject'), json_extract(j.value, '$.short'), json_extract(j.value, '$.htmlUrl')
+                 FROM dev_cache d, json_each(d.data) j
+                 WHERE d.key LIKE 'gh:commits:%' AND (json_extract(j.value, '$.subject') LIKE ?1 OR json_extract(j.value, '$.sha') LIKE ?2) LIMIT 8",
+            )?;
+            let sha = format!("{}%", query.trim().to_lowercase());
+            for row in stmt.query_map(params![like, sha], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?)))? {
+                let (repo, subject, short, url) = row?;
+                out.push(SearchHit { kind: "commit".into(), id: url, parent_id: Some(repo.clone()), title: subject, snippet: format!("{repo} · {short}"), meta: None });
+            }
         }
         Ok(out)
     })

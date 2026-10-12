@@ -29,9 +29,15 @@ import {
   FolderKanban,
   CalendarRange,
   MonitorCog,
+  History,
+  Hourglass,
+  CircleStop,
+  SquareTerminal,
+  Sparkles,
+  Flag,
   type LucideIcon,
 } from "lucide-react";
-import { navigate } from "@/stores/router";
+import { navigate, useRouter } from "@/stores/router";
 import { useUi } from "@/stores/ui";
 import { getSetting, setSetting } from "@/stores/settings";
 import { api, describeError } from "@/lib/ipc";
@@ -41,6 +47,11 @@ import { prompt } from "@/components/ui/Dialog";
 import { useFocus } from "@/features/focus/store";
 import { useDashboardUi } from "@/features/dashboard/store";
 import { openNewTask } from "@/features/tasks/creation";
+import { useSessions } from "@/features/sessions/store";
+import { startSession } from "@/features/sessions/SessionUi";
+import { resumeWork } from "@/features/workspace/store";
+import { openCatchup } from "@/features/catchup/open";
+import { createMilestone } from "@/features/milestones/actions";
 
 export interface Command {
   id: string;
@@ -76,10 +87,26 @@ export async function createWhiteboard(projectId?: string | null) {
   }
 }
 
+/** The project currently open, if any. */
+function currentProjectId(): string | null {
+  const r = useRouter.getState().route;
+  return r.name === "project" ? r.id : null;
+}
+
 export function getCommands(): Command[] {
   const ui = useUi.getState();
   const focus = useFocus.getState();
-  const cmds: Command[] = [
+  const projectId = currentProjectId();
+  const session = useSessions.getState().active;
+  const cmds = [
+    { id: "resumeWork", title: "Resume work", icon: History, section: "Go to", shortcut: "resumeWork", keywords: "continue last project workspace", run: () => void resumeWork() },
+    session
+      ? { id: "stopSession", title: `Stop session${session.taskTitle ? ` (${session.taskTitle})` : ""}`, icon: CircleStop, section: "Actions", keywords: "work timer time tracking", run: () => void useSessions.getState().stop() }
+      : { id: "startSession", title: "Start work session", icon: Hourglass, section: "Actions", keywords: "work timer time tracking", run: () => void startSession({ projectId }) },
+    { id: "sessions", title: "Open time reports", icon: Hourglass, section: "Go to", keywords: "sessions tracked hours", run: () => navigate({ name: "sessions" }) },
+    { id: "toggleTerminal", title: "Toggle terminal", icon: SquareTerminal, section: "Actions", shortcut: "toggleTerminal", keywords: "shell console command line", run: () => void import("@/features/terminal/store").then((m) => m.toggleTerminal(projectId)) },
+    projectId && { id: "catchup", title: "Catch up on this project", icon: Sparkles, section: "Actions", keywords: "summary what changed ai", run: () => openCatchup(projectId) },
+    projectId && { id: "newMilestone", title: "Create milestone", icon: Flag, section: "Create", keywords: "release goal deadline", run: () => void createMilestone({ projectId }) },
     { id: "newTask", title: "Create task", icon: Plus, section: "Create", shortcut: "newTask", keywords: "add new todo", run: () => openNewTask() },
     { id: "newNote", title: "Create note", icon: NotebookPen, section: "Create", shortcut: "newNote", keywords: "write", run: () => void createNote() },
     { id: "newProject", title: "Create project", icon: FolderPlus, section: "Create", shortcut: "newProject", run: () => ui.set({ createProjectOpen: true }) },
@@ -146,6 +173,6 @@ export function getCommands(): Command[] {
     { id: "densityComfortable", title: "Density: Comfortable", icon: Rows3, section: "Appearance", hidden: true, run: () => void setSetting("appearance.density", "comfortable") },
     { id: "densityRelaxed", title: "Density: Relaxed", icon: Rows3, section: "Appearance", hidden: true, run: () => void setSetting("appearance.density", "relaxed") },
     { id: "listStyle", title: "Toggle task descriptions in lists", icon: ListTodo, section: "Appearance", hidden: true, run: () => void setSetting("appearance.taskRowStyle", getSetting("appearance.taskRowStyle") === "compact" ? "expanded" : "compact") },
-  ];
+  ].filter(Boolean) as Command[];
   return cmds;
 }

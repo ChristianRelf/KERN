@@ -6,7 +6,6 @@
 
 import { Bot, Code2, Ellipsis, FolderGit2, FolderOpen, GitBranch, Lock, Pencil, Plus, Scissors, SquareCheckBig, TerminalSquare, Trash2, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { create } from "zustand";
 import { useQuery } from "@tanstack/react-query";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { Project, Repository, Task, Worktree, WorktreeInspection } from "@/lib/types";
@@ -26,6 +25,7 @@ import { relativeTime } from "@/lib/dates";
 import { openTerminal } from "@/features/terminal/store";
 import { useRepos, useWorktrees } from "./hooks";
 import { suggestBranchName, useBranchCheck } from "./branches";
+import { openWorktreeDialog, useWorktreeDialog, type WorktreeDialogReq } from "./worktreeDialog";
 
 const refresh = () => invalidate("worktrees", "devlinks", "task", "tasks", "capabilities", "git");
 
@@ -276,25 +276,12 @@ function Inspection({ info }: { info: WorktreeInspection }) {
 
 // ------------------------------------------------------------ creation
 
-interface DialogReq {
-  projectId: string;
-  repositoryId?: string;
-  taskId?: string | null;
-  taskTitle?: string | null;
-  issueNumber?: number | null;
-  /** Called with the new worktree. */
-  onCreated?: (w: Worktree) => void;
+export default function WorktreeDialogHost() {
+  const req = useWorktreeDialog((s) => s.req);
+  return req ? <CreateWorktreeDialog req={req} onClose={() => useWorktreeDialog.setState({ req: null })} /> : null;
 }
 
-const useWtDialog = create<{ req: DialogReq | null }>(() => ({ req: null }));
-export const openWorktreeDialog = (req: DialogReq) => useWtDialog.setState({ req });
-
-export function WorktreeDialogHost() {
-  const req = useWtDialog((s) => s.req);
-  return req ? <CreateWorktreeDialog req={req} onClose={() => useWtDialog.setState({ req: null })} /> : null;
-}
-
-function CreateWorktreeDialog({ req, onClose }: { req: DialogReq; onClose: () => void }) {
+function CreateWorktreeDialog({ req, onClose }: { req: WorktreeDialogReq; onClose: () => void }) {
   const { data: repos } = useRepos(req.projectId);
   const eligible = (repos ?? []).filter((r) => r.localPath && r.localStatus === "ok" && r.trust === "trusted");
   const [repoId, setRepoId] = useState(req.repositoryId ?? "");

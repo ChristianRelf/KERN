@@ -18,6 +18,12 @@ const KIND_LABEL: Record<SearchHit["kind"], string> = {
   wb_node: "Whiteboard card",
   label: "Label",
   view: "Saved view",
+  milestone: "Milestone",
+  command: "Command",
+  snapshot: "Workspace",
+  issue: "GitHub issue",
+  pull: "Pull request",
+  commit: "Commit",
 };
 
 export default function SearchPage({ initial }: { initial?: string }) {

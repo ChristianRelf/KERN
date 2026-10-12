@@ -22,6 +22,8 @@ import {
   X,
   Hourglass,
   Globe,
+  Flag as FlagIcon,
+  Play,
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -49,6 +51,11 @@ import { RichLink, extractUrls, normalizeUrl } from "@/features/links/links";
 import { GithubMark } from "@/features/github/shared";
 import { confirmDelete, prompt } from "@/components/ui/Dialog";
 import { clearDraft, setDraft, useDrafts } from "@/stores/drafts";
+import { MilestonePicker } from "@/features/milestones/MilestonesTab";
+import { openMilestone } from "@/features/milestones/actions";
+import { useMilestones } from "@/features/dev/hooks";
+import { TaskDevSection } from "@/features/dev/TaskDevSection";
+import { startWork } from "@/features/sessions/StartWork";
 
 function useAutosize(ref: React.RefObject<HTMLTextAreaElement | null>, value: string) {
   useLayoutEffect(() => {
@@ -253,6 +260,8 @@ function TaskDetailBody({ task }: { task: Task }) {
           />
         </div>
 
+        {task.projectId && !task.parentId && <MilestoneProp task={task} onChange={(m) => patch({ milestoneId: m }, m ? "Added to milestone" : "Removed from milestone")} />}
+
         <span className="props__label">
           <CalendarDays /> Due
         </span>
@@ -383,6 +392,7 @@ function TaskDetailBody({ task }: { task: Task }) {
 
       <Subtasks task={task} depth={0} />
       <Attachments task={task} />
+      <TaskDevSection task={task} />
 
       <div className="detail-meta">
         <span>Created {relativeTime(task.createdAt)}</span>
@@ -391,6 +401,11 @@ function TaskDetailBody({ task }: { task: Task }) {
       </div>
 
       <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
+        {!done && (
+          <Button size="sm" icon={Play} onClick={() => void startWork(task)}>
+            Start work
+          </Button>
+        )}
         {!done && (
           <Button size="sm" icon={Timer} onClick={() => startFocusOn(task)}>
             Focus
@@ -678,5 +693,31 @@ function Attachments({ task }: { task: Task }) {
         ),
       )}
     </div>
+  );
+}
+
+function MilestoneProp({ task, onChange }: { task: Task; onChange: (id: string | null) => void }) {
+  const { data: milestones } = useMilestones(task.projectId);
+  const m = milestones?.find((x) => x.id === task.milestoneId);
+  if (!m && !milestones?.length) return null;
+  return (
+    <>
+      <span className="props__label">
+        <FlagIcon /> Milestone
+      </span>
+      <div className="row" style={{ gap: 0 }}>
+        <MilestonePicker
+          projectId={task.projectId!}
+          value={task.milestoneId ?? null}
+          onChange={onChange}
+          trigger={
+            <button type="button" className="prop-btn" data-empty={!m}>
+              <span className="truncate">{m ? m.title : "None"}</span>
+            </button>
+          }
+        />
+        {m && <IconButton icon={ChevronRight} label="Open milestone" size="sm" onClick={() => openMilestone(m.id)} />}
+      </div>
+    </>
   );
 }
