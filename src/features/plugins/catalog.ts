@@ -1,4 +1,5 @@
-// Generated from tm-grammars@1.32.22 metadata; do not edit by hand. The
+// Generated from tm-grammars@1.32.22 metadata by scripts/gen-syntax-catalog.py;
+// do not edit by hand. The
 // backend (src-tauri/src/domain/plugins.rs) downloads each grammar and
 // checks it against the SHA-256 recorded in plugins_catalog.rs.
 

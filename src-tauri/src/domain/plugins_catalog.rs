@@ -1,4 +1,4 @@
-//! Generated from tm-grammars@1.32.22; do not edit by hand.
+//! Generated from tm-grammars@1.32.22 by scripts/gen-syntax-catalog.py; do not edit by hand.
 //! (grammar name, SHA-256 of the published file, size in bytes)
 
 pub const TM_GRAMMARS_VERSION: &str = "1.32.22";

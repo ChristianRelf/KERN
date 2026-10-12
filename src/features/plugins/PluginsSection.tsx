@@ -10,6 +10,7 @@ import { SToggle } from "@/features/settings/controls";
 import { formatBytes } from "@/lib/dates";
 import { SYNTAXES, type SyntaxPlugin } from "./catalog";
 import { installSyntaxes, removeSyntax, useInstalledGrammars } from "./syntax";
+import { SyntaxIcon } from "./SyntaxIcon";
 
 function Row({ label, hint, children }: { label: ReactNode; hint?: ReactNode; children?: ReactNode }) {
   return (
@@ -53,9 +54,10 @@ export function PluginsSection() {
     <Row
       key={s.id}
       label={
-        <>
+        <span className="row" style={{ gap: 8 }}>
+          <SyntaxIcon id={s.id} />
           {s.name} {isInstalled(s) && <Check size={12} className="faint" aria-label="Installed" />}
-        </>
+        </span>
       }
       hint={
         <>

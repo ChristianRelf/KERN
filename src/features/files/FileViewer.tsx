@@ -16,6 +16,7 @@ import { toast, toastError } from "@/stores/toast";
 import { formatBytes } from "@/lib/dates";
 import { FileTypeIcon } from "@/features/projects/fileIcons";
 import { installSyntaxes, syntaxForFile, useInstalledGrammars } from "@/features/plugins/syntax";
+import { SyntaxIcon } from "@/features/plugins/SyntaxIcon";
 import { CodeEditor } from "./CodeEditor";
 
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "jfif", "gif", "webp", "avif", "bmp", "ico", "svg"]);
@@ -109,13 +110,15 @@ function ImageViewer({ projectId, entry }: { projectId: string; entry: FileEntry
   if (!data) return <Skeleton height={360} />;
   return (
     <div className="image-viewer" data-actual={actual || undefined}>
-      <img
-        src={data}
-        alt={entry.name}
-        onLoad={(e) => setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
-        onClick={() => setActual(!actual)}
-        title={actual ? "Click to fit" : "Click for actual size"}
-      />
+      <div className="image-viewer__stage">
+        <img
+          src={data}
+          alt={entry.name}
+          onLoad={(e) => setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+          onClick={() => setActual(!actual)}
+          title={actual ? "Click to fit" : "Click for actual size"}
+        />
+      </div>
       {dims && (
         <span className="image-viewer__meta">
           {dims.w} × {dims.h}
@@ -185,6 +188,7 @@ function TextViewer({ projectId, entry, onDirty, onOpenExternal }: { projectId: 
     <div className="text-viewer">
       <CodeEditor value={draft} onChange={setDraft} lang={hasSyntax ? syntax!.id : null} installed={installed} readOnly={file.readOnly} onSave={() => void save()} ariaLabel={`Contents of ${entry.name}`} />
       <div className="text-viewer__bar">
+        {syntax && <SyntaxIcon id={syntax.id} size={13} />}
         <span className="faint">
           {syntax ? syntax.name : "Plain text"}
           {" · "}

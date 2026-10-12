@@ -5,9 +5,9 @@
 // highlighting follows the app's light and dark themes.
 
 import { useQuery } from "@tanstack/react-query";
-import { createCssVariablesTheme, createHighlighterCore, type HighlighterCore, type ThemedToken } from "shiki/core";
-import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import type { HighlighterCore, ThemedToken } from "shiki/core";
 import { api, describeError } from "@/lib/ipc";
+import type { FileKindCount } from "@/lib/types";
 import { invalidate } from "@/lib/query";
 import { toast, toastError } from "@/stores/toast";
 import { GRAMMAR_META, SYNTAXES, type SyntaxPlugin } from "./catalog";
@@ -27,6 +27,23 @@ export function syntaxForFile(name: string): SyntaxPlugin | undefined {
   if (byName) return byName;
   const ext = lower.includes(".") ? lower.slice(lower.lastIndexOf(".") + 1) : "";
   return ext ? SYNTAXES.find((s) => s.exts.includes(ext)) : undefined;
+}
+
+export interface Suggestion {
+  syntax: SyntaxPlugin;
+  files: number;
+}
+
+/** Code languages with at least two files (or one well-known file name) that aren't installed or declined. */
+export function suggestSyntaxes(kinds: FileKindCount[], installed: string[], declined: string[], max = 4): Suggestion[] {
+  const out: Suggestion[] = [];
+  for (const s of SYNTAXES) {
+    if (s.kind !== "code" || installed.includes(s.id) || declined.includes(s.id)) continue;
+    const byExt = kinds.filter((k) => s.exts.includes(k.key)).reduce((n, k) => n + k.count, 0);
+    const byName = kinds.filter((k) => s.names.includes(k.key)).reduce((n, k) => n + k.count, 0);
+    if (byExt >= 2 || byName >= 1) out.push({ syntax: s, files: byExt + byName });
+  }
+  return out.sort((a, b) => b.files - a.files).slice(0, max);
 }
 
 /** Every grammar a plugin installs. */
@@ -66,12 +83,18 @@ export async function removeSyntax(s: SyntaxPlugin, installed: string[]) {
 
 // ------------------------------------------------------------ highlighter
 
-const theme = createCssVariablesTheme({ name: "kern", variablePrefix: "--code-", variableDefaults: {}, fontStyle: true });
 let core: Promise<HighlighterCore> | null = null;
 const loaded = new Map<string, Promise<void>>();
 
+/** Shiki loads on first use, keeping it out of the startup bundle. */
 function highlighter() {
-  core ??= createHighlighterCore({ themes: [theme], langs: [], engine: createJavaScriptRegexEngine({ forgiving: true }) });
+  core ??= Promise.all([import("shiki/core"), import("shiki/engine/javascript")]).then(([shiki, js]) =>
+    shiki.createHighlighterCore({
+      themes: [shiki.createCssVariablesTheme({ name: "kern", variablePrefix: "--code-", variableDefaults: {}, fontStyle: true })],
+      langs: [],
+      engine: js.createJavaScriptRegexEngine({ forgiving: true }),
+    }),
+  );
   return core;
 }
 

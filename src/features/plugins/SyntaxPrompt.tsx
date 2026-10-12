@@ -4,34 +4,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { FileKindCount, Project } from "@/lib/types";
+import type { Project } from "@/lib/types";
 import { api } from "@/lib/ipc";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Controls";
 import { Dialog } from "@/components/ui/Dialog";
 import { setSetting, useSetting } from "@/stores/settings";
 import { formatBytes } from "@/lib/dates";
-import { SYNTAXES, type SyntaxPlugin } from "./catalog";
-import { installSyntaxes, useInstalledGrammars } from "./syntax";
+import { installSyntaxes, suggestSyntaxes, useInstalledGrammars } from "./syntax";
+import { SyntaxIcon } from "./SyntaxIcon";
 
+/** Projects whose prompt was answered (or dismissed) this session. */
 const askedThisSession = new Set<string>();
-
-export interface Suggestion {
-  syntax: SyntaxPlugin;
-  files: number;
-}
-
-/** Code languages with at least two files (or one well-known file name) that aren't installed or declined. */
-export function suggestSyntaxes(kinds: FileKindCount[], installed: string[], declined: string[], max = 4): Suggestion[] {
-  const out: Suggestion[] = [];
-  for (const s of SYNTAXES) {
-    if (s.kind !== "code" || installed.includes(s.id) || declined.includes(s.id)) continue;
-    const byExt = kinds.filter((k) => s.exts.includes(k.key)).reduce((n, k) => n + k.count, 0);
-    const byName = kinds.filter((k) => s.names.includes(k.key)).reduce((n, k) => n + k.count, 0);
-    if (byExt >= 2 || byName >= 1) out.push({ syntax: s, files: byExt + byName });
-  }
-  return out.sort((a, b) => b.files - a.files).slice(0, max);
-}
+/** Projects with a prompt on screen, so two views never ask at once. */
+const showing = new Set<string>();
 
 export function SyntaxPrompt({ project }: { project: Pick<Project, "id" | "folderPath"> }) {
   const enabled = useSetting("plugins.suggestSyntax");
@@ -52,29 +38,38 @@ export function SyntaxPrompt({ project }: { project: Pick<Project, "id" | "folde
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!want || !suggestions.length) return;
-    askedThisSession.add(project.id);
+    if (!want || !suggestions.length || showing.has(project.id)) return;
+    showing.add(project.id);
     setPicked(new Set(suggestions.map((s) => s.syntax.id)));
     setOpen(true);
+    // Leaving the tab before answering lets the next view ask instead.
+    return () => {
+      showing.delete(project.id);
+    };
   }, [want, suggestions]);
+
+  const close = () => {
+    askedThisSession.add(project.id);
+    setOpen(false);
+  };
 
   const chosen = suggestions.filter((s) => picked.has(s.syntax.id));
   const install = async () => {
     setBusy(true);
     const ok = await installSyntaxes(chosen.map((s) => s.syntax));
     setBusy(false);
-    if (ok) setOpen(false);
+    if (ok) close();
   };
   const neverAsk = () => {
     void setSetting("plugins.declined", [...new Set([...declined, ...suggestions.map((s) => s.syntax.id)])]);
-    setOpen(false);
+    close();
   };
 
   const single = suggestions.length === 1 ? suggestions[0].syntax : null;
   return (
     <Dialog
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(o) => !o && close()}
       centered
       title={single ? `This project uses ${single.name}` : "Install syntax highlighting?"}
       footer={
@@ -83,7 +78,7 @@ export function SyntaxPrompt({ project }: { project: Pick<Project, "id" | "folde
             Don't ask again
           </Button>
           <span className="spacer" />
-          <Button onClick={() => setOpen(false)}>Not now</Button>
+          <Button onClick={close}>Not now</Button>
           <Button variant="primary" autoFocus disabled={!chosen.length || busy} onClick={() => void install()}>
             {busy ? "Installing…" : single ? `Install ${single.name} syntax` : `Install ${chosen.length}`}
           </Button>
@@ -108,6 +103,7 @@ export function SyntaxPrompt({ project }: { project: Pick<Project, "id" | "folde
               }
               label={syntax.name}
             />
+            <SyntaxIcon id={syntax.id} />
             <span className="grow">{syntax.name}</span>
             <span className="faint">
               {files.toLocaleString()} file{files === 1 ? "" : "s"} · {formatBytes(syntax.size)}
