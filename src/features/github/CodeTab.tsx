@@ -1,200 +1,264 @@
-// Project → Code: the connected GitHub repository and the linked local
-// clone. Overview (README, languages, TODO scan), changes with diffs,
-// branches and history, fetch/pull/push, and pull requests.
+// Project → Code: the project's repositories. One repository is selected
+// at a time (remembered per project); sections only appear when they apply
+// to it: local tools (changes, history, worktrees) for a trusted local
+// copy, pull requests and builds for a GitHub repository, and the run
+// environment and dependencies for any local folder.
 
 import {
   ArrowDown,
   ArrowUp,
+  Box,
+  ChevronDown,
   CircleCheck,
   CircleDashed,
   CircleX,
   Ellipsis,
   FileDiff,
+  FolderGit2,
   FolderOpen,
   GitBranch,
   GitPullRequest,
   Link2,
   ListTodo,
+  Network,
+  Play,
   Plus,
   RefreshCw,
+  Settings2,
   ShieldHalf,
   Star,
   Tag,
+  TerminalSquare,
   Unlink,
   Upload,
+  Workflow,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { GitChangedFile, GitCommit, Project, PullInfo, TodoItem } from "@/lib/types";
+import type { GitChangedFile, GitCommit, Project, PullInfo, Repository, TodoItem } from "@/lib/types";
 import { api, describeError } from "@/lib/ipc";
 import { invalidate } from "@/lib/query";
 import { Button, IconButton } from "@/components/ui/Button";
-import { Dropdown } from "@/components/ui/Menu";
+import { Dropdown, type MenuItems } from "@/components/ui/Menu";
 import { Checkbox, EmptyState, Segmented, Skeleton } from "@/components/ui/Controls";
+import { Dialog, confirm, prompt } from "@/components/ui/Dialog";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { confirm, prompt } from "@/components/ui/Dialog";
 import { toast, toastError } from "@/stores/toast";
 import { useSetting } from "@/stores/settings";
 import { relativeTime } from "@/lib/dates";
 import { openTask } from "@/features/tasks/menu";
 import { createTask } from "@/features/tasks/actions";
-import { linkFolder, setFolderTrust, useProjectFolder } from "@/features/projects/folders";
+import { linkFolder } from "@/features/projects/folders";
 import { openLink } from "@/features/links/links";
 import { renderMarkdown, safeHref } from "@/lib/markdown";
 import { copyText } from "@/features/projects/folders";
-import { GithubMark, cloneIntoProject, connectProject, syncProject, useGitRemote, useProjectRepo } from "./shared";
+import { GithubMark, cloneIntoProject, connectProject, syncProject, useProjectRepo } from "./shared";
 import { layoutGraph, parseRefs, type Edge } from "./graph";
 import { languageColor } from "./languages";
 import { SyntaxPrompt } from "@/features/plugins/SyntaxPrompt";
+import { recordWorkspace, useWorkspaceState } from "@/features/workspace/store";
+import { RepositoriesPanel, linkGithubRepository, linkLocalRepository, refreshRepos, repoMenu, useSelectedRepo } from "@/features/dev/Repositories";
+import { WorktreesSection } from "@/features/dev/Worktrees";
+import { BuildsSection } from "@/features/dev/Builds";
+import { RunSection } from "@/features/dev/RunSection";
+import { openTerminal } from "@/features/terminal/store";
 
-type Section = "overview" | "changes" | "branches" | "pulls";
+const DependenciesSection = lazy(() => import("@/features/dev/Dependencies"));
+
+type Section = "overview" | "changes" | "history" | "worktrees" | "pulls" | "builds" | "run" | "deps";
 
 export function CodeTab({ project }: { project: Project }) {
-  const { data: repo } = useProjectRepo(project.id);
-  const { data: remote } = useGitRemote(project);
-  const { data: folder } = useProjectFolder(project.id, !!project.folderPath);
-  const autoSync = useSetting("github.autoSync");
-  const [section, setSection] = useState<Section>("overview");
-  const [syncing, setSyncing] = useState(false);
+  const { repos, selected, select, isLoading } = useSelectedRepo(project.id);
+  const { data: ws } = useWorkspaceState(project.id);
+  const [manage, setManage] = useState(false);
+  const local = !!selected?.localPath && selected.localStatus === "ok";
+  const trusted = local && selected?.trust === "trusted";
+  const gh = !!selected?.github;
+  // Run & dependencies work on the selected repository's folder, or the project folder.
+  const hasRoot = local || (!selected && !!project.folderPath);
+  const sections = useMemo(() => {
+    const out: { value: Section; label: string; icon: typeof GitBranch }[] = [{ value: "overview", label: "Overview", icon: Box }];
+    if (selected?.localPath) out.push({ value: "changes", label: "Changes", icon: FileDiff }, { value: "history", label: "History", icon: GitBranch }, { value: "worktrees", label: "Worktrees", icon: FolderGit2 });
+    if (gh) out.push({ value: "pulls", label: "Pull requests", icon: GitPullRequest }, { value: "builds", label: "Builds", icon: Workflow });
+    if (hasRoot || selected?.localPath) out.push({ value: "run", label: "Run", icon: Play }, { value: "deps", label: "Dependencies", icon: Network });
+    return out;
+  }, [selected, gh, hasRoot]);
+  const wanted = (ws?.codeSection as Section | undefined) ?? "overview";
+  const section = sections.some((s) => s.value === wanted) ? wanted : "overview";
+  const setSection = (v: Section) => recordWorkspace(project.id, { codeSection: v });
 
-  // Pull issue changes when the tab opens (at most every 10 minutes).
-  useEffect(() => {
-    if (!repo || !autoSync || !repo.syncIssues) return;
-    if (repo.lastSyncedAt && Date.now() - repo.lastSyncedAt < 10 * 60_000) return;
-    void syncProject(project.id, true);
-  }, [repo?.projectId, autoSync]);
+  if (isLoading) return <div className="page-body page-body--pad"><Skeleton height={80} /></div>;
 
-  const sync = async () => {
-    setSyncing(true);
-    await syncProject(project.id);
-    setSyncing(false);
-  };
-
-  const localRepo = remote?.isRepo ?? false;
-  const trusted = folder?.trust === "trusted" && folder.status === "ok";
+  if (!repos.length && !project.folderPath)
+    return (
+      <div className="page-body page-body--pad code-tab">
+        <EmptyState
+          icon={FolderGit2}
+          title="No code linked"
+          action={
+            <div className="row" style={{ gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
+              <Button icon={FolderGit2} onClick={() => void linkLocalRepository(project)}>
+                Link a local repository
+              </Button>
+              <Button icon={Plus} onClick={() => void linkGithubRepository(project)}>
+                Link a GitHub repository
+              </Button>
+              <Button variant="ghost" icon={FolderOpen} onClick={() => void linkFolder(project)}>
+                Link a folder
+              </Button>
+            </div>
+          }
+        >
+          Projects don't need code. Link a repository to see its changes, branches, worktrees, pull requests and builds here — you can link several.
+        </EmptyState>
+      </div>
+    );
 
   return (
     <div className="page-body page-body--pad code-tab">
       <SyntaxPrompt project={project} />
-      {repo ? (
-        <div className="code-bar">
-          <GithubMark size={16} />
-          <button type="button" className="code-bar__repo" onClick={() => repo.htmlUrl && void openLink(repo.htmlUrl)}>
-            {repo.fullName}
-          </button>
-          <span className="faint code-bar__meta">
-            {repo.linkedIssues} linked issue{repo.linkedIssues === 1 ? "" : "s"}
-            {" · "}
-            {repo.syncIssues ? (repo.lastSyncedAt ? `synced ${relativeTime(repo.lastSyncedAt)}` : "not synced yet") : "issue sync paused"}
-          </span>
-          {repo.lastSyncError && (
-            <Tooltip content={repo.lastSyncError}>
-              <CircleX size={14} className="code-bar__error" aria-label="Last sync failed" />
-            </Tooltip>
-          )}
-          <span className="spacer" />
-          {repo.syncIssues && (
-            <Button size="sm" icon={RefreshCw} className={syncing ? "spin" : undefined} disabled={syncing} onClick={() => void sync()}>
-              Sync issues
-            </Button>
-          )}
-          <Dropdown
-            align="end"
-            items={[
-              { label: repo.syncIssues ? "Pause issue sync" : "Resume issue sync", onSelect: () => void api.github.update(project.id, { syncIssues: !repo.syncIssues }).then(() => invalidate("github")) },
-              { label: "Include closed issues", checked: repo.importClosed, onSelect: () => void api.github.update(project.id, { importClosed: !repo.importClosed }).then(() => invalidate("github")) },
-              !project.folderPath && { label: "Clone a local copy…", icon: FolderOpen, onSelect: () => void cloneIntoProject(project.id, repo.fullName) },
-              { type: "separator" },
-              {
-                label: "Disconnect repository…",
-                icon: Unlink,
-                danger: true,
-                onSelect: async () => {
-                  if (!(await confirm({ title: `Disconnect ${repo.fullName}?`, message: "Imported tasks stay in the project as ordinary tasks. Nothing changes on GitHub.", confirmLabel: "Disconnect" }))) return;
-                  await api.github.disconnect(project.id);
-                  invalidate("github", "tasks", "task", "projects", "project");
-                },
-              },
-            ]}
-          >
-            <IconButton icon={Ellipsis} label="Repository options" size="sm" noTooltip />
-          </Dropdown>
-        </div>
-      ) : remote?.github ? (
-        <div className="code-banner">
-          <GithubMark size={16} />
-          <span className="grow">
-            This folder is a clone of <b>{remote.github}</b>. Connect it to sync issues with tasks and see pull requests.
-          </span>
-          <Button size="sm" variant="primary" onClick={() => void connectProject(project, remote.github!)}>
-            Connect
-          </Button>
-        </div>
-      ) : (
-        <div className="code-banner">
-          <GithubMark size={16} />
-          <span className="grow">Connect a GitHub repository to turn its issues into tasks (in both directions) and follow pull requests.</span>
-          <Button size="sm" onClick={() => void connectProject(project)}>
-            Connect repository…
-          </Button>
-        </div>
-      )}
-
-      <Segmented
-        size="sm"
-        value={section}
-        onChange={setSection}
-        ariaLabel="Code section"
-        options={[
-          { value: "overview", label: "Overview" },
-          { value: "changes", label: "Changes" },
-          { value: "branches", label: "Branches & history" },
-          { value: "pulls", label: "Pull requests" },
-        ]}
-      />
-
-      {section === "overview" && <Overview project={project} connected={!!repo} />}
-      {(section === "changes" || section === "branches") && (
-        <LocalGate project={project} hasRepo={!!repo} repoName={repo?.fullName} localRepo={localRepo} trusted={trusted}>
-          {section === "changes" ? <Changes project={project} /> : <Branches project={project} />}
+      <RepoBar project={project} repos={repos} selected={selected} onSelect={(r) => select(r.id)} onManage={() => setManage(true)} />
+      <Segmented size="sm" value={section} onChange={setSection} ariaLabel="Code section" options={sections} />
+      {section === "overview" && <Overview project={project} repo={selected} />}
+      {(section === "changes" || section === "history" || section === "worktrees") && selected && (
+        <LocalGate project={project} repo={selected} trusted={trusted}>
+          {section === "changes" ? <Changes repo={selected} /> : section === "history" ? <Branches repo={selected} /> : <WorktreesSection project={project} repo={selected} />}
         </LocalGate>
       )}
-      {section === "pulls" &&
-        (repo ? (
-          <Pulls project={project} />
-        ) : (
-          <EmptyState compact icon={GitPullRequest}>
-            Connect a GitHub repository to see its pull requests.
-          </EmptyState>
-        ))}
+      {section === "pulls" && selected?.github && <Pulls project={project} repo={selected} />}
+      {section === "builds" && selected?.github && <BuildsSection project={project} repo={selected} />}
+      {section === "run" && <RunSection project={project} repo={local ? selected : null} />}
+      {section === "deps" && (
+        <Suspense fallback={<Skeleton height={80} />}>
+          <DependenciesSection project={project} repo={local ? selected : null} />
+        </Suspense>
+      )}
+      <Dialog open={manage} onOpenChange={setManage} title="Repositories" wide>
+        <RepositoriesPanel project={project} selectedId={selected?.id} onSelect={(r) => (select(r.id), setManage(false))} />
+      </Dialog>
     </div>
   );
 }
 
-/** Git tools need a linked folder that's a repository and trusted. */
-function LocalGate({
-  project,
-  hasRepo,
-  repoName,
-  localRepo,
-  trusted,
-  children,
-}: {
-  project: Project;
-  hasRepo: boolean;
-  repoName?: string;
-  localRepo: boolean;
-  trusted: boolean;
-  children: React.ReactNode;
-}) {
-  const { data: folder } = useProjectFolder(project.id, !!project.folderPath);
-  if (!project.folderPath)
+/** Repository switcher, issue-sync status and repository actions. */
+function RepoBar({ project, repos, selected, onSelect, onManage }: { project: Project; repos: Repository[]; selected: Repository | null; onSelect: (r: Repository) => void; onManage: () => void }) {
+  const { data: sync } = useProjectRepo(project.id);
+  const autoSync = useSetting("github.autoSync");
+  const [syncing, setSyncing] = useState(false);
+  // Pull issue changes when the tab opens (at most every 10 minutes).
+  useEffect(() => {
+    if (!sync || !autoSync || !sync.syncIssues) return;
+    if (sync.lastSyncedAt && Date.now() - sync.lastSyncedAt < 10 * 60_000) return;
+    void syncProject(project.id, true);
+  }, [sync?.projectId, autoSync]);
+  const isSyncRepo = !!(sync && selected?.github && selected.github.toLowerCase() === sync.fullName.toLowerCase());
+  if (!selected)
     return (
-      <EmptyState compact icon={FolderOpen} action={hasRepo && repoName ? <Button onClick={() => void cloneIntoProject(project.id, repoName)}>Clone a local copy…</Button> : <Button onClick={() => void linkFolder(project)}>Link a folder…</Button>}>
+      <div className="code-banner">
+        <FolderGit2 size={16} />
+        <span className="grow">The linked folder isn't a git repository. You can still run its commands and see its dependencies.</span>
+        <Button size="sm" onClick={() => void linkLocalRepository(project)}>
+          Link a repository…
+        </Button>
+      </div>
+    );
+  const switcher: MenuItems = [
+    ...repos.map((r) => ({ label: r.name, icon: r.localPath ? FolderGit2 : Link2, checked: r.id === selected.id, onSelect: () => onSelect(r) })),
+    { type: "separator" },
+    { label: "Link a local repository…", icon: FolderGit2, onSelect: () => void linkLocalRepository(project) },
+    { label: "Link a GitHub repository…", icon: Plus, onSelect: () => void linkGithubRepository(project) },
+    { label: "Manage repositories…", icon: Settings2, onSelect: onManage },
+  ];
+  return (
+    <div className="code-bar">
+      {selected.localPath ? <FolderGit2 size={16} className="faint" /> : <GithubMark size={16} />}
+      <Dropdown items={switcher} align="start">
+        <button type="button" className="code-bar__repo row" style={{ gap: 4 }}>
+          {selected.name}
+          {selected.isPrimary && repos.length > 1 && <Star size={11} className="faint" />}
+          <ChevronDown size={13} className="faint" />
+        </button>
+      </Dropdown>
+      {selected.github && (
+        <button type="button" className="faint code-bar__meta" onClick={() => void openLink(`https://github.com/${selected.github}`)}>
+          {selected.github}
+        </button>
+      )}
+      {isSyncRepo && sync && (
+        <span className="faint code-bar__meta">
+          · {sync.linkedIssues} linked issue{sync.linkedIssues === 1 ? "" : "s"} · {sync.syncIssues ? (sync.lastSyncedAt ? `synced ${relativeTime(sync.lastSyncedAt)}` : "not synced yet") : "issue sync paused"}
+        </span>
+      )}
+      {isSyncRepo && sync?.lastSyncError && (
+        <Tooltip content={sync.lastSyncError}>
+          <CircleX size={14} className="code-bar__error" aria-label="Last sync failed" />
+        </Tooltip>
+      )}
+      <span className="spacer" />
+      {selected.localPath && selected.localStatus === "ok" && (
+        <IconButton icon={TerminalSquare} label="Open a terminal here" size="sm" onClick={() => void openTerminal({ projectId: project.id, cwd: { kind: "repository", repositoryId: selected.id } })} />
+      )}
+      {isSyncRepo && sync?.syncIssues && (
+        <Button
+          size="sm"
+          icon={RefreshCw}
+          className={syncing ? "spin" : undefined}
+          disabled={syncing}
+          onClick={async () => {
+            setSyncing(true);
+            await syncProject(project.id);
+            setSyncing(false);
+          }}
+        >
+          Sync issues
+        </Button>
+      )}
+      {selected.github && !sync && (
+        <Button size="sm" onClick={() => void connectProject(project, selected.github!).then(refreshRepos)}>
+          Sync issues…
+        </Button>
+      )}
+      <Dropdown
+        align="end"
+        items={[
+          ...repoMenu(project, selected),
+          isSyncRepo && sync && { type: "separator" },
+          isSyncRepo && sync && { label: sync.syncIssues ? "Pause issue sync" : "Resume issue sync", onSelect: () => void api.github.update(project.id, { syncIssues: !sync.syncIssues }).then(() => invalidate("github")) },
+          isSyncRepo && sync && { label: "Include closed issues", checked: sync.importClosed, onSelect: () => void api.github.update(project.id, { importClosed: !sync.importClosed }).then(() => invalidate("github")) },
+          isSyncRepo &&
+            sync && {
+              label: "Stop syncing issues…",
+              icon: Unlink,
+              danger: true,
+              onSelect: async () => {
+                if (!(await confirm({ title: `Stop syncing ${sync.fullName}'s issues?`, message: "Imported tasks stay in the project as ordinary tasks. Nothing changes on GitHub.", confirmLabel: "Stop syncing" }))) return;
+                await api.github.disconnect(project.id);
+                invalidate("github", "tasks", "task", "projects", "project", "repos");
+              },
+            },
+        ]}
+      >
+        <IconButton icon={Ellipsis} label="Repository options" size="sm" noTooltip />
+      </Dropdown>
+    </div>
+  );
+}
+
+/** Git tools need a local copy that's a repository and trusted. */
+function LocalGate({ project, repo, trusted, children }: { project: Project; repo: Repository; trusted: boolean; children: React.ReactNode }) {
+  if (!repo.localPath)
+    return (
+      <EmptyState compact icon={FolderOpen} action={repo.github ? <Button onClick={() => void cloneIntoProject(project.id, repo.github!).then(refreshRepos)}>Clone a local copy…</Button> : undefined}>
         Git tools work on a local copy of the code.
       </EmptyState>
     );
-  if (!localRepo)
+  if (repo.localStatus === "missing")
+    return (
+      <EmptyState compact icon={FolderOpen}>
+        The repository folder can't be found. It may have moved; unlink it and link the new location.
+      </EmptyState>
+    );
+  if (repo.localStatus === "not_repo")
     return (
       <EmptyState compact icon={GitBranch}>
         The linked folder isn't a git repository.
@@ -202,7 +266,7 @@ function LocalGate({
     );
   if (!trusted)
     return (
-      <EmptyState compact icon={ShieldHalf} action={folder && <Button onClick={() => void setFolderTrust(project.id, "trusted", folder)}>Trust folder…</Button>}>
+      <EmptyState compact icon={ShieldHalf} action={<Button onClick={() => void api.repos.setTrust(repo.id, "trusted").then(refreshRepos).catch((e) => toastError(describeError(e)))}>Trust folder</Button>}>
         Git tools run git in the folder, and a repository can run its own scripts through git (hooks and filters). Trust the folder to use them.
       </EmptyState>
     );
@@ -211,8 +275,15 @@ function LocalGate({
 
 // ------------------------------------------------------------ overview
 
-function Overview({ project, connected }: { project: Project; connected: boolean }) {
-  const { data: ov, error, isLoading } = useQuery({ queryKey: ["github", "overview", project.id], queryFn: () => api.github.overview(project.id), enabled: connected, staleTime: 10 * 60_000, retry: false });
+function Overview({ project, repo }: { project: Project; repo: Repository | null }) {
+  const connected = !!repo?.github;
+  const { data: ov, error, isLoading } = useQuery({
+    queryKey: ["github", "overview", project.id, repo?.id],
+    queryFn: () => api.github.overview(project.id, repo?.github ?? null, repo?.localPath ? repo.id : null),
+    enabled: connected,
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
   const total = ov ? ov.languages.reduce((n, [, b]) => n + b, 0) : 0;
   return (
     <div className="code-overview">
@@ -257,6 +328,7 @@ function Overview({ project, connected }: { project: Project; connected: boolean
           )}
         </div>
       )}
+      {!connected && repo?.localPath && <LocalReadme project={project} repo={repo} />}
       {project.folderPath ? <TodoScan project={project} /> : !connected && <EmptyState compact icon={ListTodo}>Link the project's folder to scan its code for TODO comments.</EmptyState>}
     </div>
   );
@@ -398,14 +470,14 @@ function fileLabel(f: GitChangedFile) {
   return { M: "Modified", A: "Added", D: "Deleted", R: "Renamed", C: "Copied", T: "Type changed" }[c] ?? f.code;
 }
 
-function Changes({ project }: { project: Project }) {
-  const { data: st, error, refetch, isFetching } = useQuery({ queryKey: ["git", "status", project.id], queryFn: () => api.git.status(project.id), retry: false, refetchOnWindowFocus: true });
+function Changes({ repo }: { repo: Repository }) {
+  const { data: st, error, refetch, isFetching } = useQuery({ queryKey: ["git", "status", repo.id], queryFn: () => api.git.status(repo.id), retry: false, refetchOnWindowFocus: true });
   const [open, setOpen] = useState<{ path: string; staged: boolean; untracked: boolean } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const run = async (action: "fetch" | "pull" | "push") => {
     setBusy(action);
     try {
-      await api.git.sync(project.id, action);
+      await api.git.sync(repo.id, action);
       toast(action === "fetch" ? "Fetched" : action === "pull" ? "Pulled" : "Pushed");
       invalidate("git");
     } catch (e) {
@@ -475,7 +547,7 @@ function Changes({ project }: { project: Project }) {
                       <span className="truncate grow mono">{f.renamedFrom ? `${f.renamedFrom} → ${f.path}` : f.path}</span>
                       <span className="chip">{fileLabel(f)}</span>
                     </button>
-                    {isOpen && <Diff projectId={project.id} {...key} />}
+                    {isOpen && <Diff repoId={repo.id} {...key} />}
                   </div>
                 );
               })}
@@ -486,8 +558,8 @@ function Changes({ project }: { project: Project }) {
   );
 }
 
-function Diff({ projectId, path, staged, untracked }: { projectId: string; path: string; staged: boolean; untracked: boolean }) {
-  const { data, error } = useQuery({ queryKey: ["git", "diff", projectId, path, staged], queryFn: () => api.git.diff(projectId, path, staged, untracked), retry: false });
+function Diff({ repoId, path, staged, untracked }: { repoId: string; path: string; staged: boolean; untracked: boolean }) {
+  const { data, error } = useQuery({ queryKey: ["git", "diff", repoId, path, staged], queryFn: () => api.git.diff(repoId, path, staged, untracked), retry: false });
   if (error) return <div className="diff faint">{describeError(error)}</div>;
   if (data === undefined) return <Skeleton height={60} />;
   const lines = data.split("\n").filter((l) => !/^(diff --git|index |--- |\+\+\+ |new file mode|deleted file mode)/.test(l));
@@ -509,12 +581,12 @@ function Diff({ projectId, path, staged, untracked }: { projectId: string; path:
 
 // ------------------------------------------------------------ branches
 
-function Branches({ project }: { project: Project }) {
-  const { data: branches, error } = useQuery({ queryKey: ["git", "branches", project.id], queryFn: () => api.git.branches(project.id), retry: false });
+function Branches({ repo }: { repo: Repository }) {
+  const { data: branches, error } = useQuery({ queryKey: ["git", "branches", repo.id], queryFn: () => api.git.branches(repo.id), retry: false });
   const [showRemote, setShowRemote] = useState(false);
   const switchTo = async (name: string, create = false) => {
     try {
-      await api.git.switch(project.id, name, create);
+      await api.git.switch(repo.id, name, create);
       toast(create ? `Created and switched to ${name}` : `Switched to ${name}`);
     } catch (e) {
       toastError(describeError(e, "Couldn't switch branch."));
@@ -566,7 +638,7 @@ function Branches({ project }: { project: Project }) {
             </button>
           ))}
       </div>
-      <History project={project} />
+      <History repo={repo} />
     </div>
   );
 }
@@ -586,12 +658,12 @@ function segment(e: Edge, y1: number, y2: number) {
 }
 
 /** Commit history drawn as a graph: lanes, merges and branch/tag labels. */
-function History({ project }: { project: Project }) {
+function History({ repo }: { repo: Repository }) {
   const [all, setAll] = useState(true);
   const [limit, setLimit] = useState(80);
   const { data: log, error, isFetching } = useQuery({
-    queryKey: ["git", "log", project.id, all, limit],
-    queryFn: () => api.git.log(project.id, limit, all),
+    queryKey: ["git", "log", repo.id, all, limit],
+    queryFn: () => api.git.log(repo.id, limit, all),
     retry: false,
     placeholderData: (prev) => prev,
   });
@@ -682,8 +754,8 @@ const REVIEW: Record<PullInfo["review"], string> = {
   none: "Awaiting review",
 };
 
-function Pulls({ project }: { project: Project }) {
-  const { data, error, isFetching, refetch } = useQuery({ queryKey: ["github", "pulls", project.id], queryFn: () => api.github.pulls(project.id), retry: false, staleTime: 60_000 });
+function Pulls({ project, repo }: { project: Project; repo: Repository }) {
+  const { data, error, isFetching, refetch } = useQuery({ queryKey: ["github", "pulls", project.id, repo.github], queryFn: () => api.github.pulls(project.id, repo.github), retry: false, staleTime: 60_000 });
   if (error) return <EmptyState compact icon={GitPullRequest}>{describeError(error, "Couldn't load pull requests.")}</EmptyState>;
   if (!data) return <Skeleton height={80} />;
   return (
@@ -736,4 +808,20 @@ function Pulls({ project }: { project: Project }) {
       </span>
     </div>
   );
+}
+
+/** README from a local repository without GitHub. */
+function LocalReadme({ project, repo }: { project: Project; repo: Repository }) {
+  const { data } = useQuery({
+    queryKey: ["files", "readme", repo.id],
+    queryFn: async () => {
+      for (const n of ["README.md", "readme.md", "README.markdown", "README.txt", "README"]) {
+        const r = await api.folders.read(project.id, n, repo.id).catch(() => null);
+        if (r) return r.text.slice(0, 64 * 1024);
+      }
+      return null;
+    },
+    staleTime: 5 * 60_000,
+  });
+  return data ? <Readme text={data} source="local" /> : null;
 }

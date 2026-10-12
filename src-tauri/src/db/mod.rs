@@ -112,4 +112,38 @@ mod tests {
         // A safety copy was written before migrating.
         assert_eq!(std::fs::read_dir(&safety).unwrap().count(), 1);
     }
+
+    #[test]
+    fn v3_projects_gain_phase_three_without_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("kern.db");
+        {
+            let conn = Connection::open(&path).unwrap();
+            configure(&conn).unwrap();
+            for (i, sql) in migrations::MIGRATIONS[..3].iter().enumerate() {
+                let tx = conn.unchecked_transaction().unwrap();
+                tx.execute_batch(sql).unwrap();
+                tx.execute_batch(&format!("PRAGMA user_version = {}", i + 1)).unwrap();
+                tx.commit().unwrap();
+            }
+            conn.execute_batch(
+                "INSERT INTO projects(id, name, created_at, updated_at) VALUES ('p1', 'Reactor', 1, 1);
+                 INSERT INTO tasks(id, title, project_id, status, created_at, updated_at) VALUES ('t1', 'Cooling', 'p1', 'todo', 1, 1);
+                 INSERT INTO project_repos(project_id, owner, name, connected_at) VALUES ('p1', 'acme', 'reactor', 1);
+                 INSERT INTO task_issue_links(repo, issue_number, task_id, project_id, html_url, synced_at) VALUES ('acme/reactor', 7, 't1', 'p1', 'u', 1);",
+            )
+            .unwrap();
+        }
+        let conn = open(&path, &dir.path().join("backups")).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), SCHEMA_VERSION);
+        let t = crate::domain::tasks::get_task(&conn, "t1").unwrap();
+        assert_eq!((t.title.as_str(), t.milestone_id, t.issue.map(|i| i.number)), ("Cooling", None, Some(7)));
+        // The existing GitHub connection shows up as a repository link, unchanged.
+        let repos = crate::domain::repos::list(&conn, "p1").unwrap();
+        assert_eq!(repos.len(), 1);
+        assert_eq!(repos[0].github.as_deref(), Some("acme/reactor"));
+        assert!(repos[0].issue_sync);
+        let p = crate::domain::projects::get_project(&conn, "p1").unwrap();
+        assert_eq!(p.github_repo.as_deref(), Some("acme/reactor"));
+    }
 }

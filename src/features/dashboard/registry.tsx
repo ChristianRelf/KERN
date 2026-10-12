@@ -14,6 +14,9 @@ import {
   Sunrise,
   Timer,
   HardDrive,
+  Hourglass,
+  Flag,
+  RotateCcw,
 } from "lucide-react";
 import { StorageWidget } from "@/features/storage/StorageWidget";
 import type { WidgetDef, WidgetConfig } from "./types";
@@ -50,6 +53,8 @@ import {
 } from "./widgets/MiscWidgets";
 import { ProgressWidget, ProgressConfigForm, WeeklyActivityWidget, CalendarWidget, type ProgressConfig } from "./widgets/StatsWidgets";
 import { FocusWidgetBody } from "@/features/focus/FocusControls";
+import { MilestonesWidget, ResumeWidget, TimeWidget, type MilestonesWidgetConfig } from "./widgets/WorkWidgets";
+import { Segmented } from "@/components/ui/Controls";
 
 function def<C extends WidgetConfig>(d: WidgetDef<C>): WidgetDef {
   return d as unknown as WidgetDef;
@@ -231,4 +236,52 @@ export const WIDGETS: WidgetDef[] = [
   }),
 ];
 
-export const WIDGET_MAP = new Map(WIDGETS.map((w) => [w.type, w]));
+/** Opt-in widgets: not on any default layout. */
+export const EXTRA_WIDGETS: WidgetDef[] = [
+  def({
+    type: "resume",
+    name: "Resume Work",
+    description: "Return to the project and task you were working on.",
+    icon: RotateCcw,
+    defaultConfig: {},
+    defaultSize: { w: 4, h: 5 },
+    minSize: { w: 3, h: 3 },
+    Component: ResumeWidget,
+    single: true,
+  }),
+  def({
+    type: "time",
+    name: "Time",
+    description: "Time tracked in work sessions today and this week.",
+    icon: Hourglass,
+    defaultConfig: {},
+    defaultSize: { w: 4, h: 6 },
+    minSize: { w: 3, h: 4 },
+    Component: TimeWidget,
+    single: true,
+  }),
+  def<MilestonesWidgetConfig>({
+    type: "milestones",
+    name: "Milestones",
+    description: "Upcoming milestones across your projects.",
+    icon: Flag,
+    defaultConfig: { days: 30 },
+    defaultSize: { w: 4, h: 6 },
+    minSize: { w: 3, h: 3 },
+    Component: MilestonesWidget,
+    Config: ({ config, setConfig }) => (
+      <div className="row" style={{ justifyContent: "space-between", fontSize: "var(--fs-sm)", gap: 12 }}>
+        <span className="muted">Look ahead</span>
+        <Segmented size="sm" value={String(config.days)} onChange={(v) => setConfig({ days: Number(v) })} options={[14, 30, 90, 180].map((d) => ({ value: String(d), label: `${d}d` }))} />
+      </div>
+    ),
+    title: (c) => `Milestones · ${c.days} days`,
+  }),
+];
+
+export const WIDGET_GROUPS: { title?: string; defs: WidgetDef[] }[] = [
+  { defs: WIDGETS },
+  { title: "Time & planning", defs: EXTRA_WIDGETS },
+];
+
+export const WIDGET_MAP = new Map([...WIDGETS, ...EXTRA_WIDGETS].map((w) => [w.type, w]));

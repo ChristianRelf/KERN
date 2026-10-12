@@ -6,6 +6,7 @@ import type { TaskStatus } from "@/lib/types";
 export type InspectorTarget =
   | { kind: "task"; id: string }
   | { kind: "project"; id: string }
+  | { kind: "milestone"; id: string }
   | null;
 
 export type CaptureMode = "task" | "note" | "idea";
@@ -35,6 +36,12 @@ interface UiState {
   inspectorPinned: boolean;
   shortcutsOpen: boolean;
   briefingPrompt: "morning" | "evening" | null;
+  /** A file to show in the viewer (from search or a restored workspace). */
+  openFile: { projectId: string; rel: string; repositoryId?: string | null } | null;
+  /** Task the "Start work" dialog is open for. */
+  startWorkTaskId: string | null;
+  /** Project the catch-up dialog is open for. */
+  catchupProjectId: string | null;
   /** Multi-selection within the active task list. */
   selectedTaskIds: string[];
   selectionAnchor: string | null;
@@ -61,6 +68,9 @@ export const useUi = create<UiState>((set) => ({
   inspectorPinned: false,
   shortcutsOpen: false,
   briefingPrompt: null,
+  openFile: null,
+  startWorkTaskId: null,
+  catchupProjectId: null,
   selectedTaskIds: [],
   selectionAnchor: null,
   openInspector: (t) => set({ inspector: t }),

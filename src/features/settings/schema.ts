@@ -101,6 +101,7 @@ export interface Settings {
   "projects.showFolderInOverview": boolean;
   "projects.rememberTrust": boolean;
   "projects.showFilesTab": boolean;
+  "projects.resume": "resume" | "overview" | "lastTab" | "ask";
   "boards.defaultCardDensity": "compact" | "expanded";
   "boards.columnWidth": number;
   // Whiteboards
@@ -176,6 +177,17 @@ export interface Settings {
   "github.auth": "auto" | "cli" | "token";
   "github.autoSync": boolean;
   "github.pushOnEdit": boolean;
+  // Developer tools (all optional)
+  "dev.editor": string;
+  "terminal.shell": string;
+  "terminal.defaultCwd": string;
+  "terminal.fontSize": number;
+  /** "all": every terminal stays visible; "project": only the open project's tabs (others keep running). */
+  "terminal.scope": "all" | "project";
+  "services.pollWhileOpen": boolean;
+  "search.indexFiles": boolean;
+  "search.codeSearch": boolean;
+  "sessions.gapPrompt": boolean;
   // Performance
   "performance.reduceBackground": boolean;
   "performance.cacheMinutes": number;
@@ -259,6 +271,7 @@ export const DEFAULTS: Settings = {
   "projects.showFolderInOverview": true,
   "projects.rememberTrust": true,
   "projects.showFilesTab": true,
+  "projects.resume": "resume",
   "boards.defaultCardDensity": "compact",
   "boards.columnWidth": 288,
 
@@ -334,6 +347,16 @@ export const DEFAULTS: Settings = {
   "github.auth": "auto",
   "github.autoSync": true,
   "github.pushOnEdit": true,
+
+  "dev.editor": "",
+  "terminal.shell": "",
+  "terminal.defaultCwd": "",
+  "terminal.fontSize": 12.5,
+  "terminal.scope": "all",
+  "services.pollWhileOpen": true,
+  "search.indexFiles": true,
+  "search.codeSearch": true,
+  "sessions.gapPrompt": true,
 
   "performance.reduceBackground": false,
   "performance.cacheMinutes": 5,

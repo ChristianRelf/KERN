@@ -27,6 +27,8 @@ export const SHORTCUTS: ShortcutDef[] = [
   { id: "rundown", label: "Daily rundown", group: "General", default: "Mod+Shift+D" },
   { id: "shortcuts", label: "Keyboard shortcuts", group: "General", default: "Mod+/" },
   { id: "undo", label: "Undo last action", group: "General", default: "Mod+Z" },
+  { id: "toggleTerminal", label: "Toggle terminal", group: "General", default: "Mod+`", global: true },
+  { id: "resumeWork", label: "Resume work", group: "General", default: "Mod+Shift+R" },
   { id: "goDashboard", label: "Go to Dashboard", group: "Navigation", default: "Mod+1" },
   { id: "goTasks", label: "Go to My Tasks", group: "Navigation", default: "Mod+2" },
   { id: "goInbox", label: "Go to Inbox", group: "Navigation", default: "Mod+3" },
@@ -113,6 +115,7 @@ export function comboFromEvent(e: KeyboardEvent | React.KeyboardEvent): string |
   else if (code === "Slash") key = "/";
   else if (code === "Comma") key = ",";
   else if (code === "Period") key = ".";
+  else if (code === "Backquote") key = "`";
   else if (code === "Space") key = "Space";
   else if (key.length === 1) key = key.toUpperCase();
   const parts: string[] = [];

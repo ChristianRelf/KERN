@@ -6,6 +6,7 @@ import { useSetting, setSetting } from "@/stores/settings";
 import { IconButton } from "@/components/ui/Button";
 import { TaskDetail } from "@/features/tasks/TaskDetail";
 import { ProjectSummary } from "@/features/projects/ProjectSummary";
+import { MilestoneDetail } from "@/features/milestones/MilestoneDetail";
 import { navigate } from "@/stores/router";
 import { useTask } from "@/hooks/data";
 import { resolveBindings } from "@/lib/shortcuts";
@@ -49,7 +50,7 @@ export function Inspector() {
       <div className="resize-handle inspector-resize" data-dragging={live !== null} onPointerDown={startResize} role="separator" aria-label="Resize details panel" />
       <div className="inspector__head">
         <span className="faint" style={{ fontSize: "var(--fs-sm)" }}>
-          {target.kind === "task" ? (task?.parentId ? "Subtask" : "Task") : "Project"}
+          {target.kind === "task" ? (task?.parentId ? "Subtask" : "Task") : target.kind === "milestone" ? "Milestone" : "Project"}
         </span>
         <span className="spacer" />
         {target.kind === "task" && (
@@ -76,7 +77,7 @@ export function Inspector() {
         <IconButton icon={PanelRightClose} label="Close panel" shortcut={shortcuts.closeInspector} size="sm" onClick={close} />
       </div>
       <div className="inspector__body">
-        {target.kind === "task" ? <TaskDetail id={target.id} onClose={close} /> : <ProjectSummary id={target.id} />}
+        {target.kind === "task" ? <TaskDetail id={target.id} onClose={close} /> : target.kind === "milestone" ? <MilestoneDetail id={target.id} /> : <ProjectSummary id={target.id} />}
       </div>
     </aside>
   );

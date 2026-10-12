@@ -32,7 +32,7 @@ export type Route =
   | { name: "tasks"; view?: TasksView }
   | { name: "inbox" }
   | { name: "projects" }
-  | { name: "project"; id: string; tab?: ProjectTab; boardId?: string; whiteboardId?: string }
+  | { name: "project"; id: string; tab?: ProjectTab; boardId?: string; whiteboardId?: string; /** Column to bring into view on the board. */ column?: string }
   | { name: "whiteboards" }
   | { name: "whiteboard"; id: string }
   | { name: "notes"; id?: string }
@@ -43,6 +43,7 @@ export type Route =
   | { name: "api"; tab?: ApiTab }
   | { name: "trash" }
   | { name: "focus" }
+  | { name: "sessions"; projectId?: string }
   | { name: "rundown"; day?: string; mode?: "morning" | "evening" }
   | { name: "task"; id: string };
 

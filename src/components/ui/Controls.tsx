@@ -26,15 +26,18 @@ export function Checkbox({
   onChange,
   label,
   indeterminate,
+  disabled,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   label?: string;
   indeterminate?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <RCheckbox.Root
       className="checkbox"
+      disabled={disabled}
       checked={indeterminate ? "indeterminate" : checked}
       onCheckedChange={(v) => onChange(v === true)}
       aria-label={label}

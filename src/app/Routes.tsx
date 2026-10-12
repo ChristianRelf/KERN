@@ -20,6 +20,7 @@ const SearchPage = lazy(() => import("@/features/search/SearchPage"));
 const TrashPage = lazy(() => import("@/features/trash/TrashPage"));
 const FocusPage = lazy(() => import("@/features/focus/FocusPage"));
 const RundownPage = lazy(() => import("@/features/daily-briefing/RundownPage"));
+const SessionsPage = lazy(() => import("@/features/sessions/SessionsPage"));
 
 export function Routes() {
   const route = useRouter((s) => s.route);
@@ -69,6 +70,9 @@ export function Routes() {
       break;
     case "focus":
       page = <FocusPage />;
+      break;
+    case "sessions":
+      page = <SessionsPage projectId={route.projectId} />;
       break;
     case "rundown":
       page = <RundownPage key={`${route.day ?? "today"}-${route.mode ?? "morning"}`} day={route.day} mode={route.mode} />;

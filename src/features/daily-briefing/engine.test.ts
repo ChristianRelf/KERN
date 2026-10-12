@@ -66,6 +66,7 @@ function project(p: Partial<Project>): Project {
     folderTrust: null,
     aiPrefs: {},
     githubRepo: null,
+    prevOpenedAt: null,
     ...p,
   };
 }

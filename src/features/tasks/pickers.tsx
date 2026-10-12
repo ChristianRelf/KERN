@@ -15,7 +15,7 @@ import { getSetting } from "@/stores/settings";
 
 // ------------------------------------------------------------ list popover
 
-function FilterList<T>({
+export function FilterList<T>({
   items,
   placeholder,
   render,

@@ -42,6 +42,15 @@ export interface Task {
   attachmentCount: number;
   /** Linked GitHub issue. */
   issue?: { repo: string; number: number; url: string } | null;
+  milestoneId?: string | null;
+  /** Explicitly linked development resources. */
+  devLinks?: DevLinkRef[];
+}
+
+export interface DevLinkRef {
+  kind: DevLinkKind;
+  repositoryId: string | null;
+  ref: string;
 }
 
 export interface TaskQuery {
@@ -65,6 +74,8 @@ export interface TaskQuery {
   topLevelOnly?: boolean;
   includeArchived?: boolean;
   pinned?: boolean;
+  milestoneIds?: string[];
+  noMilestone?: boolean;
   limit?: number;
   order?: TaskOrder;
 }
@@ -89,6 +100,7 @@ export interface TaskInput {
   reminderMinutes?: number | null;
   sortOrder?: number;
   boardOrder?: number;
+  milestoneId?: string | null;
 }
 
 export interface TaskPatch {
@@ -113,6 +125,7 @@ export interface TaskPatch {
   addLabelIds?: string[];
   removeLabelIds?: string[];
   addTrackedSeconds?: number;
+  milestoneId?: string | null;
 }
 
 export interface TaskUpdateResult {
@@ -128,7 +141,7 @@ export interface Label {
   taskCount: number;
 }
 
-export type ProjectTab = "overview" | "tasks" | "board" | "whiteboard" | "notes" | "files" | "code" | "activity";
+export type ProjectTab = "overview" | "tasks" | "board" | "whiteboard" | "notes" | "milestones" | "files" | "code" | "activity";
 
 export interface Project {
   id: string;
@@ -159,6 +172,8 @@ export interface Project {
   aiPrefs: ProjectAiPrefs;
   /** Connected GitHub repository, "owner/name". */
   githubRepo: string | null;
+  /** When the project was opened before the current visit. */
+  prevOpenedAt: number | null;
 }
 
 export type Trust = "trusted" | "restricted";
@@ -170,6 +185,8 @@ export interface ProjectAiPrefs {
   model?: string | null;
   /** Allow AI features to read this project's linked folder. */
   fileAccess?: boolean;
+  /** Allow AI features (catch-up) to use this project's tasks, notes and activity. Default true. */
+  contentAccess?: boolean;
 }
 
 export interface FolderInfo {
@@ -281,7 +298,18 @@ export interface BoardSettings {
   groupBy?: "none" | "priority" | "label";
   background?: "plain" | "dots" | "lines" | "sunken";
   showCompleted?: boolean;
-  filter?: { search?: string; priorities?: number[]; labelIds?: string[] };
+  filter?: {
+    search?: string;
+    priorities?: number[];
+    labelIds?: string[];
+    milestoneIds?: string[];
+    repositoryIds?: string[];
+    /** Only cards linked to a branch or worktree. */
+    hasBranch?: boolean;
+    /** Only the card of the active work session. */
+    inSession?: boolean;
+    due?: "overdue" | "week" | "none";
+  };
 }
 
 export interface Board {
@@ -519,8 +547,10 @@ export interface RecentItem {
   openedAt: number;
 }
 
+export type SearchScope = "all" | "tasks" | "projects" | "notes" | "files" | "code" | "github" | "commands";
+
 export interface SearchHit {
-  kind: "task" | "project" | "note" | "board" | "whiteboard" | "wb_node" | "label" | "view";
+  kind: "task" | "project" | "note" | "board" | "whiteboard" | "wb_node" | "label" | "view" | "milestone" | "command" | "snapshot" | "issue" | "pull";
   id: string;
   parentId: string | null;
   title: string;
@@ -950,4 +980,719 @@ export interface RepoOverview {
   languages: [string, number][];
   readme: string | null;
   readmeSource: "local" | "github" | null;
+}
+
+// ------------------------------------------------------------ phase 3: repositories & git
+
+export interface Repository {
+  id: string;
+  projectId: string;
+  name: string;
+  alias: string | null;
+  localPath: string | null;
+  github: string | null;
+  isPrimary: boolean;
+  sortOrder: number;
+  localStatus: "ok" | "missing" | "not_repo" | "none";
+  trust: Trust | null;
+  issueSync: boolean;
+  createdAt: number;
+}
+
+export interface RepoSummaryInfo {
+  repositoryId: string;
+  available: boolean;
+  reason: string | null;
+  branch: string | null;
+  detached: boolean;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  changed: number;
+  untracked: number;
+  conflicted: number;
+  lastCommit: GitCommit | null;
+}
+
+export interface BranchCheck {
+  valid: boolean;
+  exists: boolean;
+  message: string | null;
+}
+
+export interface Worktree {
+  repositoryId: string;
+  id: string | null;
+  path: string;
+  name: string;
+  alias: string | null;
+  branch: string | null;
+  head: string | null;
+  detached: boolean;
+  isMain: boolean;
+  locked: string | null;
+  prunable: boolean;
+  taskId: string | null;
+  taskTitle: string | null;
+  agent: string | null;
+  createdByKern: boolean;
+  trust: Trust | null;
+  changed: number | null;
+  untracked: number | null;
+  ahead: number | null;
+  behind: number | null;
+  lastActivity: number | null;
+}
+
+export interface WorktreeInput {
+  repositoryId: string;
+  branch: string;
+  newBranch: boolean;
+  base?: string | null;
+  path?: string | null;
+  taskId?: string | null;
+  alias?: string | null;
+  trust: boolean;
+}
+
+export interface WorktreeInspection {
+  path: string;
+  exists: boolean;
+  isMain: boolean;
+  locked: string | null;
+  branch: string | null;
+  modified: string[];
+  untracked: string[];
+  modifiedCount: number;
+  untrackedCount: number;
+  unpushed: number | null;
+  merged: boolean | null;
+  inUse: string[];
+}
+
+export type DevLinkKind = "repository" | "branch" | "worktree" | "pull" | "commit";
+
+export interface DevLink {
+  id: string;
+  taskId: string;
+  kind: DevLinkKind;
+  repositoryId: string | null;
+  repositoryName: string | null;
+  ref: string;
+  title: string | null;
+  url: string | null;
+  createdAt: number;
+}
+
+export interface LinkedPull {
+  repository: string;
+  number: number;
+  title: string;
+  url: string;
+  head: string;
+  checks: PullInfo["checks"];
+  review: PullInfo["review"];
+  draft: boolean;
+  inferred: boolean;
+}
+
+export interface TaskDevContext {
+  links: DevLink[];
+  pulls: LinkedPull[];
+  sessionSeconds: number;
+  sessionCount: number;
+  activeSessionId: string | null;
+}
+
+// ------------------------------------------------------------ sessions
+
+export interface SessionLink {
+  id: string;
+  kind: "commit" | "pull" | "issue";
+  repositoryId: string | null;
+  ref: string;
+  title: string | null;
+  url: string | null;
+}
+
+export interface WorkSession {
+  id: string;
+  projectId: string | null;
+  projectName: string | null;
+  taskId: string | null;
+  taskTitle: string | null;
+  repositoryId: string | null;
+  repositoryName: string | null;
+  branch: string | null;
+  worktreeId: string | null;
+  milestoneId: string | null;
+  milestoneTitle: string | null;
+  note: string;
+  startedAt: number;
+  endedAt: number | null;
+  pausedMs: number;
+  pausedAt: number | null;
+  lastSeenAt: number;
+  status: "running" | "paused" | "ended";
+  elapsedMs: number;
+  gapMs: number | null;
+  links: SessionLink[];
+}
+
+export interface SessionInput {
+  projectId?: string | null;
+  taskId?: string | null;
+  repositoryId?: string | null;
+  branch?: string | null;
+  worktreeId?: string | null;
+  milestoneId?: string | null;
+  note?: string | null;
+}
+
+export interface SessionBucket {
+  key: string | null;
+  label: string;
+  ms: number;
+  sessions: number;
+}
+
+export interface SessionReport {
+  totalMs: number;
+  sessions: number;
+  byDay: SessionBucket[];
+  byProject: SessionBucket[];
+  byTask: SessionBucket[];
+}
+
+// ------------------------------------------------------------ workspace
+
+export interface WorkspaceSnapshot {
+  id: string;
+  projectId: string;
+  name: string;
+  state: WorkspaceState;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Lightweight per-project UI context (ids, paths, viewport), never content. */
+export interface WorkspaceState {
+  tab?: ProjectTab;
+  boardId?: string | null;
+  whiteboardId?: string | null;
+  taskId?: string | null;
+  noteId?: string | null;
+  repositoryId?: string | null;
+  worktreePath?: string | null;
+  codeSection?: string | null;
+  openFile?: { rel: string; repositoryId?: string | null } | null;
+  files?: { rel: string; repositoryId?: string | null }[];
+  terminals?: { title: string; cwd: string; shell: string }[];
+  terminalOpen?: boolean;
+  terminalHeight?: number;
+  inspectorWidth?: number;
+  savedAt?: number;
+}
+
+export interface ProjectLayout {
+  projectId: string;
+  preset: string | null;
+  widgets: WidgetInstance[];
+  layouts: GridLayouts;
+  updatedAt: number;
+}
+
+export interface ProjectCapabilities {
+  hasFolder: boolean;
+  repositories: number;
+  localRepositories: number;
+  githubRepositories: number;
+  issueSync: boolean;
+  commands: number;
+  services: number;
+  envProfiles: number;
+  milestones: number;
+  worktrees: number;
+  aiAccounts: number;
+}
+
+// ------------------------------------------------------------ milestones
+
+export type MilestoneStatus = "planned" | "active" | "completed" | "cancelled";
+
+export interface ReleaseLink {
+  id: string;
+  kind: "pull" | "issue";
+  ref: string;
+  title: string | null;
+  url: string | null;
+}
+
+export interface Milestone {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+  targetDate: string | null;
+  status: MilestoneStatus;
+  progressMode: "tasks" | "manual";
+  manualProgress: number;
+  isRelease: boolean;
+  version: string | null;
+  repositoryId: string | null;
+  releaseNotes: string;
+  releaseUrl: string | null;
+  sortOrder: number;
+  completedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+  taskTotal: number;
+  taskDone: number;
+  progress: number;
+  overdue: boolean;
+  dependsOn: string[];
+  blockedBy: string[];
+  links: ReleaseLink[];
+}
+
+export interface MilestoneInput {
+  projectId: string;
+  title: string;
+  description?: string;
+  targetDate?: string | null;
+  status?: MilestoneStatus;
+  isRelease?: boolean;
+  version?: string | null;
+  repositoryId?: string | null;
+}
+
+export interface MilestonePatch {
+  title?: string;
+  description?: string;
+  targetDate?: string | null;
+  status?: MilestoneStatus;
+  progressMode?: "tasks" | "manual";
+  manualProgress?: number;
+  isRelease?: boolean;
+  version?: string | null;
+  repositoryId?: string | null;
+  releaseNotes?: string;
+  releaseUrl?: string | null;
+  sortOrder?: number;
+}
+
+// ------------------------------------------------------------ environment, commands, terminal
+
+export interface Tech {
+  id: string;
+  name: string;
+  kind: "language" | "framework" | "runtime" | "tool" | "engine" | "package-manager";
+  evidence: string;
+}
+
+export interface DetectedCommand {
+  name: string;
+  program: string;
+  args: string[];
+  cwd: string;
+  category: "dev" | "build" | "test" | "lint" | "preview" | "run" | "other";
+  source: string;
+  detail: string | null;
+}
+
+export interface Runtime {
+  id: string;
+  name: string;
+  program: string;
+  available: boolean;
+  path: string | null;
+  helpUrl: string;
+}
+
+export interface DevEnvironment {
+  root: string;
+  techs: Tech[];
+  packageManager: string | null;
+  commands: DetectedCommand[];
+  runtimes: Runtime[];
+  branch: string | null;
+  scannedDirs: number;
+}
+
+export interface SavedCommand {
+  id: string;
+  projectId: string;
+  repositoryId: string | null;
+  name: string;
+  program: string;
+  args: string[];
+  cwd: string;
+  envProfileId: string | null;
+  confirm: boolean;
+  pinned: boolean;
+  sortOrder: number;
+}
+
+export interface CommandInput {
+  id?: string | null;
+  projectId: string;
+  repositoryId?: string | null;
+  name: string;
+  program: string;
+  args: string[];
+  cwd: string;
+  envProfileId?: string | null;
+  confirm: boolean;
+  pinned: boolean;
+}
+
+export interface Shell {
+  id: string;
+  name: string;
+  program: string;
+  args: string[];
+}
+
+export type CwdTarget =
+  | { kind: "project"; projectId: string; rel?: string | null }
+  | { kind: "repository"; repositoryId: string; rel?: string | null }
+  | { kind: "worktree"; repositoryId: string; path: string }
+  | { kind: "default" };
+
+export interface RunSpec {
+  commandId?: string | null;
+  program?: string | null;
+  args?: string[];
+  envProfileId?: string | null;
+}
+
+export interface PtySpawnInput {
+  cwd: CwdTarget;
+  shell?: string | null;
+  run?: RunSpec | null;
+  projectId?: string | null;
+  title?: string | null;
+  cols: number;
+  rows: number;
+}
+
+export interface PtyInfo {
+  id: string;
+  title: string;
+  projectId: string | null;
+  cwd: string;
+  shell: string;
+  command: string | null;
+  commandId: string | null;
+  startedAt: number;
+  exitCode: number | null;
+  running: boolean;
+}
+
+export interface EnvVar {
+  id: string;
+  profileId: string;
+  name: string;
+  kind: "plain" | "secret" | "inherit";
+  value: string | null;
+  hasSecret: boolean;
+}
+
+export interface EnvProfile {
+  id: string;
+  projectId: string;
+  name: string;
+  variables: EnvVar[];
+}
+
+export interface EnvVarInput {
+  profileId: string;
+  id?: string | null;
+  name: string;
+  kind: EnvVar["kind"];
+  value?: string | null;
+}
+
+// ------------------------------------------------------------ services
+
+export interface ServiceCheck {
+  status: ServiceStatus;
+  latencyMs: number | null;
+  detail: string | null;
+  checkedAt: number;
+}
+
+export type ServiceStatus = "running" | "stopped" | "degraded" | "unknown";
+
+export interface LocalService {
+  id: string;
+  projectId: string;
+  name: string;
+  url: string;
+  healthPath: string | null;
+  expectStatus: string | null;
+  expectText: string | null;
+  commandId: string | null;
+  repositoryId: string | null;
+  intervalSecs: number;
+  enabled: boolean;
+  status: ServiceStatus;
+  healthy: boolean | null;
+  detail: string | null;
+  latencyMs: number | null;
+  checkedAt: number | null;
+  history: ServiceCheck[];
+}
+
+export interface ServiceInput {
+  id?: string | null;
+  projectId: string;
+  name: string;
+  url: string;
+  healthPath?: string | null;
+  expectStatus?: string | null;
+  expectText?: string | null;
+  commandId?: string | null;
+  repositoryId?: string | null;
+  intervalSecs?: number;
+  enabled?: boolean;
+}
+
+export interface Container {
+  id: string;
+  name: string;
+  image: string;
+  state: string;
+  status: string;
+  ports: string;
+}
+
+// ------------------------------------------------------------ dependencies
+
+export interface DepPackage {
+  name: string;
+  ecosystem: string;
+  declared: string | null;
+  resolved: string | null;
+  direct: boolean | null;
+  group: "prod" | "dev" | "peer" | "optional" | "build";
+  manifest: string;
+}
+
+export interface DepManifest {
+  path: string;
+  ecosystem: string;
+  lockfile: string | null;
+}
+
+export interface DepReport {
+  root: string;
+  scannedAt: number;
+  manifests: DepManifest[];
+  packages: DepPackage[];
+  edges: [string, string][];
+  truncated: boolean;
+}
+
+export interface Advisory {
+  id: string;
+  summary: string | null;
+  aliases: string[];
+  severity: string | null;
+  affected: string | null;
+  fixed: string | null;
+  url: string;
+}
+
+export interface AdvisoryFinding {
+  name: string;
+  ecosystem: string;
+  version: string;
+  advisories: Advisory[];
+}
+
+export interface AdvisoryReport {
+  checkedAt: number;
+  checked: number;
+  unchecked: number;
+  findings: AdvisoryFinding[];
+  source: string;
+}
+
+// ------------------------------------------------------------ health & catch-up
+
+export interface HealthPrefs {
+  overdue: boolean;
+  blocked: boolean;
+  dueSoon: boolean;
+  dueSoonDays: number;
+  milestones: boolean;
+  stale: boolean;
+  staleDays: number;
+  ci: boolean;
+  workflows: string[];
+  pulls: boolean;
+  dependencies: boolean;
+  services: boolean;
+  repositories: string[];
+}
+
+export interface HealthItem {
+  key: string;
+  label: string;
+  count: number;
+  severity: "info" | "warning" | "critical";
+  target: "tasks" | "milestones" | "build" | "pulls" | "dependencies" | "services";
+  targetRef: string | null;
+}
+
+export interface ProjectHealth {
+  state: "on_track" | "needs_attention" | "blocked" | "no_data";
+  items: HealthItem[];
+  prefs: HealthPrefs;
+  checkedAt: number;
+}
+
+export interface CatchupInclude {
+  tasks: boolean;
+  notes: boolean;
+  milestones: boolean;
+  sessions: boolean;
+  commits: boolean;
+  github: boolean;
+}
+
+export interface CatchupSource {
+  id: string;
+  kind: "task" | "note" | "milestone" | "commit" | "pull" | "issue" | "run" | "session";
+  refId: string;
+  title: string;
+  detail: string | null;
+  url: string | null;
+  repositoryId: string | null;
+  at: number | null;
+  category: string;
+}
+
+export interface CatchupLine {
+  text: string;
+  sources: string[];
+}
+
+export interface CatchupDigest {
+  projectId: string;
+  projectName: string;
+  from: number;
+  to: number;
+  whatChanged: CatchupLine[];
+  completed: CatchupLine[];
+  needsAttention: CatchupLine[];
+  nextSteps: CatchupLine[];
+  sources: CatchupSource[];
+  counts: Record<string, number>;
+}
+
+export interface CatchupPreview {
+  categories: [string, number][];
+  sources: number;
+  chars: number;
+  approxTokens: number;
+  allowed: boolean;
+  blockedReason: string | null;
+}
+
+export interface CatchupAi {
+  whatChanged: CatchupLine[];
+  completed: CatchupLine[];
+  needsAttention: CatchupLine[];
+  nextSteps: CatchupLine[];
+  sources: CatchupSource[];
+  dropped: number;
+  model: string | null;
+  accountName: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  estimatedCost: number | null;
+}
+
+// ------------------------------------------------------------ GitHub (more)
+
+export interface WorkflowRun {
+  id: number;
+  workflowId: number;
+  workflow: string;
+  title: string;
+  branch: string;
+  event: string;
+  status: string;
+  conclusion: string | null;
+  htmlUrl: string;
+  createdAt: string;
+  runNumber: number;
+  actor: string;
+  headSha: string;
+}
+
+export interface ActionsOverview {
+  repository: string;
+  defaultBranch: string | null;
+  latest: WorkflowRun[];
+  recent: WorkflowRun[];
+}
+
+export interface IssueSummary {
+  number: number;
+  title: string;
+  htmlUrl: string;
+  state: string;
+  labels: string[];
+  author: string;
+  comments: number;
+  updatedAt: string;
+  taskId: string | null;
+}
+
+export interface RemoteCommit {
+  sha: string;
+  short: string;
+  subject: string;
+  author: string;
+  date: string;
+  htmlUrl: string;
+}
+
+export interface CachedGithub {
+  repository: string;
+  pulls: PullInfo[] | null;
+  actions: ActionsOverview | null;
+  issues: IssueSummary[] | null;
+  commits: RemoteCommit[] | null;
+  fetchedAt: number | null;
+}
+
+// ------------------------------------------------------------ file search
+
+export interface FileHit {
+  projectId: string;
+  repositoryId: string | null;
+  root: string;
+  rel: string;
+  name: string;
+  snippet: string | null;
+}
+
+export interface IndexStats {
+  roots: number;
+  files: number;
+  updated: number;
+  removed: number;
+  incomplete: boolean;
+}
+
+export interface IndexStatus {
+  roots: number;
+  indexed: number;
+  files: number;
+  indexing: boolean;
+  stale: boolean;
 }

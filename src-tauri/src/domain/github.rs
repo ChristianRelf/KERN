@@ -1139,11 +1139,11 @@ pub struct RepoOverview {
 }
 
 #[tauri::command]
-pub async fn github_overview(app: AppHandle, project_id: String) -> AppResult<RepoOverview> {
+pub async fn github_overview(app: AppHandle, project_id: String, repo: Option<String>, repository_id: Option<String>) -> AppResult<RepoOverview> {
     blocking(&app, move |s| {
-        let repo = s.with(|c| project_repo(c, &project_id))?.ok_or_else(|| AppError::Invalid("This project isn't connected to GitHub.".into()))?;
+        let full_name = s.with(|c| project_slug(c, &project_id, repo.as_deref()))?;
         let gh = Gh::new(s)?;
-        let full = &repo.full_name;
+        let full = &full_name;
         let info = gh.get(&format!("/repos/{full}"))?;
         let mut languages: Vec<(String, i64)> = gh
             .get(&format!("/repos/{full}/languages"))
@@ -1154,7 +1154,7 @@ pub async fn github_overview(app: AppHandle, project_id: String) -> AppResult<Re
         languages.sort_by(|a, b| b.1.cmp(&a.1));
         // Prefer the README in a linked local clone of this same repository.
         let local = s
-            .with(|c| crate::domain::folders::root_of(c, &project_id))
+            .with(|c| crate::domain::folders::target_root(c, &project_id, repository_id.as_deref()))
             .ok()
             .filter(|(root, _)| git::read_remote(root).github.is_some_and(|g| g.eq_ignore_ascii_case(full)))
             .and_then(|(root, _)| ["README.md", "readme.md", "README.markdown", "README.txt", "README"].iter().map(|n| root.join(n)).find(|p| p.is_file()))

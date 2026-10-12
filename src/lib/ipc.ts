@@ -86,6 +86,7 @@ export const api = {
     delete: (id: string) => call<void>("project_delete", { id }),
     restore: (id: string) => call<void>("project_restore", { id }),
     touch: (id: string) => call<void>("project_touch", { id }),
+    capabilities: (id: string) => call<T.ProjectCapabilities>("project_capabilities", { id }),
   },
   ai: {
     list: () => call<T.AiAccount[]>("ai_accounts_list"),
@@ -105,17 +106,165 @@ export const api = {
     clearHistory: () => call<void>("ai_history_clear"),
     security: () => call<T.AiSecurityReport>("ai_security_check"),
   },
+  /** Git commands act on one linked repository (see `repos`). */
   git: {
     available: () => call<string | null>("git_available"),
     remote: (projectId: string) => call<T.GitRemoteInfo>("git_remote", { projectId }),
-    status: (projectId: string) => call<T.GitStatus>("git_status", { projectId }),
-    diff: (projectId: string, path: string, staged: boolean, untracked: boolean) => call<string>("git_diff", { projectId, path, staged, untracked }),
-    log: (projectId: string, limit?: number, all?: boolean) => call<T.GitCommit[]>("git_log", { projectId, limit: limit ?? null, all: all ?? null }),
-    branches: (projectId: string) => call<T.GitBranch[]>("git_branches", { projectId }),
-    switch: (projectId: string, name: string, create = false) => call<void>("git_switch", { projectId, name, create }),
-    sync: (projectId: string, action: "fetch" | "pull" | "push") => call<{ output: string }>("git_sync", { projectId, action }),
+    status: (repoId: string) => call<T.GitStatus>("git_status", { repoId }),
+    diff: (repoId: string, path: string, staged: boolean, untracked: boolean) => call<string>("git_diff", { repoId, path, staged, untracked }),
+    log: (repoId: string, limit?: number, all?: boolean, range?: string | null) =>
+      call<T.GitCommit[]>("git_log", { repoId, limit: limit ?? null, all: all ?? null, range: range ?? null }),
+    branches: (repoId: string) => call<T.GitBranch[]>("git_branches", { repoId }),
+    switch: (repoId: string, name: string, create = false) => call<void>("git_switch", { repoId, name, create }),
+    checkBranch: (repoId: string, name: string) => call<T.BranchCheck>("git_branch_check", { repoId, name }),
+    createBranch: (repoId: string, name: string, base: string | null, switchTo: boolean) =>
+      call<void>("git_create_branch", { repoId, name, base, switch: switchTo }),
+    sync: (repoId: string, action: "fetch" | "pull" | "push") => call<{ output: string }>("git_sync", { repoId, action }),
     clone: (repo: string, parent: string) => call<string>("git_clone", { repo, parent }),
     scanTodos: (projectId: string) => call<T.TodoItem[]>("project_scan_todos", { projectId }),
+    defaultBase: (repositoryId: string) => call<string>("repo_default_base", { repositoryId }),
+  },
+  repos: {
+    list: (projectId: string) => call<T.Repository[]>("repos_list", { projectId }),
+    linkLocal: (projectId: string, path: string, trust: T.Trust) => call<T.Repository>("repo_link_local", { projectId, path, trust }),
+    linkGithub: (projectId: string, repo: string) => call<T.Repository>("repo_link_github", { projectId, repo }),
+    unlink: (id: string) => call<void>("repo_unlink", { id }),
+    update: (id: string, patch: { alias?: string | null; primary?: boolean; sortOrder?: number }) => call<T.Repository>("repo_update", { id, patch }),
+    setTrust: (id: string, trust: T.Trust) => call<T.Repository>("repo_set_trust", { id, trust }),
+    summary: (id: string) => call<T.RepoSummaryInfo>("repo_summary", { id }),
+    reveal: (id: string) => call<void>("repo_reveal", { id }),
+  },
+  worktrees: {
+    list: (repositoryId: string, withStatus = true) => call<T.Worktree[]>("worktrees_list", { repositoryId, withStatus }),
+    defaultPath: (repositoryId: string, branch: string) => call<string>("worktree_default_path", { repositoryId, branch }),
+    create: (input: T.WorktreeInput) => call<T.Worktree>("worktree_create", { input }),
+    inspect: (repositoryId: string, path: string) => call<T.WorktreeInspection>("worktree_inspect", { repositoryId, path }),
+    remove: (repositoryId: string, path: string, force: boolean, deleteBranch: boolean) =>
+      call<{ removed: boolean; branchDeleted: boolean; branchNote: string | null }>("worktree_remove", { repositoryId, path, force, deleteBranch }),
+    update: (repositoryId: string, path: string, patch: { alias?: string | null; taskId?: string | null; agent?: string | null }) =>
+      call<void>("worktree_update", { repositoryId, path, patch }),
+    prune: (repositoryId: string) => call<void>("worktrees_prune", { repositoryId }),
+    openInEditor: (path: string) => call<void>("open_in_editor", { path }),
+  },
+  devLinks: {
+    list: (taskId: string) => call<T.DevLink[]>("task_links", { taskId }),
+    add: (input: { taskId: string; kind: T.DevLinkKind; repositoryId?: string | null; ref: string; title?: string | null; url?: string | null }) =>
+      call<void>("task_link_add", { input: { repositoryId: null, title: null, url: null, ...input } }),
+    remove: (id: string) => call<void>("task_link_remove", { id }),
+    context: (taskId: string) => call<T.TaskDevContext>("task_dev_context", { taskId }),
+    branchCommits: (repositoryId: string, branch: string, limit?: number) =>
+      call<{ base: string; commits: T.GitCommit[] }>("task_branch_commits", { repositoryId, branch, limit: limit ?? null }),
+  },
+  sessions: {
+    active: () => call<T.WorkSession | null>("session_active"),
+    start: (input: T.SessionInput) => call<T.WorkSession>("session_start", { input }),
+    pause: (id: string) => call<T.WorkSession>("session_pause", { id }),
+    resume: (id: string) => call<T.WorkSession>("session_resume", { id }),
+    stop: (id: string, note?: string | null, at?: number | null) => call<T.WorkSession>("session_stop", { id, note: note ?? null, at: at ?? null }),
+    heartbeat: (id: string) => call<void>("session_heartbeat", { id }),
+    discardGap: (id: string) => call<T.WorkSession>("session_discard_gap", { id }),
+    update: (id: string, patch: Partial<Pick<T.WorkSession, "note" | "taskId" | "projectId" | "milestoneId" | "repositoryId" | "branch">>) =>
+      call<T.WorkSession>("session_update", { id, patch }),
+    delete: (id: string) => call<void>("session_delete", { id }),
+    list: (query: { from?: number; to?: number; projectId?: string | null; taskId?: string | null; limit?: number }) => call<T.WorkSession[]>("sessions_list", { query }),
+    report: (from: number, to: number, projectId?: string | null) =>
+      call<T.SessionReport>("sessions_report", { from, to, tzOffsetMinutes: -new Date().getTimezoneOffset(), projectId: projectId ?? null }),
+    addLink: (input: { sessionId: string; kind: T.SessionLink["kind"]; repositoryId?: string | null; ref: string; title?: string | null; url?: string | null }) =>
+      call<void>("session_link_add", { input: { repositoryId: null, title: null, url: null, ...input } }),
+    removeLink: (id: string) => call<void>("session_link_remove", { id }),
+  },
+  workspace: {
+    get: (projectId: string) => call<T.WorkspaceState | null>("workspace_state_get", { projectId }),
+    save: (projectId: string, value: T.WorkspaceState) => call<void>("workspace_state_save", { projectId, value }),
+    snapshots: (projectId: string) => call<T.WorkspaceSnapshot[]>("workspace_snapshots_list", { projectId }),
+    saveSnapshot: (projectId: string, name: string, value: T.WorkspaceState, id?: string | null) =>
+      call<T.WorkspaceSnapshot>("workspace_snapshot_save", { projectId, name, value, id: id ?? null }),
+    deleteSnapshot: (id: string) => call<void>("workspace_snapshot_delete", { id }),
+    layout: (projectId: string) => call<T.ProjectLayout | null>("project_layout_get", { projectId }),
+    saveLayout: (projectId: string, preset: string | null, widgets: T.WidgetInstance[], layouts: T.GridLayouts) =>
+      call<void>("project_layout_save", { projectId, preset, widgets, layouts }),
+    resetLayout: (projectId: string) => call<void>("project_layout_reset", { projectId }),
+  },
+  milestones: {
+    list: (projectId: string) => call<T.Milestone[]>("milestones_list", { projectId }),
+    upcoming: (until: string, limit?: number) => call<T.Milestone[]>("milestones_upcoming", { until, limit: limit ?? null }),
+    get: (id: string) => call<T.Milestone>("milestone_get", { id }),
+    create: (input: T.MilestoneInput) => call<T.Milestone>("milestone_create", { input }),
+    update: (id: string, patch: T.MilestonePatch) => call<T.Milestone>("milestone_update", { id, patch }),
+    delete: (id: string) => call<void>("milestone_delete", { id }),
+    reorder: (ids: string[]) => call<void>("milestones_reorder", { ids }),
+    setDeps: (id: string, dependsOn: string[]) => call<T.Milestone>("milestone_set_deps", { id, dependsOn }),
+    addLink: (input: { milestoneId: string; kind: "pull" | "issue"; ref: string; title?: string | null; url?: string | null }) =>
+      call<T.Milestone>("release_link_add", { input: { title: null, url: null, ...input } }),
+    removeLink: (id: string) => call<void>("release_link_remove", { id }),
+    changelog: (id: string) => call<string>("milestone_changelog", { id }),
+  },
+  devenv: {
+    detect: (projectId: string, repositoryId?: string | null) => call<T.DevEnvironment>("devenv_detect", { projectId, repositoryId: repositoryId ?? null }),
+    cached: (projectId: string) => call<Record<string, string[]>>("devenv_cached", { projectId }),
+    which: (program: string) => call<string | null>("which_program", { program }),
+  },
+  commands: {
+    list: (projectId: string) => call<T.SavedCommand[]>("commands_list", { projectId }),
+    save: (input: T.CommandInput) => call<T.SavedCommand>("command_save", { input }),
+    delete: (id: string) => call<void>("command_delete", { id }),
+  },
+  pty: {
+    shells: () => call<T.Shell[]>("pty_shells"),
+    spawn: (input: T.PtySpawnInput) => call<T.PtyInfo>("pty_spawn", { input }),
+    write: (id: string, data: string) => call<void>("pty_write", { id, data }),
+    resize: (id: string, cols: number, rows: number) => call<void>("pty_resize", { id, cols, rows }),
+    kill: (id: string) => call<void>("pty_kill", { id }),
+    close: (id: string) => call<void>("pty_close", { id }),
+    list: () => call<T.PtyInfo[]>("pty_list"),
+    rename: (id: string, title: string) => call<void>("pty_rename", { id, title }),
+  },
+  env: {
+    profiles: (projectId: string) => call<T.EnvProfile[]>("env_profiles_list", { projectId }),
+    createProfile: (projectId: string, name: string) => call<T.EnvProfile>("env_profile_create", { projectId, name }),
+    renameProfile: (id: string, name: string) => call<T.EnvProfile>("env_profile_rename", { id, name }),
+    deleteProfile: (id: string) => call<void>("env_profile_delete", { id }),
+    duplicateProfile: (id: string) => call<T.EnvProfile>("env_profile_duplicate", { id }),
+    setVar: (input: T.EnvVarInput) => call<T.EnvVar>("env_var_set", { input: { id: null, value: null, ...input } }),
+    deleteVar: (id: string) => call<void>("env_var_delete", { id }),
+    /** Returns the value; only on explicit request. */
+    reveal: (id: string) => call<string>("env_var_reveal", { id }),
+    import: (profileId: string, path: string, opts: { autoSecret: boolean; allSecret: boolean; overwrite: boolean }) =>
+      call<{ added: number; updated: number; skipped: number; secrets: number }>("env_import", { profileId, path, ...opts }),
+    export: (profileId: string, path: string, includeSecrets: boolean, overwrite: boolean) =>
+      call<number>("env_export", { profileId, path, includeSecrets, overwrite }),
+  },
+  services: {
+    list: (projectId: string) => call<T.LocalService[]>("services_list", { projectId }),
+    save: (input: T.ServiceInput) => call<T.LocalService>("service_save", { input }),
+    delete: (id: string) => call<void>("service_delete", { id }),
+    check: (id: string) => call<T.LocalService>("service_check", { id }),
+    checkProject: (projectId: string) => call<T.LocalService[]>("services_check_project", { projectId }),
+    containers: () => call<T.Container[]>("docker_containers"),
+    containerAction: (id: string, action: "start" | "stop" | "restart") => call<void>("docker_container_action", { id, action }),
+  },
+  deps: {
+    cached: (projectId: string, repositoryId?: string | null) =>
+      call<{ report: T.DepReport | null; advisories: T.AdvisoryReport | null }>("deps_cached", { projectId, repositoryId: repositoryId ?? null }),
+    scan: (projectId: string, repositoryId?: string | null) => call<T.DepReport>("deps_scan", { projectId, repositoryId: repositoryId ?? null }),
+    advisories: (projectId: string, repositoryId?: string | null) => call<T.AdvisoryReport>("deps_advisories", { projectId, repositoryId: repositoryId ?? null }),
+  },
+  health: {
+    get: (projectId: string) => call<T.ProjectHealth>("project_health", { projectId }),
+    setPrefs: (projectId: string, prefs: T.HealthPrefs) => call<T.ProjectHealth>("project_health_prefs", { projectId, prefs }),
+  },
+  catchup: {
+    local: (projectId: string, from: number, to: number, include: T.CatchupInclude) => call<T.CatchupDigest>("catchup_local", { projectId, from, to, include }),
+    preview: (projectId: string, from: number, to: number, include: T.CatchupInclude) => call<T.CatchupPreview>("catchup_preview", { projectId, from, to, include }),
+    ai: (projectId: string, from: number, to: number, include: T.CatchupInclude, requestId: string) =>
+      call<T.CatchupAi>("catchup_ai", { projectId, from, to, include, requestId }),
+  },
+  files: {
+    index: (projectIds?: string[] | null, force = false) => call<T.IndexStats>("files_index", { projectIds: projectIds ?? null, force }),
+    search: (query: string, code: boolean, projectIds?: string[] | null, limit?: number) =>
+      call<T.FileHit[]>("files_search", { query, code, projectIds: projectIds ?? null, limit: limit ?? null }),
+    status: () => call<T.IndexStatus>("files_index_status"),
+    clear: () => call<void>("files_index_clear"),
   },
   github: {
     status: () => call<T.GithubStatus>("github_status"),
@@ -130,8 +279,12 @@ export const api = {
     sync: (projectId: string) => call<T.SyncReport>("github_sync", { projectId }),
     syncTask: (taskId: string) => call<T.SyncReport>("github_sync_task", { taskId }),
     createIssue: (taskId: string) => call<string>("github_create_issue", { taskId }),
-    pulls: (projectId: string) => call<T.PullInfo[]>("github_pulls", { projectId }),
-    overview: (projectId: string) => call<T.RepoOverview>("github_overview", { projectId }),
+    pulls: (projectId: string, repo?: string | null) => call<T.PullInfo[]>("github_pulls", { projectId, repo: repo ?? null }),
+    overview: (projectId: string, repo?: string | null, repositoryId?: string | null) => call<T.RepoOverview>("github_overview", { projectId, repo: repo ?? null, repositoryId: repositoryId ?? null }),
+    actions: (projectId: string, repo?: string | null) => call<T.ActionsOverview>("github_actions", { projectId, repo: repo ?? null }),
+    issues: (projectId: string, repo?: string | null) => call<T.IssueSummary[]>("github_issues", { projectId, repo: repo ?? null }),
+    commits: (projectId: string, repo?: string | null) => call<T.RemoteCommit[]>("github_commits", { projectId, repo: repo ?? null }),
+    cached: (projectId: string) => call<T.CachedGithub[]>("github_cached", { projectId }),
   },
   folders: {
     inspect: (path: string) => call<T.FolderInfo>("folder_inspect", { path }),
@@ -139,11 +292,11 @@ export const api = {
     link: (projectId: string, path: string, trust: T.Trust) => call<T.ProjectFolder>("project_folder_link", { projectId, path, trust }),
     unlink: (projectId: string) => call<void>("project_folder_unlink", { projectId }),
     setTrust: (projectId: string, trust: T.Trust) => call<T.ProjectFolder>("project_folder_set_trust", { projectId, trust }),
-    list: (projectId: string, rel: string) => call<T.DirListing>("project_files_list", { projectId, rel }),
-    open: (projectId: string, rel: string, confirmedProgram = false) =>
-      call<void>("project_file_open", { projectId, rel, confirmedProgram }),
-    reveal: (projectId: string, rel: string) => call<void>("project_file_reveal", { projectId, rel }),
-    path: (projectId: string, rel: string) => call<string>("project_file_path", { projectId, rel }),
+    list: (projectId: string, rel: string, repositoryId?: string | null) => call<T.DirListing>("project_files_list", { projectId, rel, repositoryId: repositoryId ?? null }),
+    open: (projectId: string, rel: string, confirmedProgram = false, repositoryId?: string | null) =>
+      call<void>("project_file_open", { projectId, rel, confirmedProgram, repositoryId: repositoryId ?? null }),
+    reveal: (projectId: string, rel: string, repositoryId?: string | null) => call<void>("project_file_reveal", { projectId, rel, repositoryId: repositoryId ?? null }),
+    path: (projectId: string, rel: string, repositoryId?: string | null) => call<string>("project_file_path", { projectId, rel, repositoryId: repositoryId ?? null }),
     createFolder: (projectId: string, parentRel: string, name: string) =>
       call<string>("project_folder_create", { projectId, parentRel, name }),
     rename: (projectId: string, rel: string, newName: string) => call<string>("project_file_rename", { projectId, rel, newName }),
@@ -151,11 +304,11 @@ export const api = {
     duplicate: (projectId: string, rel: string) => call<string>("project_file_duplicate", { projectId, rel }),
     /** Moves to the Recycle Bin / Trash. */
     trash: (projectId: string, rel: string) => call<void>("project_file_trash", { projectId, rel }),
-    read: (projectId: string, rel: string) => call<T.FileText>("project_file_read", { projectId, rel }),
-    write: (projectId: string, rel: string, file: Pick<T.FileText, "text" | "crlf" | "bom" | "modified">) =>
-      call<number | null>("project_file_write", { projectId, rel, text: file.text, crlf: file.crlf, bom: file.bom, expectedModified: file.modified }),
+    read: (projectId: string, rel: string, repositoryId?: string | null) => call<T.FileText>("project_file_read", { projectId, rel, repositoryId: repositoryId ?? null }),
+    write: (projectId: string, rel: string, file: Pick<T.FileText, "text" | "crlf" | "bom" | "modified">, repositoryId?: string | null) =>
+      call<number | null>("project_file_write", { projectId, rel, text: file.text, crlf: file.crlf, bom: file.bom, expectedModified: file.modified, repositoryId: repositoryId ?? null }),
     /** Data URL of an image inside the folder. */
-    image: (projectId: string, rel: string) => call<string>("project_file_image", { projectId, rel }),
+    image: (projectId: string, rel: string, repositoryId?: string | null) => call<string>("project_file_image", { projectId, rel, repositoryId: repositoryId ?? null }),
     kinds: (projectId: string) => call<T.FileKindCount[]>("project_file_kinds", { projectId }),
     trusted: () => call<T.TrustRecord[]>("trusted_folders_list"),
     /** trust = null forgets the decision. */
@@ -306,7 +459,7 @@ export const api = {
     delete: (id: string) => call<void>("view_delete", { id }),
     reorder: (ids: string[]) => call<void>("views_reorder", { ids }),
   },
-  search: (query: string, limit?: number) => call<T.SearchHit[]>("search", { query, limit: limit ?? null }),
+  search: (query: string, limit?: number, scope?: T.SearchScope) => call<T.SearchHit[]>("search", { query, limit: limit ?? null, scope: scope ?? null }),
   stats: {
     overview: (today: string, dayStart: number, weekStart: number) =>
       call<T.Overview>("stats_overview", { today, dayStart, weekStart }),

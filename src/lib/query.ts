@@ -49,13 +49,28 @@ export type Domain =
   | "ai"
   | "favicon"
   | "git"
-  | "github";
+  | "github"
+  | "repos"
+  | "worktrees"
+  | "devlinks"
+  | "sessions"
+  | "workspace"
+  | "layouts"
+  | "milestones"
+  | "devenv"
+  | "commands"
+  | "env"
+  | "services"
+  | "deps"
+  | "health"
+  | "capabilities"
+  | "pty";
 
 export function invalidate(...domains: Domain[]) {
   for (const d of domains) void queryClient.invalidateQueries({ queryKey: [d] });
 }
 
-export const TASK_DOMAINS: Domain[] = ["tasks", "task", "board", "projects", "project", "rundown", "stats", "activity", "labels"];
+export const TASK_DOMAINS: Domain[] = ["tasks", "task", "board", "projects", "project", "rundown", "stats", "activity", "labels", "milestones", "health"];
 
 export function invalidateTasks() {
   invalidate(...TASK_DOMAINS);
@@ -82,6 +97,7 @@ export function applyPatch(t: Task, p: TaskPatch): Task {
     "boardOrder",
     "pinned",
     "labelIds",
+    "milestoneId",
   ];
   for (const k of keys) {
     if (p[k] !== undefined) (next as unknown as Record<string, unknown>)[k] = p[k];
