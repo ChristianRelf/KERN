@@ -8,6 +8,7 @@ import { ProjectPage } from "@/features/projects/ProjectPage";
 import { TaskPage } from "@/features/tasks/TaskPage";
 import { LabelPage } from "@/features/tasks/LabelPage";
 import { PageFallback } from "@/components/layout/PageFallback";
+import { ErrorBoundary } from "@/components/layout/ErrorBoundary";
 
 // Heavy feature modules load on demand: opening the task list never
 // initialises the whiteboard renderer or the rich-text editor.
@@ -73,5 +74,9 @@ export function Routes() {
       page = <TaskPage key={route.id} id={route.id} />;
       break;
   }
-  return <Suspense fallback={<PageFallback />}>{page}</Suspense>;
+  return (
+    <ErrorBoundary resetKey={route}>
+      <Suspense fallback={<PageFallback />}>{page}</Suspense>
+    </ErrorBoundary>
+  );
 }

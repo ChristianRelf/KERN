@@ -21,7 +21,7 @@ import { api, describeError } from "@/lib/ipc";
 import { invalidate } from "@/lib/query";
 import { toastError } from "@/stores/toast";
 import { Dropdown, type MenuItems } from "@/components/ui/Menu";
-import { Button, IconButton } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 import { confirm, prompt } from "@/components/ui/Dialog";
 import { EmptyState, Segmented } from "@/components/ui/Controls";
 import { Kanban, type CardContext, type KanbanColumn } from "./Kanban";

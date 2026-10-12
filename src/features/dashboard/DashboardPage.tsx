@@ -1,6 +1,6 @@
 import { Check, Copy, EyeOff, LayoutGrid, Ellipsis, Pencil, Plus, RotateCcw, Settings2, Star, Trash, X, Eye } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Responsive, WidthProvider, type Layout, type Layouts } from "react-grid-layout";
+import { Responsive, type Layout, type Layouts } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import { format } from "date-fns";
 import type { Dashboard, GridItem, GridLayouts, WidgetInstance } from "@/lib/types";
@@ -21,8 +21,21 @@ import { TEMPLATES, buildTemplate, deriveLayouts, newWidgetId } from "./template
 import { useDashboardUi } from "./store";
 import type { WidgetDef } from "./types";
 
-const Grid = WidthProvider(Responsive);
-const BREAKPOINTS = { lg: 1100, md: 720, sm: 0 };
+/** Container width via ResizeObserver (tracks scrollbars and panel resizes). */
+function useWidth() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    ro.observe(el);
+    setWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  return { ref, width };
+}
+const BREAKPOINTS = { lg: 880, md: 560, sm: 0 };
 const COLS = { lg: 12, md: 8, sm: 4 };
 const ROW_HEIGHT = { compact: 30, comfortable: 34, relaxed: 38 } as const;
 
@@ -69,6 +82,7 @@ function DashboardView({ dashboard, all }: { dashboard: Dashboard; all: Dashboar
   const [catalogueOpen, setCatalogueOpen] = useState(false);
   const [newLayoutOpen, setNewLayoutOpen] = useState(false);
   const pending = useRef<{ widgets?: WidgetInstance[]; layouts?: GridLayouts }>({});
+  const { ref: dashRef, width } = useWidth();
   const timer = useRef<number | undefined>(undefined);
 
   const flush = useCallback(() => {
@@ -260,10 +274,12 @@ function DashboardView({ dashboard, all }: { dashboard: Dashboard; all: Dashboar
         out.lg.push({ i: w.id, x: 0, y: Infinity, w: def.defaultSize.w, h: def.defaultSize.h, minW: def.minSize.w, minH: def.minSize.h });
       }
     }
-    if (!layouts.md || !layouts.sm) {
-      const derived = deriveLayouts(out.lg as GridItem[]);
-      out.md = out.md ?? derived.md;
-      out.sm = out.sm ?? derived.sm;
+    // Re-derive smaller layouts that are missing, incomplete or don't fit their columns.
+    const derived = deriveLayouts(out.lg as GridItem[]);
+    for (const bp of ["md", "sm"] as const) {
+      const items = out[bp];
+      const valid = items && items.length === out.lg.length && items.every((i) => i.x + i.w <= COLS[bp]);
+      if (!valid) out[bp] = derived[bp];
     }
     return out;
   }, [layouts, visible]);
@@ -296,7 +312,7 @@ function DashboardView({ dashboard, all }: { dashboard: Dashboard; all: Dashboar
           </div>
         </header>
       )}
-      <div className="dash" data-editing={editing}>
+      <div className="dash" data-editing={editing} ref={dashRef}>
         {!showHeader && editing && (
           <div className="row" style={{ justifyContent: "flex-end", padding: "8px 4px 0", gap: 6 }}>
             <Button size="sm" icon={Plus} onClick={() => setCatalogueOpen(true)}>
@@ -322,8 +338,10 @@ function DashboardView({ dashboard, all }: { dashboard: Dashboard; all: Dashboar
             </Button>
           </div>
         ) : (
-          <Grid
+          width > 0 && (
+          <Responsive
             className="react-grid-layout"
+            width={width - 16}
             layouts={gridLayouts}
             breakpoints={BREAKPOINTS}
             cols={COLS}
@@ -354,7 +372,8 @@ function DashboardView({ dashboard, all }: { dashboard: Dashboard; all: Dashboar
                 </div>
               );
             })}
-          </Grid>
+          </Responsive>
+          )
         )}
       </div>
       <Dialog open={catalogueOpen} onOpenChange={setCatalogueOpen} title="Add widget" wide>

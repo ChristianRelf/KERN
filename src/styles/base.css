@@ -203,3 +203,37 @@ img {
     opacity: 0.9;
   }
 }
+
+/* Text fields show focus with their own border/caret, not the global ring. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,
+textarea:focus-visible,
+[contenteditable="true"]:focus-visible,
+.task-list:focus-visible,
+.wb:focus-visible {
+  outline: none;
+}
+
+/* Native time/date pickers: keep the control, quiet the browser chrome. */
+input[type="time"],
+input[type="date"],
+input[type="number"] {
+  color-scheme: inherit;
+}
+input[type="time"]::-webkit-calendar-picker-indicator {
+  opacity: 0.45;
+  filter: grayscale(1);
+  cursor: pointer;
+}
+:root:not([data-theme="light"]) input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) grayscale(1);
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}

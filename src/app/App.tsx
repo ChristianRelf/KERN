@@ -39,6 +39,10 @@ function initialRoute(): Route {
 }
 
 function Shell() {
+  useEffect(() => {
+    // Startup marker (ms since the page started loading); see PERFORMANCE.md.
+    (window as unknown as { __kernReadyAt?: number }).__kernReadyAt ??= performance.now();
+  }, []);
   useAppearance();
   useOsIntegration();
   useBackendEvents();

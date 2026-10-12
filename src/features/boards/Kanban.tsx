@@ -311,7 +311,6 @@ function ColumnView({
         className="kcol kcol--collapsed"
         style={style}
         onClick={onToggleCollapse}
-        role="button"
         aria-label={`Expand ${col.title}`}
         {...attributes}
         {...listeners}

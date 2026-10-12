@@ -832,6 +832,7 @@
 
 /* ---------- Inbox */
 .inbox-item {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -856,8 +857,15 @@
   font-size: var(--fs-md);
 }
 .inbox-item__actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
   display: flex;
   gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-sm);
   opacity: 0;
 }
 .inbox-item:hover .inbox-item__actions,
