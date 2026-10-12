@@ -55,6 +55,21 @@ const TABLES: &[&str] = &[
     "activity",
     "focus_sessions",
     "saved_views",
+    "project_repositories",
+    "git_worktrees",
+    "task_dev_links",
+    "milestones",
+    "milestone_deps",
+    "release_links",
+    "work_sessions",
+    "session_links",
+    "workspace_state",
+    "workspace_snapshots",
+    "project_layouts",
+    "project_commands",
+    "env_profiles",
+    "env_variables",
+    "local_services",
 ];
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

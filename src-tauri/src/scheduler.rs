@@ -162,6 +162,9 @@ fn maintenance(app: &AppHandle, at_startup: bool) {
         let purged = trash::purge_older_than(c, settings::get_or(c, "data.trashRetentionDays", 30))?;
         changed |= purged > 0;
         notify::prune_log(c);
+        // Credential-store entries of deleted environment variables.
+        let _ = crate::domain::envvars::sweep(c, state.ai.vault.as_ref());
+        c.execute("DELETE FROM service_checks WHERE checked_at < ?1", [now_ms() - 30 * 86_400_000])?;
         if at_startup {
             let _ = attachments::cleanup_orphan_assets(c, &paths.attachments_dir);
             // Clean leftovers from interrupted exports/restores.

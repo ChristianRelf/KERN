@@ -13,7 +13,6 @@ use crate::domain::folders;
 use crate::domain::git::blocking;
 use crate::domain::settings;
 use crate::error::{invalid, AppError, AppResult};
-use crate::state::AppState;
 use crate::util::now_ms;
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};

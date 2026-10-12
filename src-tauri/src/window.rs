@@ -133,6 +133,10 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
             if behavior == "tray" && !state.quitting.load(Ordering::SeqCst) {
                 api.prevent_close();
                 let _ = window.hide();
+            } else if !state.quitting.load(Ordering::SeqCst) && state.pty.running_count() > 0 {
+                // Don't silently abandon running terminal processes: ask first.
+                api.prevent_close();
+                let _ = app.emit("kern://confirm-quit", state.pty.running_count());
             }
         }
         WindowEvent::Resized(_) => {

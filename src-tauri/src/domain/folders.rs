@@ -337,6 +337,21 @@ pub fn root_of(conn: &Connection, project_id: &str) -> AppResult<(PathBuf, Trust
     Ok((canon, trust))
 }
 
+/// The root for a file operation: the project's linked folder, or one of the
+/// project's linked repositories (verified to belong to it).
+pub fn target_root(conn: &Connection, project_id: &str, repository_id: Option<&str>) -> AppResult<(PathBuf, Trust)> {
+    match repository_id {
+        Some(r) => {
+            let owner: Option<String> = conn.query_row("SELECT project_id FROM project_repositories WHERE id = ?1", [r], |x| x.get(0)).optional()?;
+            if owner.as_deref() != Some(project_id) {
+                return Err(AppError::NotFound("Repository".into()));
+            }
+            crate::domain::repos::local_root(conn, r)
+        }
+        None => root_of(conn, project_id),
+    }
+}
+
 // ------------------------------------------------------------ browsing
 
 #[derive(Serialize, Debug)]
@@ -474,9 +489,9 @@ pub async fn project_folder_set_trust(app: AppHandle, project_id: String, trust:
 }
 
 #[tauri::command]
-pub async fn project_files_list(app: AppHandle, project_id: String, rel: String) -> AppResult<DirListing> {
+pub async fn project_files_list(app: AppHandle, project_id: String, repository_id: Option<String>, rel: String) -> AppResult<DirListing> {
     blocking(&app, move |s| {
-        let (root, _) = s.with(|c| root_of(c, &project_id))?;
+        let (root, _) = s.with(|c| target_root(c, &project_id, repository_id.as_deref()))?;
         list_dir(&root, &rel)
     })
     .await
@@ -485,10 +500,10 @@ pub async fn project_files_list(app: AppHandle, project_id: String, rel: String)
 /// Opens a file with its default application. Programs and scripts need a
 /// trusted folder and an explicit confirmation for this specific open.
 #[tauri::command]
-pub async fn project_file_open(app: AppHandle, project_id: String, rel: String, confirmed_program: Option<bool>) -> AppResult<()> {
+pub async fn project_file_open(app: AppHandle, project_id: String, repository_id: Option<String>, rel: String, confirmed_program: Option<bool>) -> AppResult<()> {
     let handle = app.clone();
     blocking(&app, move |s| {
-        let (root, trust) = s.with(|c| root_of(c, &project_id))?;
+        let (root, trust) = s.with(|c| target_root(c, &project_id, repository_id.as_deref()))?;
         let target = if rel.is_empty() { root.clone() } else { resolve_inside(&root, &rel)? };
         if target.is_file() && is_program(&target) {
             if trust != Trust::Trusted {
@@ -504,10 +519,10 @@ pub async fn project_file_open(app: AppHandle, project_id: String, rel: String, 
 }
 
 #[tauri::command]
-pub async fn project_file_reveal(app: AppHandle, project_id: String, rel: String) -> AppResult<()> {
+pub async fn project_file_reveal(app: AppHandle, project_id: String, repository_id: Option<String>, rel: String) -> AppResult<()> {
     let handle = app.clone();
     blocking(&app, move |s| {
-        let (root, _) = s.with(|c| root_of(c, &project_id))?;
+        let (root, _) = s.with(|c| target_root(c, &project_id, repository_id.as_deref()))?;
         let target = if rel.is_empty() { root } else { resolve_inside(&root, &rel)? };
         handle.opener().reveal_item_in_dir(target).map_err(|e| AppError::Other(e.to_string()))
     })
@@ -516,9 +531,9 @@ pub async fn project_file_reveal(app: AppHandle, project_id: String, rel: String
 
 /// Absolute path of an item (for "Copy path"); verified to be inside the folder.
 #[tauri::command]
-pub async fn project_file_path(app: AppHandle, project_id: String, rel: String) -> AppResult<String> {
+pub async fn project_file_path(app: AppHandle, project_id: String, repository_id: Option<String>, rel: String) -> AppResult<String> {
     blocking(&app, move |s| {
-        let (root, _) = s.with(|c| root_of(c, &project_id))?;
+        let (root, _) = s.with(|c| target_root(c, &project_id, repository_id.as_deref()))?;
         let target = if rel.is_empty() { root } else { resolve_inside(&root, &rel)? };
         Ok(target.to_string_lossy().to_string())
     })
@@ -693,9 +708,9 @@ pub fn encode_text(text: &str, crlf: bool, bom: bool) -> Vec<u8> {
 }
 
 #[tauri::command]
-pub async fn project_file_read(app: AppHandle, project_id: String, rel: String) -> AppResult<FileText> {
+pub async fn project_file_read(app: AppHandle, project_id: String, repository_id: Option<String>, rel: String) -> AppResult<FileText> {
     blocking(&app, move |s| {
-        let (root, trust) = s.with(|c| root_of(c, &project_id))?;
+        let (root, trust) = s.with(|c| target_root(c, &project_id, repository_id.as_deref()))?;
         let path = resolve_inside(&root, &rel)?;
         let meta = std::fs::metadata(&path)?;
         if !meta.is_file() {
@@ -713,9 +728,9 @@ pub async fn project_file_read(app: AppHandle, project_id: String, rel: String) 
 /// Saves edited text. Refuses when the file changed on disk since it was
 /// read (`expected_modified`), so another editor's work is never overwritten.
 #[tauri::command]
-pub async fn project_file_write(app: AppHandle, project_id: String, rel: String, text: String, crlf: bool, bom: bool, expected_modified: Option<i64>) -> AppResult<Option<i64>> {
+pub async fn project_file_write(app: AppHandle, project_id: String, repository_id: Option<String>, rel: String, text: String, crlf: bool, bom: bool, expected_modified: Option<i64>) -> AppResult<Option<i64>> {
     blocking(&app, move |s| {
-        let (root, trust) = s.with(|c| root_of(c, &project_id))?;
+        let (root, trust) = s.with(|c| target_root(c, &project_id, repository_id.as_deref()))?;
         if trust != Trust::Trusted {
             return invalid("Editing files needs a trusted folder.");
         }
@@ -762,10 +777,10 @@ fn image_mime(path: &Path) -> Option<&'static str> {
 /// An image as a data URL for the in-app viewer (the webview can't read
 /// project folders directly).
 #[tauri::command]
-pub async fn project_file_image(app: AppHandle, project_id: String, rel: String) -> AppResult<String> {
+pub async fn project_file_image(app: AppHandle, project_id: String, repository_id: Option<String>, rel: String) -> AppResult<String> {
     use base64::Engine;
     blocking(&app, move |s| {
-        let (root, _) = s.with(|c| root_of(c, &project_id))?;
+        let (root, _) = s.with(|c| target_root(c, &project_id, repository_id.as_deref()))?;
         let path = resolve_inside(&root, &rel)?;
         let mime = image_mime(&path).ok_or_else(|| AppError::Invalid("Kern can't preview that kind of image.".into()))?;
         let meta = std::fs::metadata(&path)?;

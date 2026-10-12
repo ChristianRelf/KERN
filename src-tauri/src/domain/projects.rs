@@ -41,6 +41,8 @@ pub struct Project {
     pub ai_prefs: Value,
     /// Connected GitHub repository (owner/name), if any.
     pub github_repo: Option<String>,
+    /// When the project was opened before the current visit ("since last opened").
+    pub prev_opened_at: Option<i64>,
 }
 
 /// Columns 0..=16 are the project row; 17.. are statistics. `?1` is
@@ -56,7 +58,8 @@ const PROJECT_SELECT: &str = "SELECT p.id, p.name, p.description, p.icon, p.acce
   (SELECT l.path FROM project_folder_links l WHERE l.project_id = p.id),
   (SELECT t.trust FROM project_folder_links l JOIN trusted_workspaces t ON t.folder_key = l.folder_key WHERE l.project_id = p.id),
   p.ai_prefs,
-  (SELECT r.owner || '/' || r.name FROM project_repos r WHERE r.project_id = p.id)
+  (SELECT r.owner || '/' || r.name FROM project_repos r WHERE r.project_id = p.id),
+  p.prev_opened_at
 FROM projects p";
 
 fn map_project(r: &Row) -> rusqlite::Result<Project> {
@@ -88,6 +91,7 @@ fn map_project(r: &Row) -> rusqlite::Result<Project> {
         folder_trust: r.get(23)?,
         ai_prefs: serde_json::from_str(&r.get::<_, String>(24)?).unwrap_or(Value::Object(Default::default())),
         github_repo: r.get(25)?,
+        prev_opened_at: r.get(26)?,
     })
 }
 
@@ -595,9 +599,54 @@ pub fn project_restore(state: State<AppState>, id: String) -> AppResult<()> {
 #[tauri::command]
 pub fn project_touch(state: State<AppState>, id: String) -> AppResult<()> {
     state.with(|c| {
-        c.execute("UPDATE projects SET last_opened_at = ?1 WHERE id = ?2", params![now_ms(), id])?;
+        // A new visit (not just switching tabs) moves the previous open time along.
+        c.execute(
+            "UPDATE projects SET prev_opened_at = CASE WHEN last_opened_at IS NULL OR ?1 - last_opened_at > 1800000 THEN last_opened_at ELSE prev_opened_at END,
+               last_opened_at = ?1 WHERE id = ?2",
+            params![now_ms(), id],
+        )?;
         recent::touch(c, "project", &id)
     })
+}
+
+/// What a project has connected, so the interface shows only relevant tools.
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Capabilities {
+    pub has_folder: bool,
+    pub repositories: i64,
+    pub local_repositories: i64,
+    pub github_repositories: i64,
+    pub issue_sync: bool,
+    pub commands: i64,
+    pub services: i64,
+    pub env_profiles: i64,
+    pub milestones: i64,
+    pub worktrees: i64,
+    pub ai_accounts: i64,
+}
+
+pub fn capabilities(conn: &Connection, id: &str) -> AppResult<Capabilities> {
+    crate::domain::repos::adopt(conn, id)?;
+    let n = |sql: &str| -> AppResult<i64> { Ok(conn.query_row(sql, [id], |r| r.get(0))?) };
+    Ok(Capabilities {
+        has_folder: n("SELECT count(*) FROM project_folder_links WHERE project_id = ?1")? > 0,
+        repositories: n("SELECT count(*) FROM project_repositories WHERE project_id = ?1")?,
+        local_repositories: n("SELECT count(*) FROM project_repositories WHERE project_id = ?1 AND local_path IS NOT NULL")?,
+        github_repositories: n("SELECT count(*) FROM project_repositories WHERE project_id = ?1 AND github IS NOT NULL")?,
+        issue_sync: n("SELECT count(*) FROM project_repos WHERE project_id = ?1")? > 0,
+        commands: n("SELECT count(*) FROM project_commands WHERE project_id = ?1")?,
+        services: n("SELECT count(*) FROM local_services WHERE project_id = ?1")?,
+        env_profiles: n("SELECT count(*) FROM env_profiles WHERE project_id = ?1")?,
+        milestones: n("SELECT count(*) FROM milestones WHERE project_id = ?1")?,
+        worktrees: n("SELECT count(*) FROM git_worktrees w JOIN project_repositories r ON r.id = w.repository_id WHERE r.project_id = ?1")?,
+        ai_accounts: conn.query_row("SELECT count(*) FROM ai_accounts WHERE enabled = 1", [], |r| r.get(0))?,
+    })
+}
+
+#[tauri::command]
+pub fn project_capabilities(state: State<AppState>, id: String) -> AppResult<Capabilities> {
+    state.with(|c| capabilities(c, &id))
 }
 
 #[cfg(test)]

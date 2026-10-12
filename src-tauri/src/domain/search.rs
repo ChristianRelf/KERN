@@ -1,5 +1,9 @@
 //! Global search backed by SQLite FTS5 (kept in sync by triggers), plus
-//! labels and saved views by name.
+//! labels, saved views, saved commands, workspace snapshots, GitHub issues
+//! linked to tasks and cached pull requests by name. Linked-folder files and
+//! code are searched separately (see `fileindex`).
+//!
+//! `scope` narrows results: all | tasks | projects | notes | github | commands.
 
 use crate::error::AppResult;
 use crate::state::AppState;
@@ -36,11 +40,25 @@ pub fn to_fts_query(input: &str) -> Option<String> {
     }
 }
 
+/// FTS kinds included in each scope.
+fn scope_kinds(scope: &str) -> Option<&'static [&'static str]> {
+    match scope {
+        "tasks" => Some(&["task"]),
+        "projects" => Some(&["project", "board", "whiteboard", "wb_node", "milestone"]),
+        "notes" => Some(&["note"]),
+        "github" | "commands" | "files" | "code" => Some(&[]),
+        _ => None,
+    }
+}
+
 #[tauri::command]
-pub fn search(state: State<AppState>, query: String, limit: Option<i64>) -> AppResult<Vec<SearchHit>> {
+pub fn search(state: State<AppState>, query: String, limit: Option<i64>, scope: Option<String>) -> AppResult<Vec<SearchHit>> {
     let limit = limit.unwrap_or(30).clamp(1, 200);
     let Some(fts) = to_fts_query(&query) else { return Ok(vec![]) };
     let like = format!("%{}%", query.trim().replace('%', "").replace('_', ""));
+    let scope = scope.unwrap_or_else(|| "all".into());
+    let kinds = scope_kinds(&scope);
+    let all = kinds.is_none();
     state.with(|c| {
         let mut out = vec![];
         let mut stmt = c.prepare(
@@ -48,7 +66,8 @@ pub fn search(state: State<AppState>, query: String, limit: Option<i64>) -> AppR
              FROM search_fts WHERE search_fts MATCH ?1
              ORDER BY bm25(search_fts, 0.0, 0.0, 0.0, 8.0, 1.0) LIMIT ?2",
         )?;
-        let rows = stmt.query_map(params![fts, limit], |r| {
+        let fetch = if all { limit } else { limit * 3 };
+        let rows = stmt.query_map(params![fts, fetch], |r| {
             Ok(SearchHit {
                 kind: r.get(0)?,
                 id: r.get(1)?,
@@ -60,6 +79,9 @@ pub fn search(state: State<AppState>, query: String, limit: Option<i64>) -> AppR
         })?;
         for hit in rows {
             let mut hit = hit?;
+            if kinds.is_some_and(|k| !k.contains(&hit.kind.as_str())) {
+                continue;
+            }
             match hit.kind.as_str() {
                 "task" => {
                     hit.meta = c
@@ -79,15 +101,54 @@ pub fn search(state: State<AppState>, query: String, limit: Option<i64>) -> AppR
             }
             out.push(hit);
         }
-        let mut stmt = c.prepare("SELECT id, name FROM labels WHERE name LIKE ?1 ORDER BY name LIMIT 5")?;
-        for row in stmt.query_map([&like], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
-            let (id, name) = row?;
-            out.push(SearchHit { kind: "label".into(), id, parent_id: None, title: name, snippet: String::new(), meta: None });
+        if all || scope == "tasks" {
+            let mut stmt = c.prepare("SELECT id, name FROM labels WHERE name LIKE ?1 ORDER BY name LIMIT 5")?;
+            for row in stmt.query_map([&like], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+                let (id, name) = row?;
+                out.push(SearchHit { kind: "label".into(), id, parent_id: None, title: name, snippet: String::new(), meta: None });
+            }
+            let mut stmt = c.prepare("SELECT id, name FROM saved_views WHERE name LIKE ?1 ORDER BY name LIMIT 5")?;
+            for row in stmt.query_map([&like], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+                let (id, name) = row?;
+                out.push(SearchHit { kind: "view".into(), id, parent_id: None, title: name, snippet: String::new(), meta: None });
+            }
         }
-        let mut stmt = c.prepare("SELECT id, name FROM saved_views WHERE name LIKE ?1 ORDER BY name LIMIT 5")?;
-        for row in stmt.query_map([&like], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
-            let (id, name) = row?;
-            out.push(SearchHit { kind: "view".into(), id, parent_id: None, title: name, snippet: String::new(), meta: None });
+        if all || scope == "commands" {
+            let mut stmt = c.prepare(
+                "SELECT c.id, c.project_id, c.name, c.program || ' ' || replace(replace(replace(c.args, '[', ''), ']', ''), '\"', ''), p.name
+                 FROM project_commands c JOIN projects p ON p.id = c.project_id WHERE p.deleted_at IS NULL AND (c.name LIKE ?1 OR c.program LIKE ?1 OR c.args LIKE ?1) ORDER BY c.pinned DESC, c.name LIMIT 8",
+            )?;
+            for row in stmt.query_map([&like], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, String>(4)?)))? {
+                let (id, pid, name, cmd, project) = row?;
+                out.push(SearchHit { kind: "command".into(), id, parent_id: Some(pid), title: name, snippet: cmd.replace(',', " "), meta: Some(project) });
+            }
+            let mut stmt = c.prepare(
+                "SELECT s.id, s.project_id, s.name, p.name FROM workspace_snapshots s JOIN projects p ON p.id = s.project_id WHERE p.deleted_at IS NULL AND s.name LIKE ?1 ORDER BY s.name LIMIT 5",
+            )?;
+            for row in stmt.query_map([&like], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?)))? {
+                let (id, pid, name, project) = row?;
+                out.push(SearchHit { kind: "snapshot".into(), id, parent_id: Some(pid), title: name, snippet: String::new(), meta: Some(project) });
+            }
+        }
+        if all || scope == "github" {
+            let number = query.trim().trim_start_matches('#').parse::<i64>().ok();
+            let mut stmt = c.prepare(
+                "SELECT l.task_id, l.repo, l.issue_number, t.title, t.status FROM task_issue_links l JOIN tasks t ON t.id = l.task_id
+                 WHERE t.deleted_at IS NULL AND (t.title LIKE ?1 OR l.issue_number = ?2 OR l.repo LIKE ?1) ORDER BY t.updated_at DESC LIMIT 10",
+            )?;
+            for row in stmt.query_map(params![like, number], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?, r.get::<_, String>(3)?, r.get::<_, String>(4)?)))? {
+                let (task, repo, n, title, status) = row?;
+                out.push(SearchHit { kind: "issue".into(), id: task, parent_id: Some(repo.clone()), title, snippet: format!("{repo}#{n}"), meta: Some(status) });
+            }
+            let mut stmt = c.prepare(
+                "SELECT substr(d.key, 10), json_extract(j.value, '$.number'), json_extract(j.value, '$.title'), json_extract(j.value, '$.htmlUrl'), json_extract(j.value, '$.head')
+                 FROM dev_cache d, json_each(d.data) j
+                 WHERE d.key LIKE 'gh:pulls:%' AND (json_extract(j.value, '$.title') LIKE ?1 OR json_extract(j.value, '$.number') = ?2 OR json_extract(j.value, '$.head') LIKE ?1) LIMIT 10",
+            )?;
+            for row in stmt.query_map(params![like, number], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, Option<String>>(4)?)))? {
+                let (repo, n, title, url, head) = row?;
+                out.push(SearchHit { kind: "pull".into(), id: url, parent_id: Some(repo.clone()), title, snippet: format!("{repo}#{n}{}", head.map(|h| format!(" · {h}")).unwrap_or_default()), meta: None });
+            }
         }
         Ok(out)
     })
