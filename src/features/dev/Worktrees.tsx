@@ -89,7 +89,7 @@ function WorktreeRow({ project, repo, w, onRemove, onChanged }: { project: Proje
   const menu: MenuItems = [
     !w.prunable && { label: "Open terminal here", icon: TerminalSquare, onSelect: () => void openTerminal({ projectId: project.id, cwd: { kind: "worktree", repositoryId: repo.id, path: w.path }, title: w.name }) },
     !w.prunable && { label: "Open in editor", icon: Code2, onSelect: () => void api.worktrees.openInEditor(w.path).catch((e) => toastError(describeError(e))) },
-    !w.prunable && { label: "Reveal in Explorer", icon: FolderOpen, onSelect: () => void api.system.reveal(w.path).catch((e) => toastError(describeError(e))) },
+    !w.prunable && { label: "Show in folder", icon: FolderOpen, onSelect: () => void api.system.reveal(w.path).catch((e) => toastError(describeError(e))) },
     {
       label: "Rename…",
       icon: Pencil,

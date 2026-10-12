@@ -110,7 +110,7 @@ export function repoMenu(project: Pick<Project, "id">, r: Repository): MenuItems
         if (alias !== null) void api.repos.update(r.id, { alias: alias.trim() || null }).then(refreshRepos);
       },
     },
-    !!r.localPath && { label: "Reveal in Explorer", icon: FolderOpen, onSelect: () => void api.repos.reveal(r.id).catch((e) => toastError(describeError(e))) },
+    !!r.localPath && { label: "Show in folder", icon: FolderOpen, onSelect: () => void api.repos.reveal(r.id).catch((e) => toastError(describeError(e))) },
     !!r.localPath && { label: "Open in editor", icon: Code2, onSelect: () => void api.worktrees.openInEditor(r.localPath!).catch((e) => toastError(describeError(e))) },
     !!r.github && { label: "Open on GitHub", icon: ExternalLink, onSelect: () => void openLink(`https://github.com/${r.github}`) },
     !!r.localPath && r.trust !== "trusted" && { label: "Trust folder…", icon: ShieldCheck, onSelect: () => void setRepoTrust(r, "trusted") },

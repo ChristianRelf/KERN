@@ -1,14 +1,16 @@
 # Kern
 
-A local-first personal productivity workspace for Windows (portable to macOS and
-Linux): dashboard, tasks, projects, Kanban boards, whiteboards, notes, a daily
+A local-first personal productivity workspace for Windows and Linux (portable to
+macOS): dashboard, tasks, projects, Kanban boards, whiteboards, notes, a daily
 rundown and a focus timer, in one calm desktop app. Everything stays on your
 computer; there is no account, server or telemetry.
 
 ## Running
 
 Requirements: Node 20+, Rust (stable, MSVC toolchain on Windows), WebView2
-(preinstalled on Windows 11).
+(preinstalled on Windows 11). On Linux, install the
+[Tauri system dependencies](https://v2.tauri.app/start/prerequisites/#linux)
+(WebKitGTK 4.1, libayatana-appindicator, librsvg, patchelf).
 
 ```bash
 npm install
@@ -16,6 +18,15 @@ npm run app:dev      # development (Vite + Tauri, hot reload)
 npm run app:build    # release installers in src-tauri/target/release/bundle/
 npm test             # frontend unit tests (Vitest)
 cd src-tauri && cargo test   # backend unit and integration tests
+```
+
+Linux release bundles (.deb, .rpm, AppImage) are built in an Ubuntu 22.04
+container so they run on older distributions too; from any OS with Docker:
+
+```bash
+docker build -t kern-linux scripts/linux
+docker run --rm -v "$PWD:/repo:ro" -v "$PWD/release/linux:/out" \
+  -v kern-cargo:/root/.cargo/registry -v kern-target:/build/src-tauri/target kern-linux
 ```
 
 To run a development or test instance against a separate data folder (so your

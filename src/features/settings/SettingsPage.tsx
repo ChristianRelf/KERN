@@ -373,7 +373,7 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
       {
         title: "Startup",
         rows: [
-          { label: "Launch at login", hint: `Start ${APP_NAME} when you sign in to Windows.`, keywords: "autostart boot", control: <SToggle k="general.launchAtLogin" /> },
+          { label: "Launch at login", hint: `Start ${APP_NAME} when you sign in.`, keywords: "autostart boot", control: <SToggle k="general.launchAtLogin" /> },
           { label: "Start minimised at login", hint: "When launched at login, stay in the tray (or taskbar) until opened.", control: <SToggle k="general.launchMinimized" /> },
           { label: "Start maximised", control: <SToggle k="general.startMaximized" /> },
           { label: "Remember window size and position", control: <SToggle k="general.rememberWindow" /> },
