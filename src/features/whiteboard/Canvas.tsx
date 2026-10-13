@@ -1,6 +1,8 @@
 // The whiteboard editor: React Flow with custom nodes/edges, tools,
 // undo/redo, clipboard, grouping into areas, alignment guides, file drops,
-// debounced persistence with explicit flushes, and export.
+// debounced persistence with explicit flushes, and export. In a cloud space
+// it is multiplayer: saves send only what changed, collaborators' saves are
+// merged in, and cursors, selections and drags are shared live.
 
 import { takeWhiteboardFocus } from "./focus";
 import {
@@ -60,7 +62,7 @@ import {
 import { api, describeError } from "@/lib/ipc";
 import { invalidate, queryClient } from "@/lib/query";
 import type { Viewport, WhiteboardScene } from "@/lib/types";
-import { useSettings } from "@/stores/settings";
+import { useSetting, useSettings } from "@/stores/settings";
 import { onBeforeNavigate } from "@/stores/router";
 import { toast, toastError } from "@/stores/toast";
 import { MenuContent, type MenuItems } from "@/components/ui/Menu";
@@ -92,6 +94,11 @@ import {
 import { Toolbar, TopBar, type ShapeKind, type Tool } from "./Toolbar";
 import { PropsPanel } from "./PropsPanel";
 import { inkHit, inkPath, makeDrawing } from "./ink";
+import { baselineOf, commit as commitBaseline, diff as diffScene, isEmpty, merge as mergeScene } from "./collab";
+import { onEphemeral, sendEphemeral, setPresence } from "@/features/cloud/realtime";
+import { onWhiteboardChanges } from "@/features/cloud/actions";
+import { useCloud, useReadOnly } from "@/features/cloud/store";
+import { PeerStack, WhiteboardPresence } from "@/features/cloud/Presence";
 
 interface Snap {
   nodes: WbNode[];
@@ -190,6 +197,23 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
   nodesRef.current = nodes;
   edgesRef.current = edges;
 
+  // ------------------------------------------------------------ collaboration
+  const readOnly = useReadOnly();
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
+  const shared = useCloud((st) => !!st.info?.active);
+  const sharedRef = useRef(shared);
+  sharedRef.current = shared;
+  /** Each object and connection as last saved or received. */
+  const baseline = useRef(baselineOf(toRecords(initial.nodes, initial.edges)));
+  /** Objects a collaborator is dragging right now (when), never saved from here. */
+  const liveMoved = useRef(new Map<string, number>());
+  const moving = () => {
+    const now = Date.now();
+    for (const [id, t] of liveMoved.current) if (now - t > 4000) liveMoved.current.delete(id);
+    return new Set(liveMoved.current.keys());
+  };
+
   // ------------------------------------------------------------ persistence
   const saveTimer = useRef<number | undefined>(undefined);
   const dirty = useRef(false);
@@ -199,12 +223,17 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
     window.clearTimeout(saveTimer.current);
     if (!dirty.current || saving.current) return;
     dirty.current = false;
+    // Viewers can't change a workspace; nothing is saved.
+    if (readOnlyRef.current) return;
     saving.current = true;
-    const rec = toRecords(nodesRef.current.map(clean), edgesRef.current);
+    // Only what changed since the last save, so collaborators' edits are never overwritten.
+    const patch = diffScene(baseline.current, toRecords(nodesRef.current.map(clean), edgesRef.current), moving());
     const vp = rf.getViewport();
     void api.whiteboards
-      .save(wbId, rec.nodes, rec.edges, { x: vp.x, y: vp.y, zoom: vp.zoom })
+      .patch(wbId, patch, { x: vp.x, y: vp.y, zoom: vp.zoom })
       .then(() => {
+        commitBaseline(baseline.current, patch);
+        if (isEmpty(patch)) return;
         invalidate("whiteboards", "recent");
         queryClient.removeQueries({ queryKey: ["whiteboard", "preview", wbId] });
       })
@@ -275,6 +304,81 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
     past.current.push({ nodes: nodesRef.current.map(clean), edges: edgesRef.current });
     restore(next);
   };
+
+  // ------------------------------------------------------------ collaborators' saved changes
+  useEffect(
+    () =>
+      onWhiteboardChanges((ids) => {
+        if (!ids.has(wbId)) return;
+        void api.whiteboards
+          .preview(wbId)
+          .then((fresh) => {
+            const conv = fromRecords(fresh.nodes, fresh.edges);
+            const live = moving();
+            const m = mergeScene(baseline.current, toRecords(nodesRef.current.map(clean), edgesRef.current), toRecords(conv.nodes, conv.edges), live);
+            baseline.current = m.next;
+            m.nodes.forEach((_, id) => liveMoved.current.delete(id));
+            if (!m.nodes.size && !m.edges.size) return;
+            const nodeById = new Map(conv.nodes.map((n) => [n.id, n]));
+            const edgeById = new Map(conv.edges.map((e) => [e.id, e]));
+            const applyNodes = (ns: WbNode[], keepUi: boolean): WbNode[] => {
+              const out: WbNode[] = [];
+              const seen = new Set<string>();
+              for (const n of ns) {
+                seen.add(n.id);
+                if (!m.nodes.has(n.id)) out.push(n);
+                else if (m.nodes.get(n.id) && nodeById.has(n.id)) out.push(keepUi ? { ...nodeById.get(n.id)!, selected: n.selected } : nodeById.get(n.id)!);
+              }
+              m.nodes.forEach((rec, id) => {
+                if (rec && !seen.has(id) && nodeById.has(id)) out.push(nodeById.get(id)!);
+              });
+              const present = new Set(out.map((n) => n.id));
+              return sortParentsFirst(out.map((n) => (n.parentId && !present.has(n.parentId) ? { ...n, parentId: undefined } : n)));
+            };
+            const applyEdges = (es: WbEdge[], keepUi: boolean): WbEdge[] => {
+              const out: WbEdge[] = [];
+              const seen = new Set<string>();
+              for (const e of es) {
+                seen.add(e.id);
+                if (!m.edges.has(e.id)) out.push(e);
+                else if (m.edges.get(e.id) && edgeById.has(e.id)) out.push(keepUi ? { ...edgeById.get(e.id)!, selected: e.selected } : edgeById.get(e.id)!);
+              }
+              m.edges.forEach((rec, id) => {
+                if (rec && !seen.has(id) && edgeById.has(id)) out.push(edgeById.get(id)!);
+              });
+              return out;
+            };
+            setNodes((ns) => applyNodes(ns, true));
+            setEdges((es) => applyEdges(es, true));
+            // Undo only reverts this person's own edits.
+            const fix = (snap: Snap): Snap => ({ nodes: applyNodes(snap.nodes, false), edges: applyEdges(snap.edges, false) });
+            committed.current = fix(committed.current);
+            past.current = past.current.map(fix);
+            future.current = future.current.map(fix);
+          })
+          .catch(() => undefined);
+      }),
+    [wbId],
+  );
+
+  // Collaborators' drags, shown live until their save arrives.
+  useEffect(
+    () =>
+      onEphemeral((e) => {
+        const d = e.data as { k?: string; wb?: string; n?: { id: string; x: number; y: number }[] } | null;
+        if (d?.k !== "drag" || d.wb !== wbId || !Array.isArray(d.n)) return;
+        const moves = new Map(d.n.filter((m) => Number.isFinite(m.x) && Number.isFinite(m.y)).map((m) => [m.id, m]));
+        const now = Date.now();
+        moves.forEach((_, id) => liveMoved.current.set(id, now));
+        setNodes((ns) =>
+          ns.map((n) => {
+            const m = moves.get(n.id);
+            return m && !n.dragging ? { ...n, position: { x: m.x, y: m.y } } : n;
+          }),
+        );
+      }),
+    [wbId],
+  );
 
   // ------------------------------------------------------------ node api
   const updateNode = useCallback(
@@ -358,6 +462,13 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
       }
       setNodes((ns) => applyNodeChanges(changes, ns));
       if (commit) requestCommit();
+      if (sharedRef.current) {
+        const moved = changes.filter((c): c is Extract<NodeChange<WbNode>, { type: "position" }> => c.type === "position" && !!c.position);
+        if (moved.length) {
+          moved.forEach((c) => liveMoved.current.delete(c.id));
+          sendEphemeral({ k: "drag", wb: wbId, n: moved.map((c) => ({ id: c.id, x: c.position!.x, y: c.position!.y })) }, moved.some((c) => c.dragging === false));
+        }
+      }
     },
     [requestCommit, zoom, s["wb.alignGuides"]],
   );
@@ -640,7 +751,7 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
 
   // Double-click on empty canvas adds a text card.
   const onDoubleClick = (e: React.MouseEvent) => {
-    if (!(e.target as HTMLElement).classList.contains("react-flow__pane")) return;
+    if (readOnly || !(e.target as HTMLElement).classList.contains("react-flow__pane")) return;
     create("text", flowAt(e.clientX, e.clientY));
   };
 
@@ -914,7 +1025,7 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
     let unlisten: (() => void) | undefined;
     void getCurrentWebview()
       .onDragDropEvent((ev) => {
-        if (ev.payload.type !== "drop") return;
+        if (ev.payload.type !== "drop" || readOnlyRef.current) return;
         const rect = wrapper.current?.getBoundingClientRect();
         if (!rect) return;
         const ratio = window.devicePixelRatio || 1;
@@ -933,6 +1044,7 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
 
   useEffect(() => {
     const handler = (e: ClipboardEvent) => {
+      if (readOnlyRef.current) return;
       if (!wrapper.current?.contains(document.activeElement) && document.activeElement !== document.body) return;
       void onPaste(e);
     };
@@ -945,6 +1057,8 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
     if (isTextInput(e.target)) return;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key.toLowerCase();
+    // View only: navigation keys and copying still work.
+    if (readOnly && !(mod && ["0", "=", "+", "-", "c", "a"].includes(k)) && !(e.shiftKey && (e.code === "Digit1" || e.code === "Digit2")) && e.key !== " ") return;
     const handled = () => {
       e.preventDefault();
       e.stopPropagation();
@@ -1150,6 +1264,32 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
     setSelection((prev) => (prev.nodes.join() === next.nodes.join() && prev.edges.join() === next.edges.join() ? prev : next));
   }, []);
 
+  // ------------------------------------------------------------ presence
+  const sharePresence = useSetting("cloud.sharePresence") && shared;
+  const view = `wb:${wbId}`;
+  const cursorAt = useRef<Pt | null>(null);
+  const selectionRef = useRef<string[]>([]);
+  selectionRef.current = selection.nodes;
+  const announce = useCallback(
+    (cursor: Pt | null) => {
+      cursorAt.current = cursor;
+      if (sharePresence) setPresence({ view, label: scene.whiteboard.name, cursor, selection: selectionRef.current });
+    },
+    [sharePresence, view, scene.whiteboard.name],
+  );
+  useEffect(() => {
+    announce(cursorAt.current);
+  }, [selection.nodes, announce]);
+  useEffect(() => () => setPresence(null), []);
+  const boxOf = (id: string) => {
+    const all = nodesRef.current;
+    const n = all.find((x) => x.id === id);
+    if (!n) return null;
+    const p = absolutePosition(n, new Map(all.map((x) => [x.id, x])));
+    const { w, h } = sizeOf(n);
+    return { x: p.x, y: p.y, w, h };
+  };
+
   // ------------------------------------------------------------ render
   const displayEdges = useMemo(() => edges.map((e) => withMarkers(e, e.selected ? "var(--text)" : "var(--text-3)")), [edges]);
   const transform = useStore((st) => st.transform);
@@ -1178,7 +1318,7 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
     <WbContext.Provider value={nodeApi}>
       <EdgeApiContext.Provider value={edgeApi}>
         <CM.Root modal={false} onOpenChange={(o) => !o && setMenu(null)}>
-          <CM.Trigger asChild>
+          <CM.Trigger asChild disabled={readOnly}>
             <div
               ref={wrapper}
               className="wb"
@@ -1189,7 +1329,11 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
               tabIndex={0}
               onKeyDown={onKeyDown}
               onKeyUp={(e) => e.key === " " && setSpacePan(false)}
-              onMouseMove={(e) => (pointer.current = { x: e.clientX, y: e.clientY })}
+              onMouseMove={(e) => {
+                pointer.current = { x: e.clientX, y: e.clientY };
+                if (sharePresence) announce(flowAt(e.clientX, e.clientY));
+              }}
+              onMouseLeave={() => sharePresence && announce(null)}
               onDoubleClick={onDoubleClick}
             >
               <ReactFlow<WbNode, WbEdge>
@@ -1202,7 +1346,9 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
                 onReconnect={onReconnect}
-                edgesReconnectable
+                edgesReconnectable={!readOnly}
+                nodesDraggable={!readOnly}
+                nodesConnectable={!readOnly}
                 onNodeDragStop={onNodeDragStop}
                 onPaneClick={onPaneClick}
                 onSelectionChange={onSelectionChange}
@@ -1263,6 +1409,13 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
                   </svg>
                 </div>
               )}
+              <WhiteboardPresence view={view} transform={transform as [number, number, number]} boxOf={boxOf} />
+              {(shared || readOnly) && (
+                <div className="wb-collab">
+                  {readOnly && <span className="chip chip--outline">View only</span>}
+                  <PeerStack view={view} />
+                </div>
+              )}
               {!nodes.length && (
                 <div className="wb-empty">
                   <div>
@@ -1293,7 +1446,7 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
                   }
                 }}
               />
-              {(selection.nodes.length > 0 || selection.edges.length > 0) && (
+              {!readOnly && (selection.nodes.length > 0 || selection.edges.length > 0) && (
                 <PropsPanel
                   nodes={nodes.filter((n) => selection.nodes.includes(n.id))}
                   edges={edges.filter((e) => selection.edges.includes(e.id))}
@@ -1308,7 +1461,7 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
                   onDelete={deleteSelection}
                 />
               )}
-              <Toolbar
+              {!readOnly && <Toolbar
                 tool={tool}
                 onTool={setTool}
                 lastShape={lastShape}
@@ -1323,7 +1476,7 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
                 canRedo={future.current.length > 0}
                 onUndo={undo}
                 onRedo={redo}
-              />
+              />}
             </div>
           </CM.Trigger>
           <CM.Portal>

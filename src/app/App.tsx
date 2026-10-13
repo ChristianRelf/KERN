@@ -31,6 +31,7 @@ import { Onboarding } from "@/features/onboarding/Onboarding";
 import { Button } from "@/components/ui/Button";
 import { describeError } from "@/lib/ipc";
 import { BrandMark } from "./BrandMark";
+import { CloudHost } from "@/features/cloud/CloudHost";
 
 const TerminalPanel = lazy(() => import("@/features/terminal/TerminalPanel"));
 const CatchupHost = lazy(() => import("@/features/catchup/CatchupDialog"));
@@ -116,6 +117,7 @@ function Shell() {
       <StartWorkHost />
       <FileViewerHost />
       <LazyHosts />
+      <CloudHost />
       <ConfirmHost />
       <PromptHost />
       <Toaster />

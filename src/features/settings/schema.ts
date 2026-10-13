@@ -160,6 +160,10 @@ export interface Settings {
   "data.activityRetentionDays": number;
   "data.linkPreviews": boolean;
   "storage.includeLinkedFolders": boolean;
+  // Kern Cloud
+  "cloud.enabled": boolean;
+  "cloud.sharePresence": boolean;
+  "cloud.showCursors": boolean;
   // Privacy
   "privacy.network": boolean;
   "privacy.favicons": boolean;
@@ -330,6 +334,10 @@ export const DEFAULTS: Settings = {
   "data.activityRetentionDays": 180,
   "data.linkPreviews": true,
   "storage.includeLinkedFolders": false,
+
+  "cloud.enabled": false,
+  "cloud.sharePresence": true,
+  "cloud.showCursors": true,
 
   "privacy.network": true,
   "privacy.favicons": true,

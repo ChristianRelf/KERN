@@ -12,6 +12,7 @@ import "./features/boards/boards.css";
 import "./features/dashboard/dashboard.css";
 import "./features/pages.css";
 import "./features/workspace.css";
+import "./features/cloud/cloud.css";
 import { App } from "./app/App";
 
 createRoot(document.getElementById("root")!).render(

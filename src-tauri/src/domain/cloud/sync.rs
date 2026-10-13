@@ -355,65 +355,66 @@ impl Touched {
     }
 }
 
-/// Records what the server accepted. Fields sent become part of the shadow
-/// (unless a newer remote version was applied meanwhile); anything edited
-/// again since collecting stays queued.
+/// Records what the server accepted. The reply carries each record as merged
+/// on the server - including fields other people changed - so it's applied
+/// like a remote change, against a base of "the previous shadow plus what we
+/// sent". Anything edited again since collecting stays queued.
 pub fn ack(conn: &mut Connection, batch: &PushBatch, result: &PushResult) -> AppResult<Touched> {
-    let tx = conn.transaction()?;
-    let mut touched = Touched::default();
-    let sent: HashMap<(&str, &str), &OutChange> = batch.changes.iter().map(|c| ((c.t.as_str(), c.id.as_str()), c)).collect();
-    for r in &result.changes {
-        let Some(out) = sent.get(&(r.t.as_str(), r.id.as_str())) else { continue };
-        let current = shadow(&tx, &r.t, &r.id)?;
-        if current.as_ref().map(|(_, s)| *s >= r.seq).unwrap_or(false) {
-            continue;
-        }
-        if out.op == "delete" {
-            set_shadow(&tx, &r.t, &r.id, None, r.seq)?;
-        } else {
-            let mut base = current.and_then(|(d, _)| d).filter(|_| !out.full).unwrap_or_default();
+    with_applying(conn, |tx| {
+        let mut touched = Touched::default();
+        let mut cache = HashMap::new();
+        let sent: HashMap<(&str, &str), &OutChange> = batch.changes.iter().map(|c| ((c.t.as_str(), c.id.as_str()), c)).collect();
+        for r in &result.changes {
+            let Some(out) = sent.get(&(r.t.as_str(), r.id.as_str())) else { continue };
+            let current = shadow(tx, &r.t, &r.id)?;
+            let (prev, prev_seq) = match current {
+                // A newer version was already applied (e.g. the realtime echo).
+                Some((_, seq)) if seq >= r.seq => continue,
+                Some((d, seq)) => (d, seq),
+                None => (None, 0),
+            };
+            if out.op == "delete" {
+                set_shadow(tx, &r.t, &r.id, None, r.seq)?;
+                continue;
+            }
+            let mut base = if out.full { Map::new() } else { prev.unwrap_or_default() };
             for (k, v) in out.data.iter().flatten() {
                 base.insert(k.clone(), v.clone());
             }
-            set_shadow(&tx, &r.t, &r.id, Some(&base), r.seq)?;
+            set_shadow(tx, &r.t, &r.id, Some(&base), prev_seq)?;
+            apply_one(tx, r, false, &mut cache, &mut touched)?;
         }
-    }
-    // Deleted elsewhere while edited here: deletion wins.
-    if !result.rejected.is_empty() {
-        set_applying(&tx, true)?;
+        // Deleted elsewhere while edited here: deletion wins.
         for r in &result.rejected {
             if let Some(t) = table(&r.t) {
-                let wb = whiteboard_of(&tx, t, &r.id);
+                let wb = whiteboard_of(tx, t, &r.id);
                 let parts = split_key(t, &r.id);
                 tx.execute(&format!("DELETE FROM main.{} WHERE {}", t.name, pk_where(t)), params_from_iter(parts.iter()))?;
-                set_shadow(&tx, &r.t, &r.id, None, 0)?;
+                set_shadow(tx, &r.t, &r.id, None, 0)?;
                 touched.note(&r.t, None, wb);
             }
         }
-        set_applying(&tx, false)?;
-    }
-    let mut cache = HashMap::new();
-    for (tbl, rid, upto) in &batch.keys {
-        tx.execute("DELETE FROM sync_outbox WHERE tbl = ?1 AND rid = ?2 AND seq <= ?3", params![tbl, rid, upto])?;
-        // Re-queue if the record still differs from what the server has.
-        if let Some(t) = table(tbl) {
-            let cols = columns(&tx, t, &mut cache)?;
-            let local = read_row(&tx, t, rid, &cols)?;
-            let sh = shadow(&tx, tbl, rid)?;
-            let dirty = match (&local, &sh) {
-                (Some(l), Some((Some(s), _))) => !diff(l, s).is_empty(),
-                // Never accepted by the server yet: keep trying.
-                (Some(_), _) => true,
-                (None, Some((Some(_), _))) => true,
-                (None, _) => false,
-            };
-            if dirty {
-                enqueue(&tx, tbl, rid)?;
+        for (tbl, rid, upto) in &batch.keys {
+            tx.execute("DELETE FROM sync_outbox WHERE tbl = ?1 AND rid = ?2 AND seq <= ?3", params![tbl, rid, upto])?;
+            // Re-queue if the record still differs from what the server has.
+            if let Some(t) = table(tbl) {
+                let cols = columns(tx, t, &mut cache)?;
+                let local = read_row(tx, t, rid, &cols)?;
+                let sh = shadow(tx, tbl, rid)?;
+                let dirty = match (&local, &sh) {
+                    (Some(l), Some((Some(s), _))) => !diff(l, s).is_empty(),
+                    // Never accepted by the server yet: keep trying.
+                    (Some(_), _) => true,
+                    (None, Some((Some(_), _))) => true,
+                    (None, _) => false,
+                };
+                if dirty {
+                    enqueue(tx, tbl, rid)?;
+                }
             }
         }
-    }
-    tx.commit()?;
-    Ok(touched)
+        Ok(touched)
+    })
 }
 
 // ------------------------------------------------------------ apply
@@ -425,96 +426,111 @@ fn whiteboard_of(conn: &Connection, t: &SyncTable, rid: &str) -> Option<String> 
     conn.query_row(&format!("SELECT whiteboard_id FROM main.{} WHERE id = ?1", t.name), [rid], |r| r.get(0)).optional().ok().flatten()
 }
 
-/// Applies remote changes (in sequence order). With `force`, local edits
-/// that haven't been sent are discarded instead of kept.
-pub fn apply(conn: &mut Connection, changes: &[RemoteChange], force: bool) -> AppResult<Touched> {
+/// Runs `f` in a transaction with change capture paused and foreign keys
+/// off (remote records may arrive before the records they point to).
+fn with_applying<T>(conn: &mut Connection, f: impl FnOnce(&Connection) -> AppResult<T>) -> AppResult<T> {
     conn.execute_batch("PRAGMA foreign_keys = OFF")?;
-    let out = apply_inner(conn, changes, force);
+    let out = (|| {
+        let tx = conn.transaction()?;
+        set_applying(&tx, true)?;
+        let v = f(&tx)?;
+        set_applying(&tx, false)?;
+        tx.commit()?;
+        Ok(v)
+    })();
     let _ = conn.execute_batch("PRAGMA foreign_keys = ON");
     out
 }
 
-fn apply_inner(conn: &mut Connection, changes: &[RemoteChange], force: bool) -> AppResult<Touched> {
-    let tx = conn.transaction()?;
-    set_applying(&tx, true)?;
-    let mut touched = Touched::default();
-    let mut cache = HashMap::new();
-    for ch in changes {
-        let Some(t) = table(&ch.t) else { continue };
-        let sh = shadow(&tx, &ch.t, &ch.id)?;
-        if !force && sh.as_ref().map(|(_, s)| *s >= ch.seq).unwrap_or(false) {
-            continue;
+/// Applies remote changes (in sequence order). With `force`, local edits
+/// that haven't been sent are discarded instead of kept.
+pub fn apply(conn: &mut Connection, changes: &[RemoteChange], force: bool) -> AppResult<Touched> {
+    with_applying(conn, |tx| {
+        let mut touched = Touched::default();
+        let mut cache = HashMap::new();
+        for ch in changes {
+            apply_one(tx, ch, force, &mut cache, &mut touched)?;
         }
-        let parts = split_key(t, &ch.id);
-        if parts.len() != t.pk.len() {
-            continue;
-        }
-        if ch.op == "delete" {
-            let wb = whiteboard_of(&tx, t, &ch.id);
-            tx.execute(&format!("DELETE FROM main.{} WHERE {}", t.name, pk_where(t)), params_from_iter(parts.iter()))?;
-            tx.execute("DELETE FROM sync_outbox WHERE tbl = ?1 AND rid = ?2", params![ch.t, ch.id])?;
-            set_shadow(&tx, &ch.t, &ch.id, None, ch.seq)?;
-            touched.note(&ch.t, None, wb);
-            continue;
-        }
-        let cols = columns(&tx, t, &mut cache)?;
-        let Some(data) = &ch.data else { continue };
-        let remote: Map<String, Value> = data.iter().filter(|(k, _)| cols.contains(k)).map(|(k, v)| (k.clone(), v.clone())).collect();
-        if t.pk.iter().any(|k| !remote.contains_key(*k)) {
-            continue;
-        }
-        let local = read_row(&tx, t, &ch.id, &cols)?;
-        let base = sh.as_ref().and_then(|(d, _)| d.as_ref());
-        let mut pending = false;
-        let mut merged = remote.clone();
-        if let (false, Some(l), Some(s)) = (force, &local, base) {
-            for (k, v) in remote.iter() {
-                if !same(l.get(k), s.get(k)) && !same(l.get(k), Some(v)) {
-                    merged.insert(k.clone(), l.get(k).cloned().unwrap_or(Value::Null));
-                    pending = true;
-                }
-            }
-        }
-        let result = match &local {
-            Some(l) => {
-                let changed: Vec<(&String, &Value)> = merged.iter().filter(|(k, v)| !same(l.get(*k), Some(v))).collect();
-                if changed.is_empty() {
-                    Ok(0)
-                } else {
-                    let sets = changed.iter().enumerate().map(|(i, (k, _))| format!("\"{k}\" = ?{}", i + 1)).collect::<Vec<_>>().join(", ");
-                    let wh = t.pk.iter().enumerate().map(|(i, c)| format!("{c} = ?{}", changed.len() + i + 1)).collect::<Vec<_>>().join(" AND ");
-                    let mut vals: Vec<SqlValue> = changed.iter().map(|(_, v)| to_sql(v)).collect();
-                    vals.extend(parts.iter().map(|p| SqlValue::Text(p.to_string())));
-                    tx.execute(&format!("UPDATE main.{} SET {sets} WHERE {wh}", t.name), params_from_iter(vals))
-                }
-            }
-            None => {
-                let names: Vec<&String> = merged.keys().collect();
-                let sql = format!(
-                    "INSERT INTO main.{} ({}) VALUES ({})",
-                    t.name,
-                    names.iter().map(|k| format!("\"{k}\"")).collect::<Vec<_>>().join(", "),
-                    (1..=names.len()).map(|i| format!("?{i}")).collect::<Vec<_>>().join(", ")
-                );
-                tx.execute(&sql, params_from_iter(merged.values().map(to_sql)))
-            }
-        };
-        if let Err(e) = result {
-            // One bad record (e.g. from a newer app version) must not block the rest.
-            eprintln!("cloud sync: couldn't apply {}/{}: {e}", ch.t, ch.id);
-            continue;
-        }
-        set_shadow(&tx, &ch.t, &ch.id, Some(&remote), ch.seq)?;
-        if pending {
-            enqueue(&tx, &ch.t, &ch.id)?;
-        } else if force {
-            tx.execute("DELETE FROM sync_outbox WHERE tbl = ?1 AND rid = ?2", params![ch.t, ch.id])?;
-        }
-        touched.note(&ch.t, Some(&remote), None);
+        Ok(touched)
+    })
+}
+
+/// Three-way applies one remote version: fields with an unsent local edit
+/// keep the local value (and stay queued); everything else takes the
+/// server's. Older versions than the one already known are ignored.
+fn apply_one(tx: &Connection, ch: &RemoteChange, force: bool, cache: &mut HashMap<&'static str, Vec<String>>, touched: &mut Touched) -> AppResult<()> {
+    let Some(t) = table(&ch.t) else { return Ok(()) };
+    let sh = shadow(tx, &ch.t, &ch.id)?;
+    if !force && sh.as_ref().map(|(_, s)| *s >= ch.seq).unwrap_or(false) {
+        return Ok(());
     }
-    set_applying(&tx, false)?;
-    tx.commit()?;
-    Ok(touched)
+    let parts = split_key(t, &ch.id);
+    if parts.len() != t.pk.len() {
+        return Ok(());
+    }
+    if ch.op == "delete" {
+        let wb = whiteboard_of(tx, t, &ch.id);
+        tx.execute(&format!("DELETE FROM main.{} WHERE {}", t.name, pk_where(t)), params_from_iter(parts.iter()))?;
+        tx.execute("DELETE FROM sync_outbox WHERE tbl = ?1 AND rid = ?2", params![ch.t, ch.id])?;
+        set_shadow(tx, &ch.t, &ch.id, None, ch.seq)?;
+        touched.note(&ch.t, None, wb);
+        return Ok(());
+    }
+    let cols = columns(tx, t, cache)?;
+    let Some(data) = &ch.data else { return Ok(()) };
+    let remote: Map<String, Value> = data.iter().filter(|(k, _)| cols.contains(k)).map(|(k, v)| (k.clone(), v.clone())).collect();
+    if t.pk.iter().any(|k| !remote.contains_key(*k)) {
+        return Ok(());
+    }
+    let local = read_row(tx, t, &ch.id, &cols)?;
+    let base = sh.as_ref().and_then(|(d, _)| d.as_ref());
+    let mut pending = false;
+    let mut merged = remote.clone();
+    if let (false, Some(l), Some(s)) = (force, &local, base) {
+        for (k, v) in remote.iter() {
+            if !same(l.get(k), s.get(k)) && !same(l.get(k), Some(v)) {
+                merged.insert(k.clone(), l.get(k).cloned().unwrap_or(Value::Null));
+                pending = true;
+            }
+        }
+    }
+    let result = match &local {
+        Some(l) => {
+            let changed: Vec<(&String, &Value)> = merged.iter().filter(|(k, v)| !same(l.get(*k), Some(v))).collect();
+            if changed.is_empty() {
+                Ok(0)
+            } else {
+                let sets = changed.iter().enumerate().map(|(i, (k, _))| format!("\"{k}\" = ?{}", i + 1)).collect::<Vec<_>>().join(", ");
+                let wh = t.pk.iter().enumerate().map(|(i, c)| format!("{c} = ?{}", changed.len() + i + 1)).collect::<Vec<_>>().join(" AND ");
+                let mut vals: Vec<SqlValue> = changed.iter().map(|(_, v)| to_sql(v)).collect();
+                vals.extend(parts.iter().map(|p| SqlValue::Text(p.to_string())));
+                tx.execute(&format!("UPDATE main.{} SET {sets} WHERE {wh}", t.name), params_from_iter(vals))
+            }
+        }
+        None => {
+            let names: Vec<&String> = merged.keys().collect();
+            let sql = format!(
+                "INSERT INTO main.{} ({}) VALUES ({})",
+                t.name,
+                names.iter().map(|k| format!("\"{k}\"")).collect::<Vec<_>>().join(", "),
+                (1..=names.len()).map(|i| format!("?{i}")).collect::<Vec<_>>().join(", ")
+            );
+            tx.execute(&sql, params_from_iter(merged.values().map(to_sql)))
+        }
+    };
+    if let Err(e) = result {
+        // One bad record (e.g. from a newer app version) must not block the rest.
+        eprintln!("cloud sync: couldn't apply {}/{}: {e}", ch.t, ch.id);
+        return Ok(());
+    }
+    set_shadow(tx, &ch.t, &ch.id, Some(&remote), ch.seq)?;
+    if pending {
+        enqueue(tx, &ch.t, &ch.id)?;
+    } else if force {
+        tx.execute("DELETE FROM sync_outbox WHERE tbl = ?1 AND rid = ?2", params![ch.t, ch.id])?;
+    }
+    touched.note(&ch.t, Some(&remote), None);
+    Ok(())
 }
 
 /// Drops local changes that were never accepted (read-only access): queued
@@ -619,10 +635,22 @@ mod tests {
         RemoteChange { seq, t: t.into(), id: id.into(), op: "upsert".into(), data: data.as_object().cloned() }
     }
 
+    /// Pushes everything; the simulated server replies with the merged (full) rows.
     fn sent_all(c: &mut Connection, base_seq: i64) -> PushBatch {
         let b = collect(c, 500, 1 << 20).unwrap();
+        let mut cache = HashMap::new();
         let res = PushResult {
-            changes: b.changes.iter().enumerate().map(|(i, ch)| RemoteChange { seq: base_seq + i as i64, t: ch.t.clone(), id: ch.id.clone(), op: ch.op.into(), data: ch.data.clone() }).collect(),
+            changes: b
+                .changes
+                .iter()
+                .enumerate()
+                .map(|(i, ch)| {
+                    let t = table(&ch.t).unwrap();
+                    let cols = columns(c, t, &mut cache).unwrap();
+                    let data = if ch.op == "delete" { None } else { read_row(c, t, &ch.id, &cols).unwrap() };
+                    RemoteChange { seq: base_seq + i as i64, t: ch.t.clone(), id: ch.id.clone(), op: ch.op.into(), data }
+                })
+                .collect(),
             rejected: vec![],
         };
         ack(c, &b, &res).unwrap();
@@ -674,6 +702,24 @@ mod tests {
     }
 
     #[test]
+    fn push_replies_bring_in_fields_others_changed() {
+        let mut c = replica();
+        c.execute_batch("INSERT INTO tasks(id, title, created_at, updated_at) VALUES ('t1', 'Old', 1, 1)").unwrap();
+        sent_all(&mut c, 1);
+        c.execute_batch("UPDATE tasks SET status = 'in_progress' WHERE id = 't1'").unwrap();
+        let b = collect(&c, 500, 1 << 20).unwrap();
+        // Someone renamed the task (seq 2) before our push (seq 3) was merged:
+        // the server's reply is the whole merged row.
+        let t = table("tasks").unwrap();
+        let mut merged = read_row(&c, t, "t1", &columns(&c, t, &mut HashMap::new()).unwrap()).unwrap().unwrap();
+        merged.insert("title".into(), json!("New"));
+        ack(&mut c, &b, &PushResult { changes: vec![rc(3, "tasks", "t1", Value::Object(merged))], rejected: vec![] }).unwrap();
+        let title: String = c.query_row("SELECT title FROM tasks WHERE id = 't1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(title, "New");
+        assert_eq!(pending_count(&c), 0);
+    }
+
+    #[test]
     fn deletes_leave_tombstones_and_stale_copies_stay_dead() {
         let mut c = replica();
         apply(&mut c, &[rc(1, "notes", "n1", json!({"id": "n1", "title": "A", "content": "", "created_at": 1, "updated_at": 1}))], false).unwrap();
@@ -721,5 +767,142 @@ mod tests {
         ack(&mut c, &b, &res).unwrap();
         let n: i64 = c.query_row("SELECT count(*) FROM notes", [], |r| r.get(0)).unwrap();
         assert_eq!((n, pending_count(&c)), (0, 0));
+    }
+}
+
+/// End-to-end sync between two replicas through a running Kern Cloud server.
+/// Opt-in: set KERN_E2E_URL, KERN_E2E_A / KERN_E2E_B (session tokens of two
+/// members of one workspace) and KERN_E2E_SPACE, then
+/// `cargo test cloud_e2e -- --ignored --nocapture`.
+#[cfg(test)]
+mod e2e {
+    use super::*;
+    use crate::domain::cloud::client;
+    use crate::domain::whiteboards::{self, ScenePatch, WbNode};
+    use serde_json::json;
+
+    struct Peer {
+        conn: Connection,
+        token: String,
+    }
+
+    fn env(k: &str) -> Option<String> {
+        std::env::var(k).ok().filter(|v| !v.is_empty())
+    }
+
+    fn peer(token: String) -> Peer {
+        let conn = crate::db::open_memory();
+        install(&conn).unwrap();
+        Peer { conn, token }
+    }
+
+    fn push(p: &mut Peer, base: &str, space: &str) {
+        loop {
+            let batch = collect(&p.conn, 300, 2 << 20).unwrap();
+            if batch.keys.is_empty() {
+                return;
+            }
+            let result: PushResult = if batch.changes.is_empty() {
+                PushResult::default()
+            } else {
+                let r = client::check(client::request(base, Some(&p.token), "POST", &format!("/spaces/{space}/sync/push"), Some(&json!({ "changes": batch.changes })))).unwrap();
+                serde_json::from_value(r.body).unwrap()
+            };
+            ack(&mut p.conn, &batch, &result).unwrap();
+        }
+    }
+
+    fn pull(p: &mut Peer, base: &str, space: &str) {
+        loop {
+            let since = cursor(&p.conn).unwrap();
+            let r = client::check(client::request(base, Some(&p.token), "GET", &format!("/spaces/{space}/sync/pull?since={since}"), None)).unwrap().body;
+            let changes: Vec<RemoteChange> = serde_json::from_value(r["changes"].clone()).unwrap();
+            apply(&mut p.conn, &changes, false).unwrap();
+            let next = r["cursor"].as_i64().unwrap();
+            if next > since {
+                set_cursor(&p.conn, next).unwrap();
+            }
+            if !r["hasMore"].as_bool().unwrap_or(false) {
+                return;
+            }
+        }
+    }
+
+    fn text(c: &Connection, sql: &str) -> Option<String> {
+        c.query_row(sql, [], |r| r.get(0)).optional().unwrap().flatten()
+    }
+
+    fn wb(id: &str, x: f64) -> WbNode {
+        serde_json::from_value(json!({ "id": id, "type": "sticky", "x": x, "y": 0.0, "width": 200.0, "height": 200.0, "data": { "text": id } })).unwrap()
+    }
+
+    #[test]
+    #[ignore]
+    fn cloud_e2e_two_replicas_converge() {
+        let (Some(base), Some(ta), Some(tb), Some(space)) = (env("KERN_E2E_URL"), env("KERN_E2E_A"), env("KERN_E2E_B"), env("KERN_E2E_SPACE")) else {
+            eprintln!("KERN_E2E_* not set; skipping");
+            return;
+        };
+        let (mut a, mut b) = (peer(ta), peer(tb));
+
+        // A creates a project, a board column, a task and a whiteboard.
+        a.conn
+            .execute_batch(
+                "INSERT INTO projects(id, name, created_at, updated_at) VALUES ('p1', 'Launch', 1, 1);
+                 INSERT INTO boards(id, project_id, name, created_at, updated_at) VALUES ('b1', 'p1', 'Board', 1, 1);
+                 INSERT INTO board_columns(id, board_id, name, created_at, updated_at) VALUES ('c1', 'b1', 'Doing', 1, 1);
+                 INSERT INTO tasks(id, title, project_id, column_id, created_at, updated_at) VALUES ('t1', 'Write copy', 'p1', 'c1', 1, 1);
+                 INSERT INTO labels(id, name, created_at) VALUES ('l1', 'urgent', 1);
+                 INSERT INTO task_labels(task_id, label_id) VALUES ('t1', 'l1');
+                 INSERT INTO whiteboards(id, project_id, name, created_at, updated_at) VALUES ('w1', 'p1', 'Plan', 1, 1);",
+            )
+            .unwrap();
+        push(&mut a, &base, &space);
+        pull(&mut b, &base, &space);
+        assert_eq!(text(&b.conn, "SELECT title FROM tasks WHERE id = 't1'").as_deref(), Some("Write copy"));
+        assert_eq!(text(&b.conn, "SELECT name FROM board_columns WHERE id = 'c1'").as_deref(), Some("Doing"));
+        assert_eq!(text(&b.conn, "SELECT label_id FROM task_labels WHERE task_id = 't1'").as_deref(), Some("l1"));
+        // Remote rows are searchable like local ones.
+        assert_eq!(text(&b.conn, "SELECT ref_id FROM search_fts WHERE search_fts MATCH 'copy'").as_deref(), Some("t1"));
+
+        // Concurrent edits to different fields of the same task merge.
+        a.conn.execute_batch("UPDATE tasks SET title = 'Write launch copy' WHERE id = 't1'").unwrap();
+        b.conn.execute_batch("UPDATE tasks SET status = 'in_progress', priority = 2 WHERE id = 't1'").unwrap();
+        push(&mut a, &base, &space);
+        push(&mut b, &base, &space);
+        pull(&mut a, &base, &space);
+        pull(&mut b, &base, &space);
+        for p in [&a, &b] {
+            let (title, status, prio): (String, String, i64) = p.conn.query_row("SELECT title, status, priority FROM tasks WHERE id = 't1'", [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap();
+            assert_eq!((title.as_str(), status.as_str(), prio), ("Write launch copy", "in_progress", 2));
+            assert_eq!(pending_count(&p.conn), 0);
+        }
+
+        // Two people add objects to the same whiteboard: both survive.
+        whiteboards::patch_scene(&a.conn, "w1", &ScenePatch { nodes: vec![wb("from-a", 0.0)], ..Default::default() }).unwrap();
+        whiteboards::patch_scene(&b.conn, "w1", &ScenePatch { nodes: vec![wb("from-b", 300.0)], ..Default::default() }).unwrap();
+        push(&mut a, &base, &space);
+        push(&mut b, &base, &space);
+        pull(&mut a, &base, &space);
+        pull(&mut b, &base, &space);
+        for p in [&a, &b] {
+            assert_eq!(whiteboards::nodes(&p.conn, "w1").unwrap().len(), 2);
+        }
+
+        // A deletes the task while B edits it offline: deletion wins everywhere.
+        a.conn.execute_batch("DELETE FROM tasks WHERE id = 't1'").unwrap();
+        push(&mut a, &base, &space);
+        b.conn.execute_batch("UPDATE tasks SET description = 'late edit' WHERE id = 't1'").unwrap();
+        push(&mut b, &base, &space);
+        pull(&mut b, &base, &space);
+        assert!(text(&b.conn, "SELECT id FROM tasks WHERE id = 't1'").is_none());
+        assert!(text(&b.conn, "SELECT task_id FROM task_labels WHERE task_id = 't1'").is_none(), "the label link went with the task");
+
+        // A fresh device bootstraps the whole space.
+        let mut c = peer(b.token.clone());
+        pull(&mut c, &base, &space);
+        assert_eq!(text(&c.conn, "SELECT name FROM projects WHERE id = 'p1'").as_deref(), Some("Launch"));
+        assert_eq!(whiteboards::nodes(&c.conn, "w1").unwrap().len(), 2);
+        assert!(text(&c.conn, "SELECT id FROM tasks WHERE id = 't1'").is_none());
     }
 }

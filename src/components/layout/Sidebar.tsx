@@ -26,6 +26,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { SessionPill } from "@/features/sessions/SessionUi";
+import { SpaceSwitcher } from "@/features/cloud/SpaceSwitcher";
 import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   DndContext,
@@ -174,6 +175,10 @@ export function Sidebar() {
         </div>
         <IconButton icon={Search} label="Search & commands" shortcut={shortcuts.palette} size="sm" onClick={() => useUi.getState().setPalette(true)} />
         <IconButton icon={Plus} label="Quick capture" shortcut={shortcuts.quickCapture} size="sm" onClick={() => useUi.getState().openCapture()} />
+      </div>
+
+      <div className="sidebar__space">
+        <SpaceSwitcher collapsed={collapsed} />
       </div>
 
       <div className="sidebar__scroll">

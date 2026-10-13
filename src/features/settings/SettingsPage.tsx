@@ -24,7 +24,9 @@ import {
   KeyRound,
   Blocks,
   SquareTerminal,
+  Cloud,
 } from "lucide-react";
+import { CloudSection } from "@/features/cloud/CloudSection";
 import { IntegrationsSection } from "@/features/github/IntegrationsSection";
 import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
@@ -59,6 +61,7 @@ import { developerGroups } from "./DeveloperSection";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: typeof Settings }[] = [
   { id: "general", label: "General", icon: Settings },
+  { id: "cloud", label: "Account & Cloud", icon: Cloud },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "dashboard", label: "Dashboard", icon: LayoutGrid },
   { id: "tasks", label: "Tasks", icon: ListTodo },
@@ -735,6 +738,7 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
       },
     ],
     integrations: <IntegrationsSection />,
+    cloud: <CloudSection />,
     plugins: <PluginsSection />,
     developer: developerGroups(),
     api: (

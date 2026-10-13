@@ -4,6 +4,7 @@
 import { useRef, type CSSProperties, type KeyboardEvent } from "react";
 import { Cloud, HardDrive, User } from "lucide-react";
 import type { SpaceRole } from "@/lib/types";
+import { ACCENTS } from "@/features/projects/ProjectGlyph";
 
 const HUES = ["var(--hue-0)", "var(--hue-1)", "var(--hue-2)", "var(--hue-3)", "var(--hue-4)", "var(--hue-5)", "var(--hue-6)", "var(--hue-7)"];
 
@@ -55,7 +56,7 @@ export function SpaceLogo({ name, logo, kind, size = 20, accent }: { name: strin
       </span>
     );
   return (
-    <span className="space-logo" style={{ ...style, background: accent ? `var(--accent-${accent}, ${hueFor(name)})` : hueFor(name), color: "#111" }} aria-hidden>
+    <span className="space-logo" style={{ ...style, background: (accent && (ACCENTS[accent] ?? (accent.startsWith("#") ? accent : undefined))) || hueFor(name), color: "#111" }} aria-hidden>
       {name.trim().slice(0, 1).toUpperCase() || <Cloud size={12} />}
     </span>
   );

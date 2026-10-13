@@ -7,6 +7,7 @@ import type { ProjectTab } from "@/lib/types";
 export type TasksView = "list" | "today" | "upcoming" | "calendar" | "board";
 export type SettingsSection =
   | "general"
+  | "cloud"
   | "appearance"
   | "dashboard"
   | "tasks"
