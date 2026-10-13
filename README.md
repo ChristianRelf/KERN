@@ -1,209 +1,112 @@
 # Kern
 
-A local-first personal productivity workspace for Windows and Linux (portable to
-macOS): dashboard, tasks, projects, Kanban boards, whiteboards, notes, a daily
-rundown and a focus timer, in one calm desktop app. Everything stays on your
-computer; there is no account, server or telemetry.
+A calm desktop workspace for your tasks, projects, notes and whiteboards, all in
+one place and all on your own computer. There's no account to create, no
+subscription, and nothing is sent anywhere unless you turn it on.
 
-## Running
+**[⬇ Download Kern for Windows or Linux](https://github.com/ChristianRelf/KERN/releases/latest)**
 
-Requirements: Node 20+, Rust (stable, MSVC toolchain on Windows), WebView2
-(preinstalled on Windows 11). On Linux, install the
-[Tauri system dependencies](https://v2.tauri.app/start/prerequisites/#linux)
-(WebKitGTK 4.1, libayatana-appindicator, librsvg, patchelf).
+## What you can do with it
 
-```bash
-npm install
-npm run app:dev      # development (Vite + Tauri, hot reload)
-npm run app:build    # release installers in src-tauri/target/release/bundle/
-npm test             # frontend unit tests (Vitest)
-cd src-tauri && cargo test   # backend unit and integration tests
-```
+- **Plan your day.** Capture tasks in seconds, sort them later from the Inbox, and
+  start each morning with a daily rundown that suggests what to work on and shows
+  why. Due dates, reminders, priorities, checklists and repeating tasks are all there.
+- **Run projects.** A project only needs a name. Add Kanban boards, milestones with
+  target dates, and an overview page with progress, deadlines and a simple "on
+  track / needs attention" check.
+- **Think visually.** Whiteboards for sketching ideas: cards, sticky notes, shapes,
+  freehand pen, connectors and images. You can also drop live tasks and projects onto them.
+- **Write things down.** Notes with formatting and checklists, linked to your projects.
+- **Stay focused.** A focus timer, and work sessions that track time spent on a task
+  or project, with simple reports.
+- **Find anything.** Press **Ctrl+K** to search tasks, notes, projects and
+  commands from anywhere in the app.
+- **Optional extras for developers.** Link git repositories to a project to see
+  changes, history, branches and pull requests, run commands in a built-in terminal,
+  and sync GitHub issues with your tasks. None of this appears unless you link code.
+- **Optional AI.** Bring your own API key for extras like a "catch me up" summary
+  of a project, which shows exactly what would be sent before anything leaves your computer.
 
-Linux release bundles (.deb, .rpm, AppImage) are built in an Ubuntu 22.04
-container so they run on older distributions too; from any OS with Docker:
+## Install
 
-```bash
-docker build -t kern-linux scripts/linux
-docker run --rm -v "$PWD:/repo:ro" -v "$PWD/release/linux:/out" \
-  -v kern-cargo:/root/.cargo/registry -v kern-target:/build/src-tauri/target kern-linux
-```
+Download the file for your system from the
+[latest release](https://github.com/ChristianRelf/KERN/releases/latest).
 
-To run a development or test instance against a separate data folder (so your
-real data is never touched), set `KERN_DATA_DIR` before launching. Such an
-instance runs alongside the normal one and uses its own credential-store namespace.
+### Windows (10 and 11, 64-bit)
 
-## Renaming the app
+1. Download **`Kern_…_x64-setup.exe`** and open it. It installs just for your user
+   account, so no administrator rights are needed.
+2. Windows may show **"Windows protected your PC"**, because the installer isn't
+   code-signed yet. Click **More info → Run anyway**.
 
-The name "Kern" is provisional. To change it:
+Prefer an MSI (for example, for managed machines)? Use `Kern_…_x64_en-US.msi` instead.
 
-1. `src/app/brand.ts`: `APP_NAME` (all UI text).
-2. `src-tauri/tauri.conf.json`: `productName` and the window `title`. Changing
-   `identifier` moves the data folder (see below).
-3. Optionally, `package.json` / `src-tauri/Cargo.toml` package names and the
-   icon (`assets/icon.svg`, then `npx tauri icon assets/icon.svg`).
+### Linux (64-bit)
 
-## Architecture
+Pick the package that fits your distribution:
 
-```
-src/                     React + TypeScript (strict), Vite
-  app/                   bootstrap, routes, global effects and shortcuts
-  components/ui|layout   design-system controls (Radix primitives, custom styling) and the shell
-  features/<feature>/    dashboard, tasks, boards, projects, whiteboard, notes, inbox,
-                         daily-briefing, focus, search, capture, settings, trash, onboarding,
-                         storage, links, ai (API accounts), github (GitHub & git),
-                         command-centre (project overview), milestones, sessions, workspace
-                         (resume & snapshots), catchup, health, terminal, dev (repositories,
-                         worktrees, commands, environment profiles, services, dependencies)
-  lib/                   typed IPC client, query layer, dates, shortcuts, fuzzy matching
-  stores/                Zustand stores for transient UI state, settings, router, undo, toasts
-  styles/                design tokens (CSS variables), base, controls, layout
-src-tauri/src/
-  db/                    connection setup, versioned migrations
-  domain/                one module per area: pure service functions on &Connection plus
-                         thin #[tauri::command] wrappers (incl. folders, storage, links,
-                         ai/{vault,provider,router,accounts}, git, github, repos, worktrees,
-                         workflow, sessions, workspace, milestones, devenv, pty, envvars,
-                         services, deps, health, catchup, fileindex)
-  scheduler.rs           single low-frequency thread: briefings, reminders, backups, housekeeping
-  window.rs              window state persistence, tray, close/minimise behaviour
-```
+| Distribution | File | How to install |
+| --- | --- | --- |
+| Ubuntu, Debian, Mint, Pop!_OS | `Kern_…_amd64.deb` | `sudo apt install ./Kern_*_amd64.deb` |
+| Fedora, openSUSE | `Kern-…x86_64.rpm` | `sudo dnf install ./Kern-*.x86_64.rpm` |
+| Anything else | `Kern_…_amd64.AppImage` | `chmod +x Kern_*.AppImage` then run it |
 
-- The frontend never issues SQL. It calls typed commands (`src/lib/ipc.ts`). Errors come
-  back as `{ code, message }` and are shown as actionable messages with Retry.
-- Persisted data uses TanStack Query (keys are grouped by domain for invalidation).
-  Mutations are optimistic, roll back on failure, and offer Undo where reversible.
-- Heavy modules (whiteboard renderer, rich-text editor, settings, calendar, storage
-  chart, API pages, Code tab) are lazy-loaded chunks.
-- Network and filesystem work (storage scans, favicon/link fetching, AI requests,
-  git, GitHub) runs in async commands on background threads, never the UI thread.
+Kern runs on Ubuntu 22.04, Debian 12, Fedora 35 and newer (or anything similarly
+recent). It then appears in your app launcher as **Kern**.
 
-## Data
+macOS isn't packaged yet.
 
-- Database: SQLite (WAL, foreign keys, FTS5 search kept in sync by triggers) at
-  `%APPDATA%\app.kern.desktop\kern.db`. Managed attachments live alongside it in
-  `attachments\` and are referenced by relative paths, so backups restore on other machines.
-- Dates are local calendar dates (`YYYY-MM-DD`) and times are `HH:MM`, so due dates
-  never shift with timezone or DST changes. Instants are UTC epoch milliseconds.
-- Migrations are versioned with `PRAGMA user_version`. Each runs in its own
-  transaction (an interrupted migration rolls back), and a full copy of the
-  database is written to `backups\` before an existing database is migrated.
-- Deleting moves items to a recoverable Trash (purged after a configurable period).
+## Getting started
 
-### Backups and export
+When you first open Kern, a short welcome helps you set things up. After that,
+these shortcuts cover most of what you'll do (on Linux and Windows):
 
-One versioned zip format (`manifest.json` + `kern.db` + `attachments/`) is used for
-automatic, manual and pre-restore backups. "Export everything" adds portable copies:
-`data/<table>.json`, `notes/*.md` (with front matter), `whiteboards/*.json` and
-`settings.json`. Restore validates the archive (manifest, integrity check, schema
-version), shows a preview, writes a safety backup, copies the data in with SQLite's
-online backup API and swaps attachments atomically. Separate exports produce tasks
-as CSV, notes as Markdown and projects as JSON.
+| Shortcut | What it does |
+| --- | --- |
+| **Ctrl+K** | Search and run any command |
+| **Ctrl+Shift+Space** | Quick capture: jot down a task or note |
+| **Ctrl+Shift+N** | New task |
+| **Ctrl+Shift+D** | Today's rundown |
+| **Ctrl+1** to **Ctrl+6** | Dashboard, My Tasks, Inbox, Projects, Whiteboards, Notes |
+| **Ctrl+/** | See every shortcut (you can change most of them) |
 
-## Privacy and permissions
+Tip: to capture a task while you're in *another* app, turn on **System-wide quick
+capture** in **Settings → General**.
 
-- No network access is needed. Every network use is optional and controlled in
-  Settings → Privacy, with a master switch that turns all of it off:
-  - website favicons and link titles, fetched directly from the linked site (never
-    a third-party proxy), cached locally; private/local addresses are refused;
-  - AI requests and connection tests, only when you make them (no polling);
-  - GitHub issue sync and pull requests, only for projects you connect.
-- AI API keys and the GitHub token live in the OS credential store (Windows
-  Credential Manager / macOS Keychain / Secret Service), never in SQLite, logs or
-  backups. Only the backend uses them. GitHub can also use the GitHub CLI's login.
-- Linked project folders are separate from projects: deleting a project never
-  touches its folder. Folders are restricted by default; programs, git commands
-  and file changes need an explicit "trusted" decision, recorded per exact folder.
-- Tauri capabilities are limited to window show/focus, native open/save dialogs,
-  notifications, autostart and the optional global quick-capture shortcut. Opening
-  files and URLs, and all file writes, go through Kern's own commands.
-- The asset protocol can only read the app's `attachments` folder and the favicon
-  cache, and the CSP no longer allows remote images.
+## Your data stays yours
 
-## Key behaviours
+- **Everything is stored on your computer**, in one folder:
+  - Windows: `%APPDATA%\app.kern.desktop`
+  - Linux: `~/.local/share/app.kern.desktop`
+- **It works fully offline.** The few features that go online (link previews,
+  GitHub, AI, and the update check) are all optional. **Settings → Privacy** has a
+  single switch that turns all of them off.
+- **No tracking.** There's no account, analytics or telemetry.
+- **Backups happen automatically**, and **Settings** can export everything to
+  ordinary files (JSON, Markdown and CSV) whenever you like.
+- **Deleted items go to Trash first**, so you can restore them.
+- **Passwords and API keys** are kept in your system's secure storage (Windows
+  Credential Manager, or GNOME Keyring / KWallet on Linux), never in Kern's own files.
 
-- **Daily rundown**: a deterministic, offline summary with a transparent score
-  (priority, days overdue, due today, pinned, in progress, carried over, project
-  deadline, minus blocked). Each suggestion shows its score breakdown, can be
-  dismissed for the day, or pinned. The first rundown of each day is stored as a
-  snapshot for history; the evening review stores what was done and what moved.
-- **Recurring tasks**: completing an occurrence keeps it as history and spawns the
-  next one (with its checklist reset). Missed occurrences are skipped, not
-  back-filled. "From completion" schedules relative to the completion day.
-- **Focus timer**: timestamp-based, so it stays accurate when minimised. The
-  completion notification is fired from a native thread.
+## Updating
 
-- **Task completion**: a left-to-right strikethrough (CSS only, no layout
-  measurement); writes are ordered and coalesced per task so rapid clicks always
-  converge on the last click. Instant with reduced motion.
-- **AI routing**: Manual, Automatic failover, Priority or Cost-conscious. Failover
-  only replays requests that produced no output, honours retry-after, never rotates
-  between keys in the same organisation after a pool-wide limit, and is bounded.
-- **GitHub issues**: two-way, three-way-merged per field (newer edit wins when
-  both sides changed). Deleting a task unlinks it; it never closes the issue.
+When a new version is out, a blue **Update available** card appears in the sidebar.
+Click it, download the new installer and install it over the old one. Your data is
+kept, and Kern backs it up automatically before upgrading.
 
-### Projects, with optional development tools
+## Troubleshooting
 
-A project needs only a name. Everything else - folders, repositories, commands,
-services - is optional and only appears once it's connected, so a renovation or a
-school assignment never shows git tabs or empty developer panels.
+- **Linux: the window is blank or white.** Kern already avoids the most common cause.
+  If it still happens, start it from a terminal with
+  `WEBKIT_DISABLE_COMPOSITING_MODE=1 kern`.
+- **Linux: no tray icon on GNOME.** GNOME hides tray icons unless the
+  *AppIndicator and KStatusNotifierItem Support* extension is installed. You only
+  need the tray if you set Kern to keep running in the background (Settings → General).
+- **Something else?** Please
+  [open an issue](https://github.com/ChristianRelf/KERN/issues) describing what
+  happened. **Settings → About** shows the version you're on.
 
-- **Command Centre**: each project's overview is an editable widget grid (the
-  dashboard engine) starting from a preset that fits the project - General, or
-  Hybrid once code is linked. Development widgets load lazily and only if added.
-- **Resume Workspace**: Kern remembers each project's tab, board, whiteboard, open
-  task, open file, selected repository and terminal layout (debounced, flushed on
-  navigation/close) and restores it, skipping anything that no longer exists.
-  Named workspace snapshots can be saved and reapplied. Resuming never runs
-  commands, restarts services or starts assistants.
-- **Milestones** work in every project (target date, status, progress from tasks or
-  manual, dependencies) and can optionally be releases (version, repository, linked
-  pull requests and issues, changelog draft). Tasks join a milestone through
-  `tasks.milestone_id` - still one task record. Publishing a release is always done
-  by the user on GitHub; Kern only opens a prefilled draft.
-- **Work sessions** are timestamp-based (elapsed = end − start − paused), so sleep,
-  minimising and restarts never drift. A long silence before a heartbeat is offered
-  as a gap to keep or exclude. Only explicit links are stored; inferred pull
-  requests are labelled. No keystrokes, screenshots or other apps are tracked.
-- **Repositories**: a project can link zero, one or many (local clone, GitHub, or
-  both). The existing folder link and GitHub issue sync are adopted automatically.
-  Unlinking never touches disk or GitHub. Git commands are repository-scoped and
-  still need a trusted folder.
-- **Worktrees** are always read from `git worktree list` (including ones Kern didn't
-  create). Removal shows the real status first; a dirty worktree needs explicit
-  confirmation, a locked one is never removed, and branches are only deleted with
-  `git branch -d`. Kern never runs clean, reset, force-push or history rewrites.
-- **Start Work** on a task begins a session; with a trusted repository it can also
-  create (or reuse) a branch or worktree with a suggested, git-validated name and
-  link it to the task. Completing a task never commits, pushes, merges or deletes.
-- **Environment detection** reads configuration files only (package.json,
-  Cargo.toml, pyproject.toml, go.mod, …) and checks PATH; nothing is executed.
-  **Saved commands** are a program plus an argument list (no shell string), run only
-  when clicked, in a terminal tab, in a trusted folder.
-- **Terminal**: real pseudoterminals (ConPTY on Windows) rendered with xterm.js,
-  loaded on first use. Processes run with the user's permissions (trust is not a
-  sandbox), are stopped as a tree on close, and quitting with running commands asks
-  first. Output is never persisted.
-- **Environment profiles**: plain values in SQLite, secrets in the OS credential
-  store (only a reference in SQLite, never logged or backed up), injected into the
-  launched process only. `.env` import defaults likely credentials to secrets;
-  exporting secrets needs explicit consent.
-- **Local services** are only the endpoints the user adds, checked only while the
-  project is open. "Running" means it answered; "healthy" only when a configured
-  HTTP check passed. Docker is optional.
-- **Dependencies** come from manifests and lockfiles; a declared range is never shown
-  as a resolved version. OSV advisory lookups are explicit and send only package
-  names and resolved versions; a clean result reads "no known advisories".
-- **Health** is a state (On track / Needs attention / Blocked / No recent data) with
-  clickable reasons and configurable rules - no scores. Development signals only
-  count when the project has them, and come from data already fetched.
-- **Catch-up** builds a deterministic local digest with numbered sources (works with
-  no AI). The optional AI summary shows what's included and its size first, honours
-  the global and per-project content permissions, redacts key-like strings, and
-  drops any claim that doesn't cite a known source.
-- **Universal search** (Ctrl+K) adds milestones, saved commands, workspaces, synced
-  issues, cached pull requests and commits, and linked-folder files and code from an
-  incremental index (skipping dependencies, build output, `.gitignore`d, binary and
-  secret-looking files), with filters.
+## Building from source
 
-See `PERFORMANCE.md` for measurements.
+Kern is built with [Tauri](https://v2.tauri.app), React and Rust. See
+[DEVELOPMENT.md](DEVELOPMENT.md) for build instructions, architecture and internals.
