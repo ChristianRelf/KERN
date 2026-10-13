@@ -85,6 +85,36 @@ pub fn request(base: &str, token: Option<&str>, method: &str, path: &str, body: 
     Ok(Reply { status, body, token })
 }
 
+/// A binary request (image upload or download). Error replies are decoded
+/// as JSON into `Reply::body`; success bodies are returned as bytes.
+pub fn request_bytes(base: &str, token: &str, method: &str, path: &str, upload: Option<(&[u8], &str)>) -> AppResult<(Reply, Vec<u8>, Option<String>)> {
+    if !path.starts_with('/') || path.contains("..") || path.contains("://") {
+        return Err(AppError::Invalid("Unexpected Kern Cloud address.".into()));
+    }
+    let url = format!("{base}{path}");
+    let origin = url::Url::parse(base).map(|u| u.origin().ascii_serialization()).unwrap_or_default();
+    let auth = format!("Bearer {token}");
+    let agent = ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(120)))
+        .http_status_as_error(false)
+        .user_agent(concat!("Kern/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .into();
+    let agent: ureq::Agent = agent;
+    let res = match (method, upload) {
+        ("POST", Some((bytes, mime))) => agent.post(&url).header("Authorization", &auth).header("Origin", &origin).header("Content-Type", mime).send(bytes),
+        ("GET", None) => agent.get(&url).header("Authorization", &auth).header("Origin", &origin).call(),
+        _ => return Err(AppError::Invalid("Unsupported request.".into())),
+    };
+    let mut resp = res.map_err(|_| AppError::Network("Couldn't reach Kern Cloud. Check your internet connection and try again.".into()))?;
+    let status = resp.status().as_u16();
+    let content_type = resp.headers().get("content-type").and_then(|v| v.to_str().ok()).map(String::from);
+    let bytes = resp.body_mut().with_config().limit(32 * 1024 * 1024).read_to_vec().unwrap_or_default();
+    let is_json = content_type.as_deref().map(|c| c.starts_with("application/json")).unwrap_or(false);
+    let body = if is_json { serde_json::from_slice(&bytes).unwrap_or(Value::Null) } else { Value::Null };
+    Ok((Reply { status, body, token: None }, bytes, content_type))
+}
+
 /// Turns an error reply into a user-facing error.
 pub fn check(reply: AppResult<Reply>) -> AppResult<Reply> {
     let reply = reply?;
@@ -101,6 +131,7 @@ pub fn check(reply: AppResult<Reply>) -> AppResult<Reply> {
         429 => AppError::Network("Too many attempts. Wait a minute, then try again.".into()),
         s if s >= 500 => AppError::Network(format!("Kern Cloud is having trouble right now ({s}). Try again shortly.")),
         404 if message.is_none() => AppError::NotFound("That".into()),
+        413 => AppError::Invalid(msg("That's too large for Kern Cloud.")),
         _ => AppError::Invalid(msg("Kern Cloud couldn't do that.")),
     })
 }

@@ -810,7 +810,105 @@ pub fn cloud_forget_space(state: tauri::State<AppState>, space_id: String) -> Ap
             let _ = std::fs::remove_file(PathBuf::from(format!("{}{suffix}", path.display())));
         }
     }
+    let _ = std::fs::remove_dir_all(assets_dir(&state, &space_id)?);
     Ok(())
+}
+
+// ------------------------------------------------------------ shared images
+
+/// Downloaded whiteboard images of a space (disposable cache).
+pub fn assets_dir(state: &AppState, space: &str) -> AppResult<PathBuf> {
+    Ok(state.paths.cache_dir().join("cloud-assets").join(safe_id(space)?))
+}
+
+fn ext_for(mime: &str) -> &'static str {
+    match mime {
+        "image/webp" => "webp",
+        "image/png" => "png",
+        _ => "jpg",
+    }
+}
+
+fn cached(dir: &std::path::Path, asset: &str) -> Option<PathBuf> {
+    ["webp", "jpg", "png"].iter().map(|e| dir.join(format!("{asset}.{e}"))).find(|p| p.is_file())
+}
+
+fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> AppResult<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = path.with_extension(format!("part-{}", crate::util::new_id()));
+    std::fs::write(&tmp, bytes)?;
+    if std::fs::rename(&tmp, path).is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    Ok(())
+}
+
+/// Uploads an image (already compressed by the interface) so collaborators
+/// can see it. Returns the asset id to store on the whiteboard object.
+#[tauri::command]
+pub async fn cloud_upload_asset(app: AppHandle, space: String, data_base64: String, mime: String, width: Option<u32>, height: Option<u32>) -> AppResult<String> {
+    blocking(&app, move |app| {
+        use base64::Engine;
+        let state = app.state::<AppState>();
+        let space = safe_id(&space)?.to_string();
+        if !["image/webp", "image/jpeg", "image/png"].contains(&mime.as_str()) {
+            return invalid("Only WebP, JPEG and PNG images can be shared.");
+        }
+        let bytes = base64::engine::general_purpose::STANDARD.decode(data_base64.as_bytes()).map_err(|_| AppError::Invalid("Image data is malformed.".into()))?;
+        if bytes.len() > 3 * 1024 * 1024 {
+            return invalid("That image is too large to share, even after compression.");
+        }
+        let (base, token) = (base(&state)?, token(&state)?);
+        let q = match (width, height) {
+            (Some(w), Some(h)) => format!("?w={w}&h={h}"),
+            _ => String::new(),
+        };
+        let (reply, _, _) = client::request_bytes(&base, &token, "POST", &format!("/spaces/{space}/assets{q}"), Some((&bytes, &mime)))?;
+        let reply = client::check(Ok(reply))?;
+        let id = reply.body.get("id").and_then(|v| v.as_str()).map(String::from).ok_or_else(|| AppError::Other("Kern Cloud didn't return the image id.".into()))?;
+        safe_id(&id)?;
+        // This computer already has the image: seed the cache.
+        let dir = assets_dir(&state, &space)?;
+        if cached(&dir, &id).is_none() {
+            let _ = write_atomic(&dir.join(format!("{id}.{}", ext_for(&mime))), &bytes);
+        }
+        Ok(id)
+    })
+    .await
+}
+
+/// The file to show for a whiteboard image: the original when this computer
+/// has it, otherwise the shared copy (downloaded once, then cached). None
+/// when neither is available.
+#[tauri::command]
+pub async fn cloud_image_path(app: AppHandle, space: Option<String>, src: Option<String>, asset: Option<String>) -> AppResult<Option<String>> {
+    blocking(&app, move |app| {
+        let state = app.state::<AppState>();
+        if let Some(src) = src.filter(|s| !s.is_empty() && !s.contains("..") && !std::path::Path::new(s).is_absolute()) {
+            let p = state.paths.attachments_dir.join(&src);
+            if p.is_file() {
+                return Ok(Some(p.to_string_lossy().to_string()));
+            }
+        }
+        let (Some(space), Some(asset)) = (space, asset) else { return Ok(None) };
+        let dir = assets_dir(&state, &space)?;
+        let asset = safe_id(&asset)?.to_string();
+        if let Some(p) = cached(&dir, &asset) {
+            return Ok(Some(p.to_string_lossy().to_string()));
+        }
+        let (base, token) = (base(&state)?, token(&state)?);
+        let (reply, bytes, mime) = client::request_bytes(&base, &token, "GET", &format!("/spaces/{}/assets/{asset}", safe_id(&space)?), None)?;
+        if reply.status == 404 {
+            return Ok(None);
+        }
+        client::check(Ok(reply))?;
+        let path = dir.join(format!("{asset}.{}", ext_for(mime.as_deref().unwrap_or(""))));
+        write_atomic(&path, &bytes)?;
+        Ok(Some(path.to_string_lossy().to_string()))
+    })
+    .await
 }
 
 /// Deep links that arrived before the interface was ready.

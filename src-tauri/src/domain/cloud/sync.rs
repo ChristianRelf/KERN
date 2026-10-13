@@ -898,11 +898,28 @@ mod e2e {
         assert!(text(&b.conn, "SELECT id FROM tasks WHERE id = 't1'").is_none());
         assert!(text(&b.conn, "SELECT task_id FROM task_labels WHERE task_id = 't1'").is_none(), "the label link went with the task");
 
+        // A shared image: A uploads a compressed copy, the whiteboard object
+        // references it, and B downloads the same bytes.
+        let webp: Vec<u8> = [b"RIFF".as_slice(), &[30, 0, 0, 0], b"WEBPVP8 ", &[0u8; 18]].concat();
+        let (up, _, _) = client::request_bytes(&base, &a.token, "POST", &format!("/spaces/{space}/assets?w=1&h=1"), Some((&webp, "image/webp"))).unwrap();
+        let asset = client::check(Ok(up)).unwrap().body["id"].as_str().unwrap().to_string();
+        let mut img = wb("img", 600.0);
+        img.kind = "image".into();
+        img.data = json!({ "src": "wb/x/photo.png", "cloudAsset": asset });
+        whiteboards::patch_scene(&a.conn, "w1", &ScenePatch { nodes: vec![img], ..Default::default() }).unwrap();
+        push(&mut a, &base, &space);
+        pull(&mut b, &base, &space);
+        let node = whiteboards::nodes(&b.conn, "w1").unwrap().into_iter().find(|n| n.id == "img").unwrap();
+        let shared = node.data["cloudAsset"].as_str().unwrap().to_string();
+        let (down, bytes, mime) = client::request_bytes(&base, &b.token, "GET", &format!("/spaces/{space}/assets/{shared}"), None).unwrap();
+        assert_eq!((down.status, mime.as_deref(), bytes), (200, Some("image/webp"), webp));
+        println!("ASSET={asset}");
+
         // A fresh device bootstraps the whole space.
         let mut c = peer(b.token.clone());
         pull(&mut c, &base, &space);
         assert_eq!(text(&c.conn, "SELECT name FROM projects WHERE id = 'p1'").as_deref(), Some("Launch"));
-        assert_eq!(whiteboards::nodes(&c.conn, "w1").unwrap().len(), 2);
+        assert_eq!(whiteboards::nodes(&c.conn, "w1").unwrap().len(), 3);
         assert!(text(&c.conn, "SELECT id FROM tasks WHERE id = 't1'").is_none());
     }
 }

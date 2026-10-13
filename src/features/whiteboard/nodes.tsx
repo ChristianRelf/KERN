@@ -1,6 +1,8 @@
 import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
 import { createContext, memo, useContext, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { assetUrl } from "@/lib/platform";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { useCloud } from "@/features/cloud/store";
 import { useQuery } from "@tanstack/react-query";
 import {
   ExternalLink,
@@ -11,6 +13,7 @@ import {
   FolderOpen,
   Globe,
   ImageOff,
+  Image as ImageIcon,
   SquareCheckBig,
   SquareKanban,
   Flag,
@@ -444,18 +447,41 @@ export const TaskNode = memo(function TaskNode({ id, data, selected }: NodeProps
 
 export const ImageNode = memo(function ImageNode({ data, selected }: NodeProps<WbNode>) {
   const { data: info } = useAppInfo();
+  const space = useCloud((s) => s.info?.active?.id ?? null);
+  const [localFailed, setLocalFailed] = useState(false);
   const [failed, setFailed] = useState(false);
-  const url = info && data.src ? assetUrl(info.attachmentsDir, data.src) : null;
+  // The original when it's on this computer; otherwise the compressed copy a
+  // collaborator shared (downloaded once, then cached).
+  const local = info && data.src ? assetUrl(info.attachmentsDir, data.src) : null;
+  const wantShared = (!local || localFailed) && !!space && !!data.cloudAsset;
+  const shared = useQuery({
+    queryKey: ["wb-image", space, data.cloudAsset],
+    queryFn: () => api.cloud.imagePath(space, null, data.cloudAsset ?? null),
+    enabled: wantShared,
+    staleTime: Infinity,
+    retry: 2,
+  });
+  const url = local && !localFailed ? local : shared.data ? convertFileSrc(shared.data) : null;
+  const missing = !data.cloudAsset && (!local || localFailed) ? "Image is on another computer" : "Image unavailable";
   return (
     <>
       <Resizer selected={selected} data={data} min={[40, 30]} keepAspect />
       <Handles />
       <div className="wbn wbn--image" data-locked={data.locked}>
         {url && !failed ? (
-          <img src={url} alt={data.name ?? ""} draggable={false} onError={() => setFailed(true)} />
+          <img
+            src={url}
+            alt={data.name ?? ""}
+            draggable={false}
+            onError={() => (url === local ? setLocalFailed(true) : setFailed(true))}
+          />
+        ) : wantShared && shared.isLoading ? (
+          <div className="wbn__missing" style={{ height: "100%", justifyContent: "center" }}>
+            <ImageIcon size={14} /> Loading shared image…
+          </div>
         ) : (
           <div className="wbn__missing" style={{ height: "100%", justifyContent: "center" }}>
-            <ImageOff size={14} /> Image unavailable
+            <ImageOff size={14} /> {missing}
           </div>
         )}
       </div>

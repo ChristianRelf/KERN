@@ -70,6 +70,8 @@ export interface WbData extends Record<string, unknown> {
   name?: string;
   // image (path relative to the attachments dir)
   src?: string;
+  /** Kern Cloud: the compressed copy shared with collaborators. */
+  cloudAsset?: string;
   aspect?: number;
   /** Transient: start in edit mode after creation. */
   editing?: boolean;

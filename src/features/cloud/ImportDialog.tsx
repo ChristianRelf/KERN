@@ -115,7 +115,7 @@ function Import() {
                 </div>
               )}
               <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
-                Copying again skips anything already copied. Whiteboard images live on this computer, so collaborators see placeholders for them.
+                Copying again skips anything already copied. Whiteboard images are shared as compressed copies when you open each whiteboard; the originals stay on this computer.
               </span>
             </>
           )}

@@ -315,6 +315,21 @@ pub fn asset_import_bytes(state: State<AppState>, name: String, data_base64: Str
     })
 }
 
+/// Reads a managed file (relative to the attachments folder) as base64, so
+/// the interface can compress a whiteboard image before sharing it.
+#[tauri::command]
+pub fn attachment_read_base64(state: State<AppState>, path: String) -> AppResult<String> {
+    if path.is_empty() || path.contains("..") || Path::new(&path).is_absolute() {
+        return invalid("That isn't a managed file.");
+    }
+    let p = state.paths.attachments_dir.join(&path);
+    let meta = std::fs::metadata(&p).map_err(|_| AppError::NotFound("The image file".into()))?;
+    if meta.len() > 50 * 1024 * 1024 {
+        return invalid("Images larger than 50 MB can't be shared.");
+    }
+    Ok(base64::engine::general_purpose::STANDARD.encode(std::fs::read(&p)?))
+}
+
 /// Removes whiteboard assets no longer referenced by any whiteboard object
 /// (including whiteboards in the trash).
 pub fn cleanup_orphan_assets(conn: &Connection, root: &Path) -> AppResult<usize> {

@@ -101,6 +101,56 @@ version), shows a preview, writes a safety backup, copies the data in with SQLit
 online backup API and swaps attachments atomically. Separate exports produce tasks
 as CSV, notes as Markdown and projects as JSON.
 
+## Kern Cloud (optional sync and collaboration)
+
+The server lives in the separate `KERNWEB` repository (Node, Hono, Better Auth,
+PostgreSQL) at `https://api.relf.cloud/kern/v1`. Development builds can point
+elsewhere with `KERN_CLOUD_URL` (e.g. `http://localhost:8787/kern/v1`).
+
+- **Offline mode** is the ordinary `kern.db`, unchanged and account-free.
+- **Spaces**: the personal space and each workspace get a local replica at
+  `cloud/<user>/<space>.db` with the same schema, so every feature works the
+  same (and offline). Switching spaces swaps the connection in `AppState`.
+  Per-computer tables (settings, AI accounts and usage, folder trust, caches,
+  notification log, linked-file index; `db::DEVICE_TABLES`) are parked under a
+  `_device_` prefix in replicas, and `kern.db` is attached as `local`, so
+  unqualified names resolve to the device copy. Migrations unpark, migrate and
+  re-park, so every schema step applies to replicas unchanged.
+- **Sync** (`domain/cloud/sync.rs`): triggers on the synced tables
+  (`sync::TABLES`) record changed rows in `sync_outbox`. A push sends field-level
+  diffs against `sync_shadow` (the server's version as last known), or the full
+  row for new records; personal columns (pins, last opened, whiteboard viewport,
+  local repository links) never sync. The server merges per field and replies
+  with merged rows, which are applied like any remote change: a three-way merge
+  where fields with unsent local edits keep the local value. Deletes win and
+  leave tombstone shadows, so stale copies can't resurrect a record. Remote
+  rows are applied with change capture paused and foreign keys off.
+- **Worker** (`domain/cloud/mod.rs`): one background thread, woken by the
+  replica's commit hook, pushes and pulls with backoff, and emits
+  `kern://cloud-sync` (status) and `kern://cloud-applied` (tables and
+  whiteboards changed; the interface invalidates matching queries).
+- **Session**: the Better Auth bearer token is stored in the OS credential
+  store and used only by the backend (`cloud_request` proxies API calls). The
+  interface opens the realtime socket with a single-use ticket, hands incoming
+  changes to `cloud_apply`, and shares presence (view, whiteboard cursor and
+  selection) and live drags.
+- **Whiteboards** save diffs (`whiteboard_patch`) against a per-editor baseline
+  and three-way merge collaborators' saves (`features/whiteboard/collab.ts`);
+  undo only reverts your own edits. Images placed on a cloud whiteboard are
+  compressed in the interface (WebP, ≤1600 px, stepped down to ~400 KB;
+  `features/whiteboard/cloudImages.ts`), uploaded once per space (de-duplicated
+  by hash) and referenced as `data.cloudAsset`. Other computers show the original
+  when they have it, otherwise download the shared copy into
+  `cache/cloud-assets/<space>/` (`cloud_image_path`).
+- **Invitations**: `link.relf.cloud/kern/invite/<id>` hands off to
+  `kern://invite/<id>` (tauri-plugin-deep-link; single-instance forwards it).
+- Backups, restore and "export everything" cover offline data only; automatic
+  orphaned-asset cleanup is skipped once cloud replicas exist (their whiteboards
+  may use attachment files).
+
+Tests: `cargo test cloud` (engine and client), `npx vitest run collab`, and an
+opt-in two-replica test against a running server (see KERNWEB's README).
+
 ## Privacy and permissions
 
 - No network access is needed. Every network use is optional and controlled in
@@ -108,7 +158,8 @@ as CSV, notes as Markdown and projects as JSON.
   - website favicons and link titles, fetched directly from the linked site (never
     a third-party proxy), cached locally; private/local addresses are refused;
   - AI requests and connection tests, only when you make them (no polling);
-  - GitHub issue sync and pull requests, only for projects you connect.
+  - GitHub issue sync and pull requests, only for projects you connect;
+  - Kern Cloud, only after turning on online collaboration and signing in.
 - AI API keys and the GitHub token live in the OS credential store (Windows
   Credential Manager / macOS Keychain / Secret Service), never in SQLite, logs or
   backups. Only the backend uses them. GitHub can also use the GitHub CLI's login.
@@ -116,7 +167,8 @@ as CSV, notes as Markdown and projects as JSON.
   touches its folder. Folders are restricted by default; programs, git commands
   and file changes need an explicit "trusted" decision, recorded per exact folder.
 - Tauri capabilities are limited to window show/focus, native open/save dialogs,
-  notifications, autostart and the optional global quick-capture shortcut. Opening
+  notifications, autostart and the optional global quick-capture shortcut. The CSP
+  allows one remote connection: the Kern Cloud realtime socket. Opening
   files and URLs, and all file writes, go through Kern's own commands.
 - The asset protocol can only read the app's `attachments` folder and the favicon
   cache, and the CSP no longer allows remote images.

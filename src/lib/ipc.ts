@@ -314,6 +314,11 @@ export const api = {
     importOffline: (projectIds?: string[] | null) => call<Record<string, number>>("cloud_import_offline", { projectIds: projectIds ?? null }),
     forgetSpace: (spaceId: string) => call<void>("cloud_forget_space", { spaceId }),
     takeLinks: () => call<string[]>("cloud_take_links"),
+    /** Shares a compressed whiteboard image with the space; returns its asset id. */
+    uploadAsset: (space: string, dataBase64: string, mime: string, width?: number, height?: number) =>
+      call<string>("cloud_upload_asset", { space, dataBase64, mime, width: width ?? null, height: height ?? null }),
+    /** Local file for a whiteboard image: the original, or the downloaded shared copy. */
+    imagePath: (space: string | null, src: string | null, asset: string | null) => call<string | null>("cloud_image_path", { space, src, asset }),
   },
   folders: {
     inspect: (path: string) => call<T.FolderInfo>("folder_inspect", { path }),
@@ -439,6 +444,8 @@ export const api = {
       call<T.Attachment>("attachment_add_link", { url, title: title ?? null, taskId: target.taskId ?? null, projectId: target.projectId ?? null }),
     rename: (id: string, name: string) => call<void>("attachment_rename", { id, name }),
     importAsset: (sourcePath: string) => call<T.StoredAsset>("asset_import", { sourcePath }),
+    /** A managed file's bytes (base64), e.g. to compress a whiteboard image. */
+    readBase64: (path: string) => call<string>("attachment_read_base64", { path }),
     importAssetBytes: (name: string, dataBase64: string) =>
       call<T.StoredAsset>("asset_import_bytes", { name, dataBase64 }),
   },

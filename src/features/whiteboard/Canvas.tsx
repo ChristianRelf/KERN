@@ -99,6 +99,7 @@ import { onEphemeral, sendEphemeral, setPresence } from "@/features/cloud/realti
 import { onWhiteboardChanges } from "@/features/cloud/actions";
 import { useCloud, useReadOnly } from "@/features/cloud/store";
 import { PeerStack, WhiteboardPresence } from "@/features/cloud/Presence";
+import { shareImage } from "./cloudImages";
 
 interface Snap {
   nodes: WbNode[];
@@ -403,6 +404,37 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
     [requestCommit],
   );
   const edgeApi = useMemo(() => ({ updateEdge, editingId: editingEdge, setEditingId: setEditingEdge }), [updateEdge, editingEdge]);
+
+  // In a cloud space, images are shared with collaborators as compressed
+  // copies (the original stays here). Covers new images and ones copied in
+  // from offline data.
+  const spaceId = useCloud((st) => st.info?.active?.id ?? null);
+  const shareTried = useRef(new Set<string>());
+  const shareWarned = useRef(false);
+  useEffect(() => {
+    if (!spaceId || readOnly) return;
+    for (const n of nodes) {
+      const src = n.data.src;
+      if (n.type !== "image" || !src || n.data.cloudAsset) continue;
+      const key = `${n.id}:${src}`;
+      if (shareTried.current.has(key)) continue;
+      shareTried.current.add(key);
+      shareImage(spaceId, src)
+        .then((asset) => updateNode(n.id, { cloudAsset: asset }, false))
+        .catch((e) => {
+          shareTried.current.delete(key);
+          // The original is on another computer: nothing to share from here.
+          if (e instanceof Error && "code" in e && (e as { code: string }).code === "not_found") {
+            shareTried.current.add(key);
+            return;
+          }
+          if (!shareWarned.current) {
+            shareWarned.current = true;
+            toastError(describeError(e, "Couldn't share an image with collaborators. It's still on this computer."));
+          }
+        });
+    }
+  }, [nodes, spaceId, readOnly, updateNode]);
 
   // ------------------------------------------------------------ alignment guides
   const zoom = useStore((st) => st.transform[2]);

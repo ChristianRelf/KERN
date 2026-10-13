@@ -2,7 +2,9 @@
 
 A calm desktop workspace for your tasks, projects, notes and whiteboards, all in
 one place and all on your own computer. There's no account to create, no
-subscription, and nothing is sent anywhere unless you turn it on.
+subscription, and nothing is sent anywhere unless you turn it on. When you want
+to, **Kern Cloud** (free) syncs a personal space across your devices and lets you
+collaborate with others in shared workspaces, in real time.
 
 **[⬇ Download Kern for Windows or Linux](https://github.com/ChristianRelf/KERN/releases/latest)**
 
@@ -73,6 +75,27 @@ these shortcuts cover most of what you'll do (on Linux and Windows):
 Tip: to capture a task while you're in *another* app, turn on **System-wide quick
 capture** in **Settings → General**.
 
+## Working together (optional)
+
+Turn on **online collaboration** from the space menu at the top of the sidebar
+(or **Settings → Account & Cloud**) and sign in, or create a free account.
+
+- **Personal space**: your own projects, tasks, boards, notes and whiteboards,
+  synced between every computer you sign in on. You can copy your offline data
+  into it (files are never uploaded).
+- **Workspaces**: shared spaces for a team. Give it a name, logo and a few
+  details, optionally bring in a GitHub organisation (each repository becomes a
+  project), and invite people by email. Changes appear for everyone instantly,
+  and whiteboards are multiplayer, with live cursors.
+- **Offline** stays exactly as it was: no account, nothing leaves your computer.
+  Switch between Offline, Personal and your workspaces from the space menu.
+
+Only the core things sync: projects, boards, tasks, issues, milestones, notes and
+whiteboards. Images on whiteboards are shared as compressed copies; the originals
+stay on your computer. Files, folders, code, terminals and settings always stay on your
+computer. A workspace project shows its files only on computers where you've
+linked the folder.
+
 ## Your data stays yours
 
 - **Everything is stored on your computer**, in one folder:
@@ -81,7 +104,8 @@ capture** in **Settings → General**.
 - **It works fully offline.** The few features that go online (link previews,
   GitHub, AI, and the update check) are all optional. **Settings → Privacy** has a
   single switch that turns all of them off.
-- **No tracking.** There's no account, analytics or telemetry.
+- **No tracking.** There's no analytics or telemetry, and an account is only
+  needed if you choose Kern Cloud.
 - **Backups happen automatically**, and **Settings** can export everything to
   ordinary files (JSON, Markdown and CSV) whenever you like.
 - **Deleted items go to Trash first**, so you can restore them.

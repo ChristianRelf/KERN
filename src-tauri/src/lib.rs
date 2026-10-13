@@ -54,6 +54,10 @@ pub fn run() {
             let scope = app.asset_protocol_scope();
             let _ = scope.allow_directory(&paths.attachments_dir, true);
             let _ = scope.allow_directory(paths.favicons_dir(), true);
+            // Whiteboard images shared by collaborators (Kern Cloud).
+            let shared_images = paths.cache_dir().join("cloud-assets");
+            let _ = std::fs::create_dir_all(&shared_images);
+            let _ = scope.allow_directory(&shared_images, true);
             let conn = match db::open(&paths.db_path, &paths.default_backups_dir) {
                 Ok(c) => c,
                 Err(e) => {
@@ -341,6 +345,8 @@ pub fn run() {
             cloud::cloud_import_offline,
             cloud::cloud_forget_space,
             cloud::cloud_take_links,
+            cloud::cloud_upload_asset,
+            cloud::cloud_image_path,
             // boards
             boards::boards_list,
             boards::board_get,
@@ -384,6 +390,7 @@ pub fn run() {
             attachments::attachment_rename,
             attachments::asset_import,
             attachments::asset_import_bytes,
+            attachments::attachment_read_base64,
             // dashboards
             dashboards::dashboards_list,
             dashboards::dashboard_create,

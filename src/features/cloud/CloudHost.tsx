@@ -2,7 +2,7 @@
 // backend: account and sync status, remote changes, the realtime socket,
 // deep links (kern://invite/…) and where this user is (presence).
 
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "@/lib/ipc";
 import { queryClient } from "@/lib/query";
@@ -11,13 +11,15 @@ import { useRouter, type Route } from "@/stores/router";
 import { getSetting, useSetting } from "@/stores/settings";
 import { toast } from "@/stores/toast";
 import { AuthDialog } from "./AuthDialog";
-import { CreateWorkspaceDialog } from "./CreateWorkspace";
-import { ImportDialog } from "./ImportDialog";
-import { InviteDialog } from "./InviteDialog";
-import { ManageWorkspaceDialog } from "./ManageWorkspace";
 import { handleDeepLinks, leaveLostSpace, onApplied } from "./actions";
 import { startRealtime, setPresence } from "./realtime";
 import { openAuth, refreshMe, refreshStatus, setSync, useCloud } from "./store";
+
+// Larger dialogs load on first use.
+const CreateWorkspaceDialog = lazy(() => import("./CreateWorkspace").then((m) => ({ default: m.CreateWorkspaceDialog })));
+const ManageWorkspaceDialog = lazy(() => import("./ManageWorkspace").then((m) => ({ default: m.ManageWorkspaceDialog })));
+const ImportDialog = lazy(() => import("./ImportDialog").then((m) => ({ default: m.ImportDialog })));
+const InviteDialog = lazy(() => import("./InviteDialog").then((m) => ({ default: m.InviteDialog })));
 
 function viewOf(r: Route): { view: string; label?: string } {
   switch (r.name) {
@@ -103,13 +105,19 @@ function useCloudEffects() {
 
 export function CloudHost() {
   useCloudEffects();
+  const create = useCloud((s) => s.createOpen);
+  const manage = useCloud((s) => !!s.manage);
+  const invite = useCloud((s) => !!s.inviteId);
+  const importing = useCloud((s) => s.importOpen);
   return (
     <>
       <AuthDialog />
-      <CreateWorkspaceDialog />
-      <ManageWorkspaceDialog />
-      <InviteDialog />
-      <ImportDialog />
+      <Suspense fallback={null}>
+        {create && <CreateWorkspaceDialog />}
+        {manage && <ManageWorkspaceDialog />}
+        {invite && <InviteDialog />}
+        {importing && <ImportDialog />}
+      </Suspense>
     </>
   );
 }
