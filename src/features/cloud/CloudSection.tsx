@@ -174,6 +174,9 @@ export function CloudSection() {
               <Row label="Show collaborators' cursors" hint="Live cursors and selections on whiteboards.">
                 <SToggle k="cloud.showCursors" />
               </Row>
+              <Row label="Stream notifications" hint="A notification when a stream adds a task or inbox item to the open space.">
+                <SToggle k="cloud.streamToasts" />
+              </Row>
             </div>
           </section>
         </>

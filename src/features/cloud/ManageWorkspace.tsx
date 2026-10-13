@@ -487,6 +487,21 @@ const ACTION_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
   "member.removed": () => "removed a member",
   "member.role": (d) => `changed a role to ${String(d.role)}`,
   "github.imported": (d) => `imported ${String(d.repos)} repositories from ${String(d.org)}`,
+  "stream.created": (d) => `created the stream ${String(d.name)}`,
+  "stream.updated": (d) => `changed ${Array.isArray(d.fields) ? (d.fields as string[]).join(", ") : "settings"} of the stream ${String(d.name)}`,
+  "stream.auth": (d) => `switched the stream ${String(d.name)} from ${String(d.from)} to ${String(d.to)} authentication`,
+  "stream.paused": (d) => `paused the stream ${String(d.name)}`,
+  "stream.resumed": (d) => `resumed the stream ${String(d.name)}`,
+  "stream.deleted": (d) => `deleted the stream ${String(d.name)}`,
+  "stream.rotated": (d) => `rotated the secret of the stream ${String(d.name)}`,
+  "stream.revealed": (d) => `revealed the secret of the stream ${String(d.name)}`,
+  "stream.revoked_previous": (d) => `stopped the previous secret of the stream ${String(d.name)}`,
+  "stream.github_token": (d) => `set the GitHub token of the stream ${String(d.name)}`,
+  "stream.github_token_removed": (d) => `removed the GitHub token of the stream ${String(d.name)}`,
+  "stream.turnstile": (d) => `${d.set ? "set" : "removed"} the Turnstile secret of the stream ${String(d.name)}`,
+  "stream.redelivered": (d) => `redelivered a submission to the stream ${String(d.name)}`,
+  "stream.blocked": (d) => `blocked a sender on the stream ${String(d.name)}`,
+  "stream.log_cleared": (d) => `cleared the delivery log of the stream ${String(d.name)}`,
 };
 
 function ActivityLog({ id }: { id: string }) {

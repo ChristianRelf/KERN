@@ -1862,3 +1862,143 @@ export interface ScenePatch {
   edges: WbEdgeRecord[];
   removedEdges: string[];
 }
+
+// ------------------------------------------------------------ Kern Cloud streams
+
+export type StreamAction = "task" | "inbox" | "issue" | "task_issue";
+export type StreamAuth = "public" | "token" | "signature";
+export type StreamFieldType = "text" | "long_text" | "email" | "url" | "number" | "boolean" | "choice";
+export type StreamEventStatus = "delivered" | "partial" | "rejected" | "duplicate" | "spam" | "failed";
+
+export interface StreamField {
+  key: string;
+  label: string;
+  type: StreamFieldType;
+  required: boolean;
+  /** 0 = the type's default. */
+  maxLength: number;
+  options: string[];
+  hidden: boolean;
+}
+
+export interface StreamConfig {
+  action: StreamAction;
+  task: {
+    projectId: string | null;
+    columnId: string | null;
+    status: Exclude<TaskStatus, "completed">;
+    priority: number;
+    priorityField: string | null;
+    priorityMap: Record<string, number>;
+    labelIds: string[];
+    dueInDays: number | null;
+  };
+  templates: { title: string; titleFallback: string; body: string; footer: boolean; includeJson: boolean };
+  fields: { mode: "lenient" | "strict"; list: StreamField[] };
+  github: { repo: string | null; labels: string[]; assignees: string[]; linkToTask: boolean; neutralizeMentions: boolean };
+  security: {
+    auth: StreamAuth;
+    allowedOrigins: string[];
+    requireOrigin: boolean;
+    ipAllowlist: string[];
+    blockedSenders: string[];
+    honeypotField: string | null;
+    turnstile: boolean;
+    turnstileSiteKey: string | null;
+    signatureToleranceSec: number;
+    maxBodyKb: number;
+    allowFormPosts: boolean;
+    rateLimit: { perMinute: number; perHour: number; streamPerHour: number };
+    dedupeMinutes: number;
+    escapeMarkdown: boolean;
+  };
+  responses: { successMessage: string; redirectUrl: string | null; returnIds: boolean };
+  notify: { app: boolean; email: "off" | "each" | "failures"; emailTo: "creator" | "admins" };
+  log: { storePayloads: boolean; retentionDays: number };
+}
+
+export interface Stream {
+  id: string;
+  spaceId: string;
+  url: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  config: StreamConfig;
+  secretHint: string;
+  previousSecretExpiresAt: string | null;
+  github: { tokenSet: boolean; tokenHint: string | null; checkedAt: string | null };
+  turnstile: { secretSet: boolean };
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastDeliveryAt: string | null;
+  deliveryCount: number;
+  last24h?: { total: number; problems: number };
+}
+
+export interface StreamList {
+  streams: Stream[];
+  presets: { id: string; description: string }[];
+  limit: number;
+  baseUrl: string;
+  docsUrl: string;
+}
+
+export interface StreamDetail {
+  stream: Stream;
+  stats: {
+    last24h: Partial<Record<StreamEventStatus, number>>;
+    last7d: Partial<Record<StreamEventStatus, number>>;
+    daily: { day: string; status: StreamEventStatus; n: number }[];
+  };
+}
+
+export interface StreamEvent {
+  id: number;
+  receivedAt: string;
+  status: StreamEventStatus;
+  code: string | null;
+  message: string | null;
+  test: boolean;
+  auth: string | null;
+  sender: string | null;
+  origin: string | null;
+  userAgent: string | null;
+  contentType: string | null;
+  idempotencyKey: string | null;
+  taskId: string | null;
+  inboxId: string | null;
+  issue: { number: number; url: string } | null;
+  durationMs: number | null;
+  hasPayload: boolean;
+  payload?: Record<string, unknown> | null;
+}
+
+export interface StreamPreview {
+  valid: boolean;
+  errors: Record<string, string>;
+  payload: Record<string, unknown>;
+  title: string;
+  body: string;
+  githubBody: string;
+}
+
+export interface StreamOutcome {
+  eventId: number;
+  status: "delivered" | "partial" | "failed";
+  code: string | null;
+  message: string | null;
+  title: string;
+  taskId: string | null;
+  inboxId: string | null;
+  issue: { number: number; url: string } | null;
+  notes: string[];
+}
+
+export interface GithubRepoCheck {
+  fullName: string;
+  private: boolean;
+  hasIssues: boolean;
+  htmlUrl: string;
+}

@@ -47,7 +47,11 @@ export type Route =
   | { name: "focus" }
   | { name: "sessions"; projectId?: string }
   | { name: "rundown"; day?: string; mode?: "morning" | "evening" }
-  | { name: "task"; id: string };
+  | { name: "task"; id: string }
+  | { name: "streams"; id?: string; tab?: StreamTab };
+
+/** Sections of a stream's page. */
+export type StreamTab = "overview" | "destination" | "fields" | "security" | "github" | "responses" | "deliveries";
 
 interface RouterState {
   route: Route;

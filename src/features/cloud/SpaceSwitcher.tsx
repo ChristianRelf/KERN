@@ -12,6 +12,7 @@ import {
   LogOut,
   Mail,
   Plus,
+  Radio,
   RefreshCw,
   Settings2,
   UserPlus,
@@ -201,6 +202,12 @@ export function SpaceSwitcher({ collapsed }: { collapsed: boolean }) {
                 <DM.Item className="menu__item" onSelect={() => useCloud.setState({ manage: { id: active!.id, tab: "invites" } })}>
                   <UserPlus strokeWidth={1.75} />
                   <span>Invite people…</span>
+                </DM.Item>
+              )}
+              {active && (active.role === "owner" || active.role === "admin") && (
+                <DM.Item className="menu__item" onSelect={() => navigate({ name: "streams" })}>
+                  <Radio strokeWidth={1.75} />
+                  <span>Streams…</span>
                 </DM.Item>
               )}
               {active && active.role !== "viewer" && (

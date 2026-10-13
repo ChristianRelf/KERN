@@ -35,6 +35,7 @@ import {
   SquareTerminal,
   Sparkles,
   Flag,
+  Radio,
   type LucideIcon,
 } from "lucide-react";
 import { navigate, useRouter } from "@/stores/router";
@@ -127,6 +128,7 @@ export function getCommands(): Command[] {
     { id: "rundown", title: "Open today's rundown", icon: Sunrise, section: "Go to", shortcut: "rundown", keywords: "briefing morning daily summary", run: () => navigate({ name: "rundown" }) },
     { id: "evening", title: "Open evening review", icon: Sunset, section: "Go to", keywords: "review end of day", run: () => navigate({ name: "rundown", mode: "evening" }) },
     { id: "goTrash", title: "Open trash", icon: Trash, section: "Go to", keywords: "deleted restore", run: () => navigate({ name: "trash" }) },
+    { id: "goStreams", title: "Open streams", icon: Radio, section: "Go to", keywords: "webhook form bug report endpoint cloud", run: () => navigate({ name: "streams" }) },
     { id: "goSettings", title: "Open settings", icon: Settings, section: "Go to", shortcut: "goSettings", keywords: "preferences options", run: () => navigate({ name: "settings" }) },
 
     focus.phase === "running"

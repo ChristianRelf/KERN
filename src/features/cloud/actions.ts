@@ -166,6 +166,32 @@ export function handleInviteEvent(inv: { id: string; workspace: string; inviterN
   toast(`${inv.inviterName ?? "Someone"} invited you to ${inv.workspace}`, { action: { label: "View", run: () => openInvite(inv.id) }, duration: 10_000 });
 }
 
+export interface StreamEventMessage {
+  space: string;
+  stream: { id: string; name: string };
+  status: "delivered" | "partial" | "failed";
+  title: string;
+  taskId: string | null;
+  inboxId: string | null;
+  issueUrl: string | null;
+  test: boolean;
+}
+
+/** A stream delivered a submission into a space (the records arrive as ordinary changes). */
+export function handleStreamEvent(e: StreamEventMessage) {
+  void queryClient.invalidateQueries({ queryKey: ["cloud", "streams", e.space] });
+  if (e.space !== st().info?.active?.id || !getSetting("cloud.streamToasts")) return;
+  const action = e.taskId
+    ? { label: "Open", run: () => navigate({ name: "task", id: e.taskId! }) }
+    : e.inboxId
+      ? { label: "Inbox", run: () => navigate({ name: "inbox" }) }
+      : e.issueUrl
+        ? { label: "Open issue", run: () => void api.system.open(e.issueUrl!) }
+        : { label: "Details", run: () => navigate({ name: "streams", id: e.stream.id, tab: "deliveries" }) };
+  if (e.status === "failed") toast(`${e.stream.name}: a submission couldn't be delivered`, { tone: "error", action: { label: "Details", run: () => navigate({ name: "streams", id: e.stream.id, tab: "deliveries" }) }, duration: 8000 });
+  else toast(`${e.stream.name}${e.test ? " (test)" : ""}: ${e.title}`, { action, duration: 8000 });
+}
+
 // ------------------------------------------------------------ remote changes
 
 const TABLE_DOMAINS: Record<string, Domain[]> = {

@@ -164,6 +164,7 @@ export interface Settings {
   "cloud.enabled": boolean;
   "cloud.sharePresence": boolean;
   "cloud.showCursors": boolean;
+  "cloud.streamToasts": boolean;
   // Privacy
   "privacy.network": boolean;
   "privacy.favicons": boolean;
@@ -338,6 +339,7 @@ export const DEFAULTS: Settings = {
   "cloud.enabled": false,
   "cloud.sharePresence": true,
   "cloud.showCursors": true,
+  "cloud.streamToasts": true,
 
   "privacy.network": true,
   "privacy.favicons": true,

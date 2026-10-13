@@ -3,14 +3,15 @@
 //   - "changes": records other people saved (handed to the backend to apply),
 //   - "presence": who's here and where (cursors, selections),
 //   - "ephemeral": live interactions such as whiteboard drags,
-//   - "space" / "invite": workspace events for this account.
+//   - "space" / "invite": workspace events for this account,
+//   - "stream": a stream delivered a submission into the open space.
 // The socket authenticates with a single-use ticket fetched by the backend;
 // the session token never reaches the interface.
 
 import { api } from "@/lib/ipc";
 import type { RemoteChange } from "@/lib/types";
 import { refreshMe, refreshStatus, useCloud, type Peer, type PresenceState } from "./store";
-import { handleSpaceEvent, handleInviteEvent } from "./actions";
+import { handleSpaceEvent, handleInviteEvent, handleStreamEvent, type StreamEventMessage } from "./actions";
 
 type Ephemeral = { userId: string; conn: string; color: string; name: string; data: unknown };
 type Listener = (e: Ephemeral) => void;
@@ -113,6 +114,9 @@ function onMessage(raw: string) {
       return;
     case "invite":
       handleInviteEvent(msg.invite as { id: string; workspace: string; inviterName: string | null });
+      return;
+    case "stream":
+      handleStreamEvent(msg as unknown as StreamEventMessage);
       return;
   }
 }
