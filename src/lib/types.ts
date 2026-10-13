@@ -930,6 +930,17 @@ export interface RepoSummary {
   htmlUrl: string;
   openIssues: number;
   updatedAt: string | null;
+  archived?: boolean;
+  fork?: boolean;
+  language?: string | null;
+}
+
+export interface GithubOrg {
+  login: string;
+  description: string | null;
+  avatarUrl: string | null;
+  /** The signed-in user's own account. */
+  personal: boolean;
 }
 
 export interface ProjectRepo {
@@ -1697,4 +1708,157 @@ export interface IndexStatus {
   files: number;
   indexing: boolean;
   stale: boolean;
+}
+
+// ------------------------------------------------------------ Kern Cloud
+
+export interface CloudAccount {
+  id: string;
+  name: string;
+  email: string;
+  emailVerified: boolean;
+  image: string | null;
+}
+
+export type SpaceKind = "personal" | "workspace";
+export type SpaceRole = "owner" | "admin" | "member" | "viewer";
+
+export interface ActiveSpace {
+  id: string;
+  kind: SpaceKind;
+  name: string;
+}
+
+export type SyncState = "off" | "idle" | "syncing" | "offline" | "error" | "signed_out" | "read_only";
+
+export interface SyncStatus {
+  state: SyncState;
+  pending: number;
+  lastSyncedAt: number | null;
+  message: string | null;
+}
+
+export interface CloudInfo {
+  apiUrl: string;
+  wsUrl: string;
+  signedIn: boolean;
+  account: CloudAccount | null;
+  active: ActiveSpace | null;
+  sync: SyncStatus;
+}
+
+export type TeamSize = "just-me" | "2-10" | "11-50" | "51-200" | "201-1000" | "1000+";
+
+export interface Space {
+  id: string;
+  kind: SpaceKind;
+  name: string;
+  slug: string | null;
+  description: string;
+  logo: string | null;
+  accent: string | null;
+  website: string | null;
+  industry: string | null;
+  teamSize: TeamSize | null;
+  useCase: string | null;
+  timezone: string | null;
+  githubOrg: string | null;
+  githubSyncedAt: string | null;
+  settings: Record<string, unknown>;
+  ownerId: string;
+  role: SpaceRole;
+  head: number;
+  memberCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type InviteStatus = "pending" | "accepted" | "declined" | "revoked" | "expired";
+
+export interface Invite {
+  id: string;
+  spaceId: string;
+  email: string;
+  role: Exclude<SpaceRole, "owner">;
+  message: string | null;
+  invitedBy: string | null;
+  inviterName: string | null;
+  createdAt: string;
+  expiresAt: string;
+  lastSentAt: string | null;
+  sendCount: number;
+  status: InviteStatus;
+  link: string;
+  /** Present on invitations addressed to the signed-in user. */
+  workspace?: string;
+  logo?: string | null;
+}
+
+export interface InviteSummary {
+  id: string;
+  workspace: string;
+  logo: string | null;
+  inviterName: string | null;
+  role: Exclude<SpaceRole, "owner">;
+  emailHint: string;
+  expiresAt: string;
+  status: InviteStatus;
+}
+
+export interface Me {
+  user: CloudAccount & { createdAt: string | null };
+  personal: Space | null;
+  workspaces: Space[];
+  invites: Invite[];
+}
+
+export interface Member {
+  userId: string;
+  role: SpaceRole;
+  title: string | null;
+  joinedAt: string;
+  name: string;
+  email: string;
+  image: string | null;
+}
+
+export interface WorkspaceDetail {
+  workspace: Space;
+  members: Member[];
+  invites: Invite[];
+}
+
+export interface InviteResult {
+  email: string;
+  ok: boolean;
+  reason?: string;
+  invite?: Invite;
+}
+
+export interface AuditEntry {
+  id: number;
+  action: string;
+  detail: Record<string, unknown>;
+  at: string;
+  actor: string | null;
+}
+
+export interface RemoteChange {
+  seq: number;
+  t: string;
+  id: string;
+  op: "upsert" | "delete";
+  data: Record<string, unknown> | null;
+}
+
+export interface OfflineSummary {
+  projects: [string, string][];
+  counts: Record<string, number>;
+}
+
+export interface ScenePatch {
+  nodes: WbNodeRecord[];
+  removedNodes: string[];
+  edges: WbEdgeRecord[];
+  removedEdges: string[];
 }

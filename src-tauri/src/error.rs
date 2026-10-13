@@ -20,6 +20,12 @@ pub enum AppError {
     Invalid(String),
     #[error("{0}")]
     Network(String),
+    /// Kern Cloud rejected the session: sign in again.
+    #[error("{0}")]
+    Auth(String),
+    /// Kern Cloud needs the account's email confirmed first.
+    #[error("{0}")]
+    Unverified(String),
     #[error("{0}")]
     Other(String),
 }
@@ -46,6 +52,8 @@ impl AppError {
             AppError::NotFound(_) => "not_found",
             AppError::Invalid(_) => "invalid",
             AppError::Network(_) => "network",
+            AppError::Auth(_) => "auth",
+            AppError::Unverified(_) => "unverified",
             AppError::Other(_) => "other",
         }
     }

@@ -233,6 +233,9 @@ pub struct RepoSummary {
     pub html_url: String,
     pub open_issues: i64,
     pub updated_at: Option<String>,
+    pub archived: bool,
+    pub fork: bool,
+    pub language: Option<String>,
 }
 
 fn repo_summary(v: &Value) -> Option<RepoSummary> {
@@ -244,6 +247,9 @@ fn repo_summary(v: &Value) -> Option<RepoSummary> {
         html_url: v.get("html_url").and_then(|d| d.as_str()).unwrap_or("").to_string(),
         open_issues: v.get("open_issues_count").and_then(|d| d.as_i64()).unwrap_or(0),
         updated_at: v.get("pushed_at").and_then(|d| d.as_str()).map(String::from),
+        archived: v.get("archived").and_then(|d| d.as_bool()).unwrap_or(false),
+        fork: v.get("fork").and_then(|d| d.as_bool()).unwrap_or(false),
+        language: v.get("language").and_then(|d| d.as_str()).map(String::from),
     })
 }
 
@@ -255,6 +261,119 @@ pub async fn github_repos(app: AppHandle) -> AppResult<Vec<RepoSummary>> {
         Ok(list.iter().filter_map(repo_summary).collect())
     })
     .await
+}
+
+// ------------------------------------------------------------ organisations
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrgSummary {
+    pub login: String,
+    pub description: Option<String>,
+    pub avatar_url: Option<String>,
+    /// The signed-in user's own account rather than an organisation.
+    pub personal: bool,
+}
+
+/// The signed-in account plus the organisations it belongs to.
+#[tauri::command]
+pub async fn github_orgs(app: AppHandle) -> AppResult<Vec<OrgSummary>> {
+    blocking(&app, |s| {
+        let gh = Gh::new(s)?;
+        let me = gh.get("/user")?;
+        let mut out = vec![OrgSummary {
+            login: me.get("login").and_then(|l| l.as_str()).unwrap_or("").to_string(),
+            description: me.get("name").and_then(|l| l.as_str()).map(String::from),
+            avatar_url: me.get("avatar_url").and_then(|l| l.as_str()).map(String::from),
+            personal: true,
+        }];
+        for o in gh.get_all("/user/orgs?per_page=100", 3)? {
+            if let Some(login) = o.get("login").and_then(|l| l.as_str()) {
+                out.push(OrgSummary {
+                    login: login.to_string(),
+                    description: o.get("description").and_then(|d| d.as_str()).filter(|d| !d.is_empty()).map(String::from),
+                    avatar_url: o.get("avatar_url").and_then(|d| d.as_str()).map(String::from),
+                    personal: false,
+                });
+            }
+        }
+        Ok(out)
+    })
+    .await
+}
+
+/// Every repository of an organisation (or the signed-in user's own).
+#[tauri::command]
+pub async fn github_org_repos(app: AppHandle, org: String) -> AppResult<Vec<RepoSummary>> {
+    blocking(&app, move |s| {
+        let org = org.trim().to_string();
+        if org.is_empty() || !org.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return invalid("That isn't a GitHub organisation name.");
+        }
+        let gh = Gh::new(s)?;
+        let me = gh.get("/user")?;
+        let mine = me.get("login").and_then(|l| l.as_str()).map(|l| l.eq_ignore_ascii_case(&org)).unwrap_or(false);
+        let path = if mine { "/user/repos?per_page=100&sort=pushed&affiliation=owner".to_string() } else { format!("/orgs/{org}/repos?per_page=100&type=all&sort=pushed") };
+        let list = gh.get_all(&path, 10)?;
+        Ok(list.iter().filter_map(repo_summary).collect())
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportRepo {
+    pub full_name: String,
+    pub description: Option<String>,
+    pub default_branch: Option<String>,
+    pub html_url: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportReport {
+    pub created: Vec<String>,
+    pub skipped: Vec<String>,
+}
+
+/// Creates one project per repository (skipping repositories some project is
+/// already connected to), connected for issue sync. In a workspace these
+/// projects - and their GitHub connection - sync to every member.
+#[tauri::command]
+pub fn github_import_repos(state: tauri::State<AppState>, repos: Vec<ImportRepo>, sync_issues: Option<bool>) -> AppResult<ImportReport> {
+    state.with(|c| {
+        let tx = c.transaction()?;
+        let mut report = ImportReport { created: vec![], skipped: vec![] };
+        for r in repos {
+            let Some((owner, name)) = r.full_name.split_once('/') else { continue };
+            let taken: bool = tx.query_row(
+                "SELECT EXISTS (SELECT 1 FROM project_repos WHERE lower(owner) = lower(?1) AND lower(name) = lower(?2))",
+                params![owner, name],
+                |row| row.get(0),
+            )?;
+            if taken {
+                report.skipped.push(r.full_name);
+                continue;
+            }
+            let p = crate::domain::projects::create_project(
+                &tx,
+                &crate::domain::projects::ProjectInput {
+                    name: name.to_string(),
+                    description: r.description.clone().filter(|d| !d.trim().is_empty()),
+                    ..Default::default()
+                },
+            )?;
+            tx.execute(
+                "INSERT INTO project_repos(project_id, owner, name, default_branch, html_url, sync_issues, connected_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![p.id, owner, name, r.default_branch, r.html_url, sync_issues.unwrap_or(true) as i64, now_ms()],
+            )?;
+            crate::domain::repos::link_github(&tx, &p.id, &r.full_name)?;
+            crate::domain::activity::log(&tx, Some(&p.id), "project", &p.id, "connected", &r.full_name)?;
+            report.created.push(r.full_name);
+        }
+        tx.commit()?;
+        Ok(report)
+    })
 }
 
 // ------------------------------------------------------------ connection

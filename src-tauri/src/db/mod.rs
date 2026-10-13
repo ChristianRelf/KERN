@@ -33,7 +33,67 @@ pub fn user_version(conn: &Connection) -> AppResult<i64> {
 pub fn open(path: &Path, safety_dir: &Path) -> AppResult<Connection> {
     let conn = Connection::open(path)?;
     configure(&conn)?;
-    let version = user_version(&conn)?;
+    upgrade(&conn, safety_dir)?;
+    Ok(conn)
+}
+
+/// Tables that belong to this computer rather than to a space: settings,
+/// AI accounts and usage, folder trust, caches, notification history and the
+/// linked-file index. A cloud space replica parks its own copies under a
+/// prefix, so unqualified names resolve to the attached device database.
+pub const DEVICE_TABLES: &[&str] = &[
+    "settings",
+    "ai_accounts",
+    "ai_usage_events",
+    "ai_failover_events",
+    "favicon_cache",
+    "link_metadata",
+    "storage_scan_cache",
+    "trusted_workspaces",
+    "notification_log",
+    "file_index_roots",
+    "file_index",
+    "file_fts",
+];
+const PARKED: &str = "_device_";
+
+fn table_exists(conn: &Connection, name: &str) -> AppResult<bool> {
+    Ok(conn.query_row("SELECT EXISTS (SELECT 1 FROM main.sqlite_master WHERE type = 'table' AND name = ?1)", [name], |r| r.get(0))?)
+}
+
+/// Parks (or restores) the device tables of a space replica. Migrations run
+/// with the normal names so every schema step applies unchanged.
+fn park_device_tables(conn: &Connection, park: bool) -> AppResult<()> {
+    for t in DEVICE_TABLES {
+        let parked = format!("{PARKED}{t}");
+        let (from, to) = if park { (t.to_string(), parked) } else { (parked, t.to_string()) };
+        if table_exists(conn, &from)? && !table_exists(conn, &to)? {
+            conn.execute_batch(&format!("ALTER TABLE main.\"{from}\" RENAME TO \"{to}\""))?;
+        }
+    }
+    Ok(())
+}
+
+/// Opens (creating if necessary) a cloud space replica at `path`: the same
+/// schema as the offline database plus sync bookkeeping, with the device
+/// database attached as `local` for settings and other per-computer data.
+pub fn open_space(path: &Path, safety_dir: &Path, device_db: &Path) -> AppResult<Connection> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let conn = Connection::open(path)?;
+    configure(&conn)?;
+    park_device_tables(&conn, false)?;
+    upgrade(&conn, safety_dir)?;
+    park_device_tables(&conn, true)?;
+    crate::domain::cloud::sync::install(&conn)?;
+    conn.execute("ATTACH DATABASE ?1 AS local", [device_db.to_string_lossy().to_string()])?;
+    Ok(conn)
+}
+
+/// Checks the schema version, takes a safety copy and migrates.
+fn upgrade(conn: &Connection, safety_dir: &Path) -> AppResult<()> {
+    let version = user_version(conn)?;
     if version > SCHEMA_VERSION {
         return Err(AppError::Invalid(format!(
             "This data was created by a newer version of the app (schema {version}, supported {SCHEMA_VERSION}). Update the app to open it."
@@ -47,8 +107,8 @@ pub fn open(path: &Path, safety_dir: &Path) -> AppResult<Connection> {
         ));
         conn.execute("VACUUM INTO ?1", [target.to_string_lossy().to_string()])?;
     }
-    migrate(&conn)?;
-    Ok(conn)
+    migrate(conn)?;
+    Ok(())
 }
 
 /// Runs all pending migrations, each atomically.
@@ -111,6 +171,47 @@ mod tests {
         assert_eq!(fav, "false", "an existing opt-out carries over to favicons");
         // A safety copy was written before migrating.
         assert_eq!(std::fs::read_dir(&safety).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn space_replicas_share_device_tables_and_import_offline_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let device = dir.path().join("kern.db");
+        {
+            let conn = open(&device, &dir.path().join("backups")).unwrap();
+            conn.execute_batch(
+                "INSERT INTO settings(key, value, updated_at) VALUES ('appearance.theme', '\"dark\"', 1);
+                 INSERT INTO projects(id, name, created_at, updated_at) VALUES ('p1', 'Offline project', 1, 1);
+                 INSERT INTO tasks(id, title, project_id, created_at, updated_at) VALUES ('t1', 'Offline task', 'p1', 1, 1);
+                 INSERT INTO project_folder_links(project_id, path, folder_key, linked_at) VALUES ('p1', 'C:/code/site', 'c:/code/site', 1);",
+            )
+            .unwrap();
+        }
+        let replica = dir.path().join("cloud").join("u1").join("s1.db");
+        let mut conn = open_space(&replica, &dir.path().join("cloud-backups"), &device).unwrap();
+        // Settings come from the device database; space data starts empty.
+        let theme: String = crate::domain::settings::get(&conn, "appearance.theme").unwrap();
+        assert_eq!(theme, "dark");
+        crate::domain::settings::set(&conn, "general.landing", &serde_json::json!("tasks")).unwrap();
+        let n: i64 = conn.query_row("SELECT count(*) FROM projects", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0);
+        // Offline data copies in (with the device-only folder link) and is queued to sync.
+        let counts = crate::domain::cloud::sync::import_offline(&mut conn, None).unwrap();
+        assert_eq!((counts["projects"], counts["tasks"], counts["project_folder_links"]), (1, 1, 1));
+        assert!(crate::domain::cloud::sync::pending_count(&conn) >= 2);
+        let title: String = conn.query_row("SELECT title FROM main.tasks WHERE id = 't1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(title, "Offline task");
+        drop(conn);
+        // The setting written while in the space landed in the device database.
+        let device_conn = open(&device, &dir.path().join("backups")).unwrap();
+        let landing: String = crate::domain::settings::get(&device_conn, "general.landing").unwrap();
+        assert_eq!(landing, "tasks");
+        // Reopening a replica (e.g. after an app update) keeps its data and parking.
+        let conn = open_space(&replica, &dir.path().join("cloud-backups"), &device).unwrap();
+        let n: i64 = conn.query_row("SELECT count(*) FROM main.projects", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 1);
+        let parked: i64 = conn.query_row("SELECT count(*) FROM main.sqlite_master WHERE name = 'settings'", [], |r| r.get(0)).unwrap();
+        assert_eq!(parked, 0);
     }
 
     #[test]

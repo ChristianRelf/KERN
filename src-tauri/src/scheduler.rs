@@ -143,10 +143,17 @@ fn maintenance(app: &AppHandle, at_startup: bool) {
     let paths = state.paths.clone();
     let version = app.package_info().version.to_string();
     let mut changed = false;
+    // Automatic backups protect the offline data; cloud spaces live on the server.
+    let cloud = state.cloud.is_active();
+    // Other spaces' whiteboards may use attachment files this database
+    // doesn't reference, so orphan cleanup only runs without cloud copies.
+    let replicas = crate::domain::cloud::has_replicas(&state);
     let _ = state.with(|c| {
-        if let Err(e) = archive::auto_backup_if_due(c, &paths, &version) {
-            eprintln!("automatic backup failed: {e}");
-            let _ = app.emit("kern://backup-failed", e.to_string());
+        if !cloud {
+            if let Err(e) = archive::auto_backup_if_due(c, &paths, &version) {
+                eprintln!("automatic backup failed: {e}");
+                let _ = app.emit("kern://backup-failed", e.to_string());
+            }
         }
         let days: i64 = settings::get_or(c, "tasks.autoArchiveDays", 0);
         if days > 0 {
@@ -165,7 +172,7 @@ fn maintenance(app: &AppHandle, at_startup: bool) {
         // Credential-store entries of deleted environment variables.
         let _ = crate::domain::envvars::sweep(c, state.ai.vault.as_ref());
         c.execute("DELETE FROM service_checks WHERE checked_at < ?1", [now_ms() - 30 * 86_400_000])?;
-        if at_startup {
+        if at_startup && !replicas {
             let _ = attachments::cleanup_orphan_assets(c, &paths.attachments_dir);
             // Clean leftovers from interrupted exports/restores.
             let _ = std::fs::remove_dir_all(paths.data_dir.join("tmp"));

@@ -38,6 +38,11 @@ impl Paths {
     pub fn logs_dir(&self) -> PathBuf {
         self.data_dir.join("logs")
     }
+
+    /// Local replicas of Kern Cloud spaces, one folder per account.
+    pub fn cloud_dir(&self) -> PathBuf {
+        self.data_dir.join("cloud")
+    }
 }
 
 pub struct AppState {
@@ -53,6 +58,8 @@ pub struct AppState {
     pub ai: crate::domain::ai::router::AiService,
     /// Integrated terminal processes.
     pub pty: crate::domain::pty::PtyManager,
+    /// Kern Cloud: the active space, sync signals and status.
+    pub cloud: crate::domain::cloud::CloudState,
 }
 
 impl AppState {
@@ -65,7 +72,18 @@ impl AppState {
             storage: Default::default(),
             ai: crate::domain::ai::default_service(),
             pty: Default::default(),
+            cloud: Default::default(),
         }
+    }
+
+    /// Replaces the open database (switching between offline data and a
+    /// cloud space replica). Waits for any in-flight work on the old one.
+    pub fn swap_connection(&self, conn: Connection) -> AppResult<Connection> {
+        let mut guard = self
+            .db
+            .lock()
+            .map_err(|_| AppError::Other("Database lock was poisoned; restart the app.".into()))?;
+        Ok(std::mem::replace(&mut *guard, conn))
     }
 
     /// Runs `f` with exclusive access to the database connection.

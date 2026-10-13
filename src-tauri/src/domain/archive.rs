@@ -629,6 +629,9 @@ pub fn projects_json(conn: &Connection, ids: Option<Vec<String>>) -> AppResult<V
 
 #[tauri::command]
 pub fn backup_create(app: AppHandle, state: State<AppState>, dest_dir: Option<String>) -> AppResult<BackupInfo> {
+    if state.cloud.is_active() {
+        return invalid("Backups cover your offline data. Switch to Offline in the space menu first - cloud spaces are kept on the server.");
+    }
     let version = app.package_info().version.to_string();
     let paths = state.paths.clone();
     state.with(|c| {
@@ -654,6 +657,9 @@ pub fn backup_preview(state: State<AppState>, path: String) -> AppResult<Restore
 /// backup made of the replaced data. The client reloads afterwards.
 #[tauri::command]
 pub fn backup_restore(app: AppHandle, state: State<AppState>, path: String) -> AppResult<BackupInfo> {
+    if state.cloud.is_active() {
+        return invalid("Backups cover your offline data. Switch to Offline in the space menu first - cloud spaces are kept on the server.");
+    }
     let version = app.package_info().version.to_string();
     let paths = state.paths.clone();
     state.with(|c| restore(c, &paths, &version, &PathBuf::from(&path)))
@@ -673,6 +679,9 @@ pub fn backup_delete(state: State<AppState>, path: String) -> AppResult<()> {
 
 #[tauri::command]
 pub fn export_all(app: AppHandle, state: State<AppState>, path: String) -> AppResult<BackupInfo> {
+    if state.cloud.is_active() {
+        return invalid("Backups cover your offline data. Switch to Offline in the space menu first - cloud spaces are kept on the server.");
+    }
     let version = app.package_info().version.to_string();
     let paths = state.paths.clone();
     state.with(|c| create_archive(c, &paths, &version, &PathBuf::from(&path), "export", true))

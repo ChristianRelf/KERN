@@ -208,6 +208,79 @@ pub fn save_scene(conn: &Connection, id: &str, nodes_in: &[WbNode], edges_in: &[
     Ok(())
 }
 
+/// Changes to part of a scene: objects and connections to insert or update,
+/// and ids to remove. Collaborators editing the same whiteboard each send
+/// only what they changed, so nobody's edits overwrite anyone else's.
+#[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ScenePatch {
+    pub nodes: Vec<WbNode>,
+    pub removed_nodes: Vec<String>,
+    pub edges: Vec<WbEdge>,
+    pub removed_edges: Vec<String>,
+}
+
+pub fn patch_scene(conn: &Connection, id: &str, p: &ScenePatch) -> AppResult<()> {
+    let exists: bool = conn.query_row("SELECT EXISTS (SELECT 1 FROM whiteboards WHERE id = ?1)", [id], |r| r.get(0))?;
+    if !exists {
+        return Err(AppError::NotFound("Whiteboard".into()));
+    }
+    let now = now_ms();
+    for n in &p.removed_nodes {
+        conn.execute("DELETE FROM wb_edges WHERE whiteboard_id = ?1 AND (source = ?2 OR target = ?2)", params![id, n])?;
+        conn.execute("DELETE FROM wb_nodes WHERE id = ?1 AND whiteboard_id = ?2", params![n, id])?;
+    }
+    let mut upsert = conn.prepare(
+        "INSERT INTO wb_nodes(id, whiteboard_id, type, x, y, width, height, z, parent_id, locked, data, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+         ON CONFLICT(id) DO UPDATE SET type = excluded.type, x = excluded.x, y = excluded.y, width = excluded.width,
+           height = excluded.height, z = excluded.z, parent_id = excluded.parent_id, locked = excluded.locked,
+           data = excluded.data, updated_at = excluded.updated_at
+         WHERE wb_nodes.whiteboard_id = excluded.whiteboard_id AND (wb_nodes.type IS NOT excluded.type OR wb_nodes.x IS NOT excluded.x
+           OR wb_nodes.y IS NOT excluded.y OR wb_nodes.width IS NOT excluded.width OR wb_nodes.height IS NOT excluded.height
+           OR wb_nodes.z IS NOT excluded.z OR wb_nodes.parent_id IS NOT excluded.parent_id OR wb_nodes.locked IS NOT excluded.locked
+           OR wb_nodes.data IS NOT excluded.data)",
+    )?;
+    for n in &p.nodes {
+        if !n.x.is_finite() || !n.y.is_finite() {
+            return invalid("Whiteboard object has an invalid position.");
+        }
+        upsert.execute(params![
+            n.id,
+            id,
+            n.kind,
+            n.x,
+            n.y,
+            n.width.filter(|w| w.is_finite()),
+            n.height.filter(|h| h.is_finite()),
+            n.z,
+            n.parent_id,
+            n.locked as i64,
+            serde_json::to_string(&n.data)?,
+            now
+        ])?;
+    }
+    for e in &p.removed_edges {
+        conn.execute("DELETE FROM wb_edges WHERE id = ?1 AND whiteboard_id = ?2", params![e, id])?;
+    }
+    let mut edge = conn.prepare(
+        "INSERT INTO wb_edges(id, whiteboard_id, source, target, source_handle, target_handle, data)
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7
+         WHERE EXISTS (SELECT 1 FROM wb_nodes WHERE id = ?3 AND whiteboard_id = ?2) AND EXISTS (SELECT 1 FROM wb_nodes WHERE id = ?4 AND whiteboard_id = ?2)
+         ON CONFLICT(id) DO UPDATE SET source = excluded.source, target = excluded.target, source_handle = excluded.source_handle,
+           target_handle = excluded.target_handle, data = excluded.data
+         WHERE wb_edges.whiteboard_id = excluded.whiteboard_id AND (wb_edges.source IS NOT excluded.source OR wb_edges.target IS NOT excluded.target
+           OR wb_edges.source_handle IS NOT excluded.source_handle OR wb_edges.target_handle IS NOT excluded.target_handle OR wb_edges.data IS NOT excluded.data)",
+    )?;
+    for e in &p.edges {
+        edge.execute(params![e.id, id, e.source, e.target, e.source_handle, e.target_handle, serde_json::to_string(&e.data)?])?;
+    }
+    if !(p.nodes.is_empty() && p.removed_nodes.is_empty() && p.edges.is_empty() && p.removed_edges.is_empty()) {
+        conn.execute("UPDATE whiteboards SET updated_at = ?1 WHERE id = ?2", params![now, id])?;
+    }
+    Ok(())
+}
+
 /// Copies a whiteboard (with fresh ids) into `project_id`.
 pub fn duplicate(conn: &Connection, id: &str, project_id: Option<&str>, rename: bool) -> AppResult<Whiteboard> {
     let src = get(conn, id)?;
@@ -335,6 +408,20 @@ pub fn whiteboard_save(
     })
 }
 
+/// Saves the changed part of a scene (see [`ScenePatch`]).
+#[tauri::command]
+pub fn whiteboard_patch(state: State<AppState>, id: String, patch: ScenePatch, viewport: Option<Value>) -> AppResult<()> {
+    state.with(|c| {
+        let tx = c.transaction()?;
+        patch_scene(&tx, &id, &patch)?;
+        if let Some(v) = viewport {
+            tx.execute("UPDATE whiteboards SET viewport = ?1 WHERE id = ?2", params![serde_json::to_string(&v)?, id])?;
+        }
+        tx.commit()?;
+        Ok(())
+    })
+}
+
 #[tauri::command]
 pub fn whiteboard_duplicate(state: State<AppState>, id: String) -> AppResult<Whiteboard> {
     state.with(|c| {
@@ -440,6 +527,26 @@ mod tests {
         // Text is searchable.
         let n: i64 = c.query_row("SELECT count(*) FROM search_fts WHERE search_fts MATCH 'alpha'", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn patches_touch_only_what_changed() {
+        let c = open_memory();
+        let w = create(&c, None, "Plan").unwrap();
+        save_scene(&c, &w.id, &[node("a", 0.0, "alpha"), node("b", 10.0, "beta")], &[]).unwrap();
+        // Someone else adds "c" while this patch moves "a" and links a → b.
+        save_scene(&c, &w.id, &[node("a", 0.0, "alpha"), node("b", 10.0, "beta"), node("c", 20.0, "gamma")], &[]).unwrap();
+        let e = WbEdge { id: "e1".into(), source: "a".into(), target: "b".into(), source_handle: None, target_handle: None, data: json!({}) };
+        let dangling = WbEdge { id: "e2".into(), source: "a".into(), target: "zz".into(), source_handle: None, target_handle: None, data: json!({}) };
+        patch_scene(&c, &w.id, &ScenePatch { nodes: vec![node("a", 99.0, "alpha")], edges: vec![e, dangling], ..Default::default() }).unwrap();
+        let ns = nodes(&c, &w.id).unwrap();
+        assert_eq!(ns.len(), 3, "the other editor's object survives");
+        assert_eq!(ns.iter().find(|n| n.id == "a").unwrap().x, 99.0);
+        assert_eq!(edges(&c, &w.id).unwrap().len(), 1, "connections to missing objects are dropped");
+        // Removing an object removes its connections.
+        patch_scene(&c, &w.id, &ScenePatch { removed_nodes: vec!["b".into()], ..Default::default() }).unwrap();
+        assert_eq!(nodes(&c, &w.id).unwrap().len(), 2);
+        assert!(edges(&c, &w.id).unwrap().is_empty());
     }
 
     #[test]

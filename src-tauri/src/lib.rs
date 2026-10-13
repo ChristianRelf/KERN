@@ -14,7 +14,8 @@ pub mod window;
 
 use domain::*;
 use state::{AppState, Paths};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 pub fn run() {
@@ -27,6 +28,9 @@ pub fn run() {
         }));
     }
     builder
+        // After single-instance, so a kern:// link opened while Kern runs
+        // reaches the running app.
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
@@ -73,6 +77,25 @@ pub fn run() {
                 eprintln!("couldn't apply trust retention: {e}");
             }
             app.manage(AppState::new(conn, paths));
+            // Reopen the cloud space that was open last time (works offline too).
+            cloud::restore_active(app.handle());
+            cloud::start_worker(app.handle().clone());
+            // kern://invite/<id> links. Installers register the scheme; this
+            // also covers development runs and portable copies.
+            let _ = app.deep_link().register_all();
+            if let Ok(Some(urls)) = app.deep_link().get_current() {
+                for u in urls {
+                    app.state::<AppState>().cloud.push_link(u.to_string());
+                }
+            }
+            let handle = app.handle().clone();
+            app.deep_link().on_open_url(move |event| {
+                for u in event.urls() {
+                    handle.state::<AppState>().cloud.push_link(u.to_string());
+                }
+                window::show_main(&handle);
+                let _ = handle.emit("kern://deep-link", ());
+            });
             if let Err(e) = window::create_tray(app) {
                 eprintln!("tray unavailable: {e}");
             }
@@ -295,6 +318,29 @@ pub fn run() {
             github::github_issues,
             github::github_commits,
             github::github_cached,
+            github::github_orgs,
+            github::github_org_repos,
+            github::github_import_repos,
+            // Kern Cloud: account, spaces, sync
+            cloud::cloud_status,
+            cloud::cloud_sign_up,
+            cloud::cloud_sign_in,
+            cloud::cloud_send_code,
+            cloud::cloud_verify_email,
+            cloud::cloud_sign_in_code,
+            cloud::cloud_reset_password,
+            cloud::cloud_sign_out,
+            cloud::cloud_request,
+            cloud::cloud_invite_info,
+            cloud::cloud_open_space,
+            cloud::cloud_apply,
+            cloud::cloud_sync_now,
+            cloud::cloud_resync,
+            cloud::cloud_set_connection,
+            cloud::cloud_offline_summary,
+            cloud::cloud_import_offline,
+            cloud::cloud_forget_space,
+            cloud::cloud_take_links,
             // boards
             boards::boards_list,
             boards::board_get,
@@ -325,6 +371,7 @@ pub fn run() {
             whiteboards::whiteboard_create,
             whiteboards::whiteboard_update,
             whiteboards::whiteboard_save,
+            whiteboards::whiteboard_patch,
             whiteboards::whiteboard_duplicate,
             whiteboards::whiteboard_import,
             whiteboards::whiteboard_delete,

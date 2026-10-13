@@ -7,6 +7,7 @@ pub mod archive;
 pub mod attachments;
 pub mod boards;
 pub mod catchup;
+pub mod cloud;
 pub mod daily;
 pub mod dashboards;
 pub mod deps;

@@ -33,6 +33,8 @@ export function describeError(e: unknown, fallback = "Couldn't save your changes
       case "invalid":
       case "not_found":
       case "network":
+      case "auth":
+      case "unverified":
         return e.message.charAt(0).toUpperCase() + e.message.slice(1);
       case "busy":
         return "The database is busy. Try again in a moment.";
@@ -285,6 +287,33 @@ export const api = {
     issues: (projectId: string, repo?: string | null) => call<T.IssueSummary[]>("github_issues", { projectId, repo: repo ?? null }),
     commits: (projectId: string, repo?: string | null) => call<T.RemoteCommit[]>("github_commits", { projectId, repo: repo ?? null }),
     cached: (projectId: string) => call<T.CachedGithub[]>("github_cached", { projectId }),
+    orgs: () => call<T.GithubOrg[]>("github_orgs"),
+    orgRepos: (org: string) => call<T.RepoSummary[]>("github_org_repos", { org }),
+    importRepos: (repos: Pick<T.RepoSummary, "fullName" | "description" | "defaultBranch" | "htmlUrl">[], syncIssues = true) =>
+      call<{ created: string[]; skipped: string[] }>("github_import_repos", { repos, syncIssues }),
+  },
+  /** Kern Cloud. Requests are made by the backend, which holds the session. */
+  cloud: {
+    status: () => call<T.CloudInfo>("cloud_status"),
+    signUp: (name: string, email: string, password: string) => call<void>("cloud_sign_up", { name, email, password }),
+    signIn: (email: string, password: string) => call<T.CloudAccount>("cloud_sign_in", { email, password }),
+    sendCode: (email: string, purpose: "verify" | "sign-in" | "reset") => call<void>("cloud_send_code", { email, purpose }),
+    verifyEmail: (email: string, code: string) => call<T.CloudAccount>("cloud_verify_email", { email, code }),
+    signInWithCode: (email: string, code: string) => call<T.CloudAccount>("cloud_sign_in_code", { email, code }),
+    resetPassword: (email: string, code: string, password: string) => call<void>("cloud_reset_password", { email, code, password }),
+    signOut: (forget = false) => call<void>("cloud_sign_out", { forget }),
+    request: <R = unknown>(method: "GET" | "POST" | "PATCH" | "DELETE", path: string, body?: unknown) =>
+      call<R>("cloud_request", { method, path, body: body ?? null }),
+    inviteInfo: (id: string) => call<T.InviteSummary>("cloud_invite_info", { id }),
+    openSpace: (space: T.ActiveSpace | null) => call<void>("cloud_open_space", { space }),
+    apply: (space: string, from: number, to: number, changes: T.RemoteChange[]) => call<void>("cloud_apply", { space, from, to, changes }),
+    syncNow: () => call<void>("cloud_sync_now"),
+    resync: () => call<void>("cloud_resync"),
+    setConnection: (connId: string | null) => call<void>("cloud_set_connection", { connId }),
+    offlineSummary: () => call<T.OfflineSummary>("cloud_offline_summary"),
+    importOffline: (projectIds?: string[] | null) => call<Record<string, number>>("cloud_import_offline", { projectIds: projectIds ?? null }),
+    forgetSpace: (spaceId: string) => call<void>("cloud_forget_space", { spaceId }),
+    takeLinks: () => call<string[]>("cloud_take_links"),
   },
   folders: {
     inspect: (path: string) => call<T.FolderInfo>("folder_inspect", { path }),
@@ -387,6 +416,8 @@ export const api = {
     ) => call<T.Whiteboard>("whiteboard_update", { id, patch }),
     save: (id: string, nodes: T.WbNodeRecord[], edges: T.WbEdgeRecord[], viewport?: T.Viewport | null) =>
       call<void>("whiteboard_save", { id, nodes, edges, viewport: viewport ?? null }),
+    /** Saves only what changed, so collaborators' edits are never overwritten. */
+    patch: (id: string, patch: T.ScenePatch, viewport?: T.Viewport | null) => call<void>("whiteboard_patch", { id, patch, viewport: viewport ?? null }),
     duplicate: (id: string) => call<T.Whiteboard>("whiteboard_duplicate", { id }),
     import: (document: unknown, projectId?: string | null) =>
       call<T.Whiteboard>("whiteboard_import", { document, projectId: projectId ?? null }),
