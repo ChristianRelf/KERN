@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/Button";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { confirm } from "@/components/ui/Dialog";
 import { APP_NAME } from "@/app/brand";
+import { startUpdate } from "@/features/updates/store";
+import { openWhatsNew } from "@/features/updates/WhatsNew";
 
 function Heatmap() {
   return (
@@ -81,8 +83,8 @@ export function AboutSection() {
           <span className="row" style={{ gap: 6, marginTop: 6, flexWrap: "wrap" }}>
             <span className="about-pill">v{info?.version ?? "…"}</span>
             {update?.latest ? (
-              <Button size="sm" variant="primary" icon={Download} onClick={() => void api.system.open(update.url)}>
-                Get v{update.latest}
+              <Button size="sm" variant="primary" icon={Download} onClick={() => void startUpdate({ current: update.current, target: update.latest!, fallbackUrl: update.url })}>
+                Update to v{update.latest}
               </Button>
             ) : (
               <Tooltip content="Check again">
@@ -133,6 +135,11 @@ export function AboutSection() {
         <Button size="sm" icon={Copy} disabled={!details} onClick={() => void navigator.clipboard.writeText(details).then(() => toast("Details copied"))}>
           Copy details
         </Button>
+        {info && (
+          <Button size="sm" icon={Sparkles} onClick={() => openWhatsNew(info.version)}>
+            What's new in {info.version}
+          </Button>
+        )}
         {update?.url && (
           <Button size="sm" icon={ArrowUpRight} onClick={() => void api.system.open(update.url)}>
             Release notes

@@ -39,6 +39,9 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        // In-app updates: signed installers from the GitHub release.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
@@ -462,6 +465,7 @@ pub fn run() {
             window::app_mode_set,
             window::app_lite_pin,
             updates::check_for_update,
+            updates::release_notes,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Kern")

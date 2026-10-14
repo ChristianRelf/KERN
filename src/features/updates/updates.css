@@ -1,0 +1,90 @@
+/* ---------- Update screen: the whole window while updating */
+.update-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  animation: fade-in var(--t-layout) var(--ease);
+}
+.update-screen__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(360px, calc(100vw - 48px));
+  text-align: center;
+}
+.update-screen__mark {
+  margin-bottom: 6px;
+}
+.update-screen__title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--text);
+}
+.update-screen__versions {
+  font-size: var(--fs-sm);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.update-screen__bar {
+  width: 100%;
+  margin-top: 8px;
+}
+.update-screen__bar[data-indeterminate="true"] .progress__bar {
+  width: 30% !important;
+  animation: update-indeterminate 1.3s var(--ease) infinite;
+}
+@keyframes update-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-screen__bar[data-indeterminate="true"] .progress__bar {
+    animation: none;
+    width: 100% !important;
+    opacity: 0.4;
+  }
+}
+.update-screen__status {
+  min-height: 1.4em;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.update-screen__error {
+  max-width: 100%;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+.update-screen__card[data-failed="true"] .btn {
+  margin-top: 8px;
+}
+
+/* ---------- What's new */
+.whats-new__meta {
+  font-size: var(--fs-sm);
+  color: var(--text-3);
+  margin-top: -4px;
+}
+.whats-new__notes {
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.whats-new__notes h2 {
+  font-size: var(--fs-md);
+}
+.whats-new__notes h3 {
+  font-size: var(--fs-sm);
+  text-transform: none;
+}

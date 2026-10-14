@@ -1,0 +1,128 @@
+// Builds signed Windows installers and the updater manifest (latest.json),
+// and optionally publishes them as the GitHub release for the current
+// version.
+//
+//   node scripts/release.mjs --notes notes.md            build + manifest
+//   node scripts/release.mjs --notes notes.md --publish  ...then publish
+//
+// The updater signing key is read from TAURI_SIGNING_PRIVATE_KEY, or the file
+// at KERN_UPDATER_KEY, or ~/.tauri/kern-updater.key. Keep that file backed
+// up: installs only accept updates signed with it (the public half is in
+// tauri.conf.json under plugins.updater.pubkey).
+//
+// Publishing needs the tag v<version> pushed to origin first, so the release
+// can't be created against the wrong commit.
+
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+
+const REPO = "ChristianRelf/KERN";
+const root = resolve(import.meta.dirname, "..");
+const args = process.argv.slice(2);
+const flag = (name) => args.includes(name);
+const option = (name) => {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : undefined;
+};
+
+function fail(msg) {
+  console.error(`\n✗ ${msg}`);
+  process.exit(1);
+}
+
+// Windows runs commands through the shell (for npx), so paths and spaced
+// values need quoting there.
+const q = (s) => (process.platform === "win32" ? `"${s}"` : s);
+
+function run(cmd, cmdArgs, opts = {}) {
+  const r = spawnSync(cmd, cmdArgs, { cwd: root, stdio: "inherit", shell: process.platform === "win32", ...opts });
+  if (r.status !== 0) fail(`${cmd} ${cmdArgs.join(" ")} exited with ${r.status}`);
+  return r;
+}
+
+function output(cmd, cmdArgs) {
+  const r = spawnSync(cmd, cmdArgs, { cwd: root, encoding: "utf8", shell: process.platform === "win32" });
+  return r.status === 0 ? r.stdout.trim() : null;
+}
+
+// ------------------------------------------------------------ version
+
+const conf = JSON.parse(readFileSync(join(root, "src-tauri/tauri.conf.json"), "utf8"));
+const version = conf.version;
+const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+const cargo = readFileSync(join(root, "src-tauri/Cargo.toml"), "utf8").match(/^version\s*=\s*"([^"]+)"/m)?.[1];
+if (pkg.version !== version || cargo !== version) fail(`Versions disagree: tauri.conf.json ${version}, package.json ${pkg.version}, Cargo.toml ${cargo}.`);
+if (!conf.plugins?.updater?.pubkey) fail("tauri.conf.json has no plugins.updater.pubkey.");
+
+const notesPath = option("--notes");
+if (!notesPath) fail("Pass the release notes: --notes <file.md>");
+if (!existsSync(notesPath)) fail(`No notes at ${notesPath}`);
+const notes = readFileSync(notesPath, "utf8").trim();
+
+// ------------------------------------------------------------ signing key
+
+let key = process.env.TAURI_SIGNING_PRIVATE_KEY;
+if (!key) {
+  const keyPath = process.env.KERN_UPDATER_KEY || join(homedir(), ".tauri", "kern-updater.key");
+  if (!existsSync(keyPath)) fail(`No updater signing key: set TAURI_SIGNING_PRIVATE_KEY or KERN_UPDATER_KEY, or put it at ${keyPath}.`);
+  key = readFileSync(keyPath, "utf8").trim();
+}
+
+// ------------------------------------------------------------ build
+
+console.log(`\n▸ Building Kern ${version} with updater artifacts…\n`);
+// Updater artifacts are only made for releases, so everyday builds don't
+// need the key.
+const overrides = join(mkdtempSync(join(tmpdir(), "kern-release-")), "release.conf.json");
+writeFileSync(overrides, JSON.stringify({ bundle: { createUpdaterArtifacts: true } }));
+run("npx", ["tauri", "build", "--config", q(overrides)], {
+  env: { ...process.env, TAURI_SIGNING_PRIVATE_KEY: key, TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? "" },
+});
+
+// ------------------------------------------------------------ manifest
+
+const bundle = join(root, "src-tauri/target/release/bundle");
+const artifacts = {
+  nsis: join(bundle, "nsis", `Kern_${version}_x64-setup.exe`),
+  msi: join(bundle, "msi", `Kern_${version}_x64_en-US.msi`),
+};
+const platform = (file) => {
+  if (!existsSync(file) || !existsSync(`${file}.sig`)) fail(`Missing ${file} or its .sig - was the build signed?`);
+  const name = file.split(/[\\/]/).pop();
+  return { signature: readFileSync(`${file}.sig`, "utf8").trim(), url: `https://github.com/${REPO}/releases/download/v${version}/${name}` };
+};
+const manifest = {
+  version,
+  notes,
+  pub_date: new Date().toISOString(),
+  platforms: {
+    // The updater picks "<os>-<arch>-<installer>" first, matching how Kern
+    // was installed, then falls back to "<os>-<arch>".
+    "windows-x86_64": platform(artifacts.nsis),
+    "windows-x86_64-nsis": platform(artifacts.nsis),
+    "windows-x86_64-msi": platform(artifacts.msi),
+  },
+};
+const manifestPath = join(bundle, "latest.json");
+writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+console.log(`\n✓ Signed installers and ${manifestPath}`);
+
+// ------------------------------------------------------------ publish
+
+if (!flag("--publish")) {
+  console.log(`\nNot published. To publish: push tag v${version}, then re-run with --publish.`);
+  process.exit(0);
+}
+const tag = `v${version}`;
+if (!output("git", ["ls-remote", "--tags", "origin", `refs/tags/${tag}`])) fail(`Tag ${tag} isn't on origin yet - push it first.`);
+console.log(`\n▸ Publishing ${tag}…\n`);
+run("gh", [
+  "release", "create", tag,
+  "--repo", REPO,
+  "--title", q(`Kern ${version}`),
+  "--notes-file", q(resolve(notesPath)),
+  ...[artifacts.nsis, artifacts.msi, manifestPath].map(q),
+]);
+console.log(`\n✓ Released https://github.com/${REPO}/releases/tag/${tag}`);

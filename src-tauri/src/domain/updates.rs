@@ -1,6 +1,8 @@
 //! Update check: compares the running version with the newest published
-//! GitHub release. Read-only and unauthenticated; it never downloads or
-//! installs anything, the interface just links to the release page.
+//! GitHub release. Read-only and unauthenticated. Downloading and installing
+//! is done by the updater plugin (signed installers listed in the release's
+//! `latest.json`); this module also fetches a release's notes for the
+//! "What's new" dialog shown after updating.
 //!
 //! The interface polls often (every minute while Kern is visible), so the
 //! last response's ETag is sent back: an unchanged release list comes back
@@ -111,6 +113,69 @@ pub async fn check_for_update(app: AppHandle) -> AppResult<UpdateInfo> {
     .map_err(|e| AppError::Other(e.to_string()))?
 }
 
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseNotes {
+    pub version: String,
+    pub name: String,
+    /// Markdown, as written on the release page.
+    pub body: String,
+    pub url: String,
+    pub published_at: Option<String>,
+}
+
+/// The notes of the release tagged `v{version}`, read from GitHub.
+#[tauri::command]
+pub async fn release_notes(app: AppHandle, version: String) -> AppResult<ReleaseNotes> {
+    let Some(v) = parse(&version) else {
+        return Err(AppError::Invalid(format!("'{version}' isn't a version.")));
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let network: bool = state.with(|c| Ok(settings::get_or(c, "privacy.network", true)))?;
+        if !network {
+            return Err(AppError::Network("Network access is turned off in Settings → Privacy.".into()));
+        }
+        let agent: ureq::Agent = ureq::Agent::config_builder()
+            .timeout_global(Some(Duration::from_secs(15)))
+            .http_status_as_error(false)
+            .user_agent("Kern")
+            .build()
+            .into();
+        let api = releases_api();
+        let url = format!("{}/tags/v{v}", api.split('?').next().unwrap_or(RELEASES_API));
+        let mut resp = agent
+            .get(&url)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .call()
+            .map_err(|e| AppError::Network(format!("Couldn't reach GitHub ({e}).")))?;
+        let status = resp.status().as_u16();
+        if status == 404 {
+            return Err(AppError::NotFound(format!("Release v{v}")));
+        }
+        if status >= 400 {
+            return Err(AppError::Network(format!("GitHub returned {status}.")));
+        }
+        let text = resp.body_mut().with_config().limit(1024 * 1024).read_to_string().map_err(|e| AppError::Network(e.to_string()))?;
+        let r: Value = serde_json::from_str(&text).map_err(|e| AppError::Network(format!("Unexpected reply from GitHub ({e}).")))?;
+        Ok(notes_from(&r, &v))
+    })
+    .await
+    .map_err(|e| AppError::Other(e.to_string()))?
+}
+
+fn notes_from(r: &Value, v: &Version) -> ReleaseNotes {
+    let s = |k: &str| r.get(k).and_then(Value::as_str).map(str::to_string);
+    ReleaseNotes {
+        version: v.to_string(),
+        name: s("name").filter(|n| !n.trim().is_empty()).unwrap_or_else(|| format!("Kern {v}")),
+        body: s("body").unwrap_or_default(),
+        url: s("html_url").unwrap_or_else(|| RELEASES_PAGE.to_string()),
+        published_at: s("published_at"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,5 +194,13 @@ mod tests {
         assert!(newest(&rs, &parse("0.2.0").unwrap()).is_none());
         // A stable release outranks its own beta.
         assert!(newest(&[json!({ "tag_name": "v0.1.1", "html_url": "e" })], &cur).is_some());
+    }
+
+    #[test]
+    fn reads_release_notes() {
+        let v = parse("0.2.0").unwrap();
+        let n = notes_from(&json!({ "name": "", "body": "## What's new", "html_url": "u", "published_at": "2026-10-14T00:00:00Z" }), &v);
+        assert_eq!((n.name.as_str(), n.body.as_str(), n.url.as_str()), ("Kern 0.2.0", "## What's new", "u"));
+        assert_eq!(notes_from(&json!({}), &v).url, RELEASES_PAGE);
     }
 }

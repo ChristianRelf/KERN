@@ -42,6 +42,8 @@ url = "2"
 portable-pty = "0.9"
 # Reading Cargo.toml / pyproject.toml / lockfiles for detection and the dependency explorer.
 toml = "0.8"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 # AI API keys live in the operating system's credential store, never in SQLite.
 [target.'cfg(windows)'.dependencies]

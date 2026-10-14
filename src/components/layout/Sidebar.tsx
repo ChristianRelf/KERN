@@ -67,16 +67,17 @@ import { prompt, confirm } from "@/components/ui/Dialog";
 import { APP_NAME } from "@/app/brand";
 import { BrandMark } from "@/app/BrandMark";
 import { switchMode } from "@/app/mode";
+import { startUpdate } from "@/features/updates/store";
 import { AUTO_SCROLL, DROP_ANIMATION, DragPreview, SORT_TRANSITION, SortableRow, announcements, restrictToVertical, useListSensors } from "./sortable";
 
 /**
- * Shown above Trash when a newer GitHub release exists; opens its page
- * (nothing is downloaded or installed). Pops in when an update appears.
+ * Shown above Trash when a newer GitHub release exists; installs it in the
+ * app (see features/updates). Pops in when an update appears.
  */
 function UpdateBanner({ collapsed }: { collapsed: boolean }) {
   const { data } = useUpdateCheck();
   if (!data?.latest) return null;
-  const label = `Update available: ${APP_NAME} v${data.latest} (you have v${data.current})`;
+  const label = `Update to ${APP_NAME} v${data.latest} (you have v${data.current})`;
   return (
     <Tooltip content={label} side="right">
       <button
@@ -84,7 +85,7 @@ function UpdateBanner({ collapsed }: { collapsed: boolean }) {
         className="update-banner"
         data-collapsed={collapsed || undefined}
         aria-label={label}
-        onClick={() => api.system.open(data.url).catch((e) => toastError(describeError(e, "Couldn't open the release page.")))}
+        onClick={() => void startUpdate({ current: data.current, target: data.latest!, fallbackUrl: data.url })}
       >
         <CircleArrowDown strokeWidth={2} />
         {!collapsed && (

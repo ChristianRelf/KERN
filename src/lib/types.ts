@@ -663,6 +663,15 @@ export interface UpdateInfo {
   url: string;
 }
 
+export interface ReleaseNotes {
+  version: string;
+  name: string;
+  /** Markdown, as written on the release page. */
+  body: string;
+  url: string;
+  publishedAt: string | null;
+}
+
 export interface AppInfo {
   name: string;
   version: string;

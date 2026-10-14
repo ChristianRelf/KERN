@@ -34,6 +34,38 @@ To run a development or test instance against a separate data folder (so your
 real data is never touched), set `KERN_DATA_DIR` before launching. Such an
 instance runs alongside the normal one and uses its own credential-store namespace.
 
+## Releasing and in-app updates
+
+Kern updates itself: when a newer release exists, the sidebar's *Update
+available* button (or *Update to …* in Settings → About) swaps the window for a
+minimal update screen, downloads the signed installer (up to three attempts;
+if all fail it returns to the running version), and installs it passively. On
+the first start of the new version a *What's new* dialog shows that release's
+notes, read from its GitHub release (or from `latest.json` when offline). The
+code is in `src/features/updates/`.
+
+The updater reads `latest.json` from the newest (non-pre-release) GitHub
+release and only installs files signed with the updater key. The public key is
+in `tauri.conf.json` (`plugins.updater.pubkey`); the private key lives outside
+the repository, at `~/.tauri/kern-updater.key` by default. **Back it up:** if
+it's lost, installed copies can't verify any future update and everyone has to
+reinstall by hand once.
+
+To release a new version:
+
+1. Bump the version in `package.json`, `package-lock.json`,
+   `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` and `src-tauri/tauri.conf.json`;
+   commit, tag `v<version>` and push both.
+2. Write the release notes (Markdown; a `## What's new` section and an
+   optional `## Install` section, which the in-app dialog leaves out).
+3. `npm run release -- --notes notes.md --publish`
+
+The script builds the installers with updater signatures, writes
+`src-tauri/target/release/bundle/latest.json`, and creates the GitHub release
+with the `.exe`, `.msi` and `latest.json` attached. Without `--publish` it
+stops after building. The key can also come from `TAURI_SIGNING_PRIVATE_KEY`
+(its contents) or `KERN_UPDATER_KEY` (a path).
+
 ## Renaming the app
 
 The name "Kern" is provisional. To change it:

@@ -541,6 +541,7 @@ export const api = {
   system: {
     info: () => call<T.AppInfo>("app_info"),
     checkForUpdate: () => call<T.UpdateInfo>("check_for_update"),
+    releaseNotes: (version: string) => call<T.ReleaseNotes>("release_notes", { version }),
     open: (target: string) => call<void>("open_external", { target }),
     reveal: (path: string) => call<void>("reveal_path", { path }),
     exists: (path: string) => call<boolean>("path_exists", { path }),

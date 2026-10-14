@@ -17,6 +17,9 @@ import { BrandMark } from "./BrandMark";
 import { hideSplash } from "./splash";
 import { loadMode, switchMode, useMode, type AppMode } from "./mode";
 import { StartChooser } from "./StartChooser";
+import { useUpdater } from "@/features/updates/store";
+import { UpdateScreen } from "@/features/updates/UpdateScreen";
+import { WhatsNewHost } from "@/features/updates/WhatsNew";
 
 const Shell = lazy(() => import("./Shell"));
 const LiteApp = lazy(() => import("@/features/lite/LiteApp"));
@@ -40,6 +43,7 @@ function initialRoute(): Route {
 export function App() {
   const loaded = useSettings((s) => s.loaded);
   const mode = useMode((s) => s.mode);
+  const updating = useUpdater((s) => s.phase !== null);
   const [error, setError] = useState<string | null>(null);
 
   const boot = async () => {
@@ -82,10 +86,18 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        {mode === null ? (
-          <StartChooser />
+        {updating ? (
+          // The rest of the app steps aside while an update runs.
+          <UpdateScreen />
         ) : (
-          <Suspense fallback={null}>{mode === "lite" ? <LiteApp /> : <Shell />}</Suspense>
+          <>
+            {mode === null ? (
+              <StartChooser />
+            ) : (
+              <Suspense fallback={null}>{mode === "lite" ? <LiteApp /> : <Shell />}</Suspense>
+            )}
+            <WhatsNewHost />
+          </>
         )}
       </TooltipProvider>
     </QueryClientProvider>
