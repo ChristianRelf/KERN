@@ -128,18 +128,17 @@ export function useDashboards() {
 }
 
 /**
- * Polls GitHub releases for a newer version every minute while Kern is
- * visible (unchanged lists are answered from the backend's ETag cache).
- * Failures stay silent.
+ * Checks the newest release's update manifest every 10 minutes, and when
+ * Kern comes back into focus after 5. Failures stay silent.
  */
 export function useUpdateCheck() {
   return useQuery({
     queryKey: ["updateCheck"],
     queryFn: api.system.checkForUpdate,
-    staleTime: 55 * 1000,
-    refetchInterval: 60 * 1000,
-    refetchOnWindowFocus: false,
-    retry: false,
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 10 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    retry: 1,
   });
 }
 

@@ -102,10 +102,28 @@ const platform = (file) => {
   const name = file.split(/[\\/]/).pop();
   return { signature: readFileSync(`${file}.sig`, "utf8").trim(), url: `https://github.com/${REPO}/releases/download/v${version}/${name}` };
 };
+// The oldest version without known security issues. Installs older than it
+// must update (see check_for_update). It's carried forward from the release
+// being replaced, so skipping a security release doesn't make it optional;
+// a security release raises it to itself.
+const cmp = (a, b) => {
+  const [x, y] = [a, b].map((v) => v.split("-")[0].split(".").map(Number));
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return Math.sign(x[i] - y[i]);
+  return 0;
+};
+const res = await fetch(`https://github.com/${REPO}/releases/latest/download/latest.json`);
+if (!res.ok && res.status !== 404) fail(`Couldn't read the published latest.json (${res.status}), so the minimum secure version can't be carried forward.`);
+const previous = res.ok ? await res.json() : null;
+let minSecure = previous?.kern?.minSecureVersion ?? null;
+if (previous?.notes?.toLowerCase().includes(MARKER) && (!minSecure || cmp(previous.version, minSecure) > 0)) minSecure = previous.version;
+if (notes.toLowerCase().includes(MARKER)) minSecure = version;
+if (minSecure) console.log(`\nMinimum secure version: ${minSecure}${minSecure === version ? " (this release)" : " (carried forward)"}`);
+
 const manifest = {
   version,
   notes,
   pub_date: new Date().toISOString(),
+  ...(minSecure ? { kern: { minSecureVersion: minSecure } } : {}),
   platforms: {
     // The updater picks "<os>-<arch>-<installer>" first, matching how Kern
     // was installed, then falls back to "<os>-<arch>".
