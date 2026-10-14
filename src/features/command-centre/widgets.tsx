@@ -30,6 +30,7 @@ import {
   Workflow,
   X,
   FolderTree,
+  Palette,
 } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState, type ComponentType } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -40,6 +41,7 @@ import { useBoard, useBoards, useGroups, useNotes, useTasks, useWhiteboards } fr
 import { useToday } from "@/hooks/useToday";
 import { addDaysStr, dayStartMs, formatDue, formatDuration, relativeTime, weekStartStr } from "@/lib/dates";
 import { navigate } from "@/stores/router";
+import { useUi } from "@/stores/ui";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Dropdown } from "@/components/ui/Menu";
 import { EmptyState, Popover, Progress, Segmented, Select, Skeleton } from "@/components/ui/Controls";
@@ -565,8 +567,11 @@ function AboutBody() {
               </button>
             }
           >
-            <div style={{ width: 280 }}>
+            <div className="col" style={{ width: 300, gap: 10 }}>
               <IconAccentPicker icon={p.icon} accent={p.accent} name={p.name} onChange={(c) => void updateProject(p.id, c)} />
+              <Button size="sm" variant="ghost" icon={Palette} style={{ alignSelf: "flex-start" }} onClick={() => useUi.getState().set({ customizeProjectId: p.id })}>
+                Customize project…
+              </Button>
             </div>
           </Popover>
         </div>

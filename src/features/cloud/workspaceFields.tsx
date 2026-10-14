@@ -9,7 +9,7 @@ import { api, describeError } from "@/lib/ipc";
 import type { RepoSummary, SpaceRole, TeamSize } from "@/lib/types";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Checkbox, Select, Segmented, Skeleton, Switch } from "@/components/ui/Controls";
-import { ACCENTS } from "@/features/projects/ProjectGlyph";
+import { AppearancePicker } from "@/features/projects/AppearancePicker";
 import { GithubMark, useGithubStatus } from "@/features/github/shared";
 import { navigate } from "@/stores/router";
 import { processLogo, ROLE_HINT, ROLE_LABEL, SpaceLogo } from "./ui";
@@ -20,6 +20,10 @@ export interface WorkspaceDraft {
   description: string;
   logo: string | null;
   accent: string | null;
+  /** Lucide icon key or "emoji:…" for the mark when there's no logo (settings.icon). */
+  icon: string | null;
+  /** Tint the interface with the workspace colour while it's open (settings.tint). */
+  tint: boolean;
   website: string;
   industry: string;
   teamSize: TeamSize | null;
@@ -81,7 +85,7 @@ export const slugify = (s: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
 
-export function LogoPicker({ name, logo, accent, onChange }: { name: string; logo: string | null; accent: string | null; onChange: (logo: string | null) => void }) {
+export function LogoPicker({ name, logo, accent, icon, onChange }: { name: string; logo: string | null; accent: string | null; icon?: string | null; onChange: (logo: string | null) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
   const take = async (file: File | undefined) => {
@@ -109,7 +113,7 @@ export function LogoPicker({ name, logo, accent, onChange }: { name: string; log
           void take(e.dataTransfer.files[0]);
         }}
       >
-        <SpaceLogo name={name || "?"} logo={logo} accent={accent} size={64} />
+        <SpaceLogo name={name || "?"} logo={logo} accent={accent} icon={icon} size={64} />
         <span className="logo-picker__overlay">
           <ImagePlus size={16} />
         </span>
@@ -153,7 +157,7 @@ export function BasicsFields({ draft, set, currentSlug }: { draft: WorkspaceDraf
   const check = useSlugCheck(draft.slug, currentSlug);
   return (
     <div className="col" style={{ gap: 14 }}>
-      <LogoPicker name={draft.name} logo={draft.logo} accent={draft.accent} onChange={(logo) => set({ logo })} />
+      <LogoPicker name={draft.name} logo={draft.logo} accent={draft.accent} icon={draft.icon} onChange={(logo) => set({ logo })} />
       <div className="field">
         <label className="field__label">Workspace name</label>
         <input
@@ -244,23 +248,17 @@ export function AboutFields({ draft, set }: { draft: WorkspaceDraft; set: (p: Pa
         <input className="input" type="url" placeholder="https://" value={draft.website} onChange={(e) => set({ website: e.target.value })} spellCheck={false} />
       </div>
       <div className="field">
-        <label className="field__label">Colour</label>
-        <div className="row" style={{ gap: 6 }}>
-          {[null, ...Object.keys(ACCENTS)].map((a) => (
-            <button
-              key={a ?? "auto"}
-              type="button"
-              className="swatch"
-              data-active={draft.accent === a || undefined}
-              style={{ background: a ? ACCENTS[a] : "var(--surface-3)", width: 22, height: 22 }}
-              aria-label={a ?? "Automatic"}
-              title={a ? a[0].toUpperCase() + a.slice(1) : "Automatic"}
-              onClick={() => set({ accent: a })}
-            />
-          ))}
-        </div>
-        <span className="field__hint">Used for the workspace's letter mark when there's no logo.</span>
+        <label className="field__label">Mark & colour</label>
+        <AppearancePicker icon={draft.icon} accent={draft.accent} name={draft.name} onChange={(c) => set(c)} />
+        <span className="field__hint">The icon or emoji is shown when there's no logo. The colour is used for the mark and the tint below.</span>
       </div>
+      <label className="row tint-option">
+        <Switch checked={draft.tint && !!draft.accent} disabled={!draft.accent} onChange={(tint) => set({ tint })} label="Tint Kern with the workspace colour" />
+        <span className="col">
+          <span>Tint Kern with this colour</span>
+          <span className="field__hint">{draft.accent ? "While this workspace is open, buttons and highlights use its colour - for everyone in it." : "Choose a colour first."}</span>
+        </span>
+      </label>
     </div>
   );
 }

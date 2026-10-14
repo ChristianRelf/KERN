@@ -676,7 +676,7 @@
 /* ------------------------------------------------------------ settings */
 .sync-scope {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
   width: 100%;
   font-size: var(--fs-xs);
@@ -767,4 +767,22 @@
   font-size: var(--fs-2xs);
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ account row */
+.account-row {
+  flex-wrap: nowrap;
+  gap: 12px;
+  padding-block: 12px;
+}
+.account-row .set-row__text {
+  flex-basis: 0;
+}
+.tint-option {
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+.tint-option > .col {
+  gap: 2px;
 }

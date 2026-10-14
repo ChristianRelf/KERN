@@ -11,6 +11,7 @@ import {
   KeyRound,
   LayoutGrid,
   ListFilter,
+  Minimize2,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -65,6 +66,7 @@ import { resolveBindings } from "@/lib/shortcuts";
 import { prompt, confirm } from "@/components/ui/Dialog";
 import { APP_NAME } from "@/app/brand";
 import { BrandMark } from "@/app/BrandMark";
+import { switchMode } from "@/app/mode";
 import { AUTO_SCROLL, DROP_ANIMATION, DragPreview, SORT_TRANSITION, SortableRow, announcements, restrictToVertical, useListSensors } from "./sortable";
 
 /**
@@ -202,6 +204,7 @@ export function Sidebar() {
               onClick={() => navigate({ name: "settings" })}
             />
           </div>
+          {!collapsed && <IconButton icon={Minimize2} label="Switch to Kern Lite" size="sm" onClick={() => void switchMode("lite")} />}
           {!collapsed && (
             <IconButton
               icon={PanelLeftClose}

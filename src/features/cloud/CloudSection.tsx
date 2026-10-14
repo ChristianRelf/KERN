@@ -3,9 +3,9 @@
 
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Check, CloudOff, CloudUpload, HardDrive, KeyRound, LogOut, RefreshCw, RotateCcw, Trash, Upload } from "lucide-react";
+import { Check, CloudOff, CloudUpload, HardDrive, KeyRound, LogOut, Pencil, RefreshCw, RotateCcw, Trash, Upload } from "lucide-react";
 import { api } from "@/lib/ipc";
-import { Button } from "@/components/ui/Button";
+import { Button, IconButton } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Controls";
 import { Dialog, confirm } from "@/components/ui/Dialog";
 import { SToggle } from "@/features/settings/controls";
@@ -15,6 +15,7 @@ import { disableCloud, enableCloud, openPersonal, signOut, switchSpace } from ".
 import { errorText, openAuth, refreshMe, refreshStatus, useActiveSpace, useCloud } from "./store";
 import { syncLabel } from "./SpaceSwitcher";
 import { Avatar, processLogo, timeAgo } from "./ui";
+import { YearHeatmap } from "@/features/stats/YearHeatmap";
 
 function Row({ label, hint, children }: { label: string; hint?: ReactNode; children?: ReactNode }) {
   return (
@@ -88,22 +89,26 @@ export function CloudSection() {
       </section>
 
       {!signedIn ? (
-        <section>
-          <div className="set-group__title">Account</div>
-          <div className="set-group">
-            <Row label={account ? `Signed out (${account.email})` : "Not signed in"} hint="A free account lets you sync a personal space between your devices and join workspaces.">
-              <Button size="sm" variant="primary" disabled={!network} onClick={() => openAuth({ email: account?.email, then: () => enableCloud() })}>
-                Sign in
-              </Button>
-              <Button size="sm" disabled={!network} onClick={() => openAuth({ mode: "sign-up", then: () => enableCloud() })}>
-                Create account
-              </Button>
-            </Row>
-          </div>
-        </section>
+        <>
+          <section>
+            <div className="set-group__title">Account</div>
+            <div className="set-group">
+              <Row label={account ? `Signed out (${account.email})` : "Not signed in"} hint="A free account lets you sync a personal space between your devices and join workspaces.">
+                <Button size="sm" variant="primary" disabled={!network} onClick={() => openAuth({ email: account?.email, then: () => enableCloud() })}>
+                  Sign in
+                </Button>
+                <Button size="sm" disabled={!network} onClick={() => openAuth({ mode: "sign-up", then: () => enableCloud() })}>
+                  Create account
+                </Button>
+              </Row>
+            </div>
+          </section>
+          <ActivityGroup />
+        </>
       ) : (
         <>
           <AccountGroup />
+          <ActivityGroup />
           <section>
             <div className="set-group__title">Sync</div>
             <div className="set-group">
@@ -181,8 +186,17 @@ export function CloudSection() {
           </section>
         </>
       )}
-      <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>Server: {info?.apiUrl ?? "…"}</span>
     </div>
+  );
+}
+
+/** Tasks completed per day over the last year (in the open space). */
+function ActivityGroup() {
+  return (
+    <section>
+      <div className="set-group__title">Your activity</div>
+      <YearHeatmap />
+    </section>
   );
 }
 
@@ -210,47 +224,59 @@ function AccountGroup() {
     <section>
       <div className="set-group__title">Account</div>
       <div className="set-group">
-        <div className="set-row">
-          <div className="row" style={{ gap: 12, minWidth: 0 }}>
-            <label className="avatar-edit" title="Change picture">
-              <Avatar name={account.name || account.email} image={account.image} size={40} />
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                hidden
-                onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  try {
-                    await update({ image: await processLogo(f, 128) }, "Picture updated");
-                  } catch (err) {
-                    toastError((err as Error).message);
-                  }
+        <div className="set-row account-row">
+          <label className="avatar-edit" title="Change picture">
+            <Avatar name={account.name || account.email} image={account.image} size={40} />
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              hidden
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                try {
+                  await update({ image: await processLogo(f, 128) }, "Picture updated");
+                } catch (err) {
+                  toastError((err as Error).message);
+                }
+              }}
+            />
+          </label>
+          <div className="set-row__text">
+            {editingName ? (
+              <form
+                className="row"
+                style={{ gap: 6 }}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (name.trim()) void update({ name: name.trim() }, "Name updated").then(() => setEditingName(false));
                 }}
-              />
-            </label>
-            <div className="col" style={{ minWidth: 0 }}>
-              {editingName ? (
-                <form
-                  className="row"
-                  style={{ gap: 6 }}
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (name.trim()) void update({ name: name.trim() }, "Name updated").then(() => setEditingName(false));
-                  }}
-                >
-                  <input className="input" autoFocus value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
-                  <Button size="sm" type="submit" icon={Check}>
-                    Save
-                  </Button>
-                </form>
-              ) : (
-                <button type="button" className="auth__link" style={{ fontWeight: 600, color: "var(--text)" }} onClick={() => setEditingName(true)}>
+              >
+                <input className="input grow" autoFocus value={name} maxLength={80} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setEditingName(false)} />
+                <Button size="sm" type="submit" icon={Check}>
+                  Save
+                </Button>
+              </form>
+            ) : (
+              <span className="row" style={{ gap: 4 }}>
+                <span className="set-row__label truncate" style={{ fontWeight: 600 }}>
                   {account.name || "Add your name"}
-                </button>
-              )}
-              <span className="faint truncate">{account.email} {account.emailVerified ? "· verified" : ""}</span>
-            </div>
+                </span>
+                <IconButton
+                  icon={Pencil}
+                  size="sm"
+                  label="Edit name"
+                  onClick={() => {
+                    setName(account.name);
+                    setEditingName(true);
+                  }}
+                />
+              </span>
+            )}
+            <span className="set-row__hint truncate">
+              {account.email}
+              {account.emailVerified ? " · verified" : ""}
+            </span>
           </div>
           <div className="set-row__control">
             <Button size="sm" icon={LogOut} onClick={() => void signOut()}>

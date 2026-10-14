@@ -1,70 +1,25 @@
+// Startup: load settings and the window mode, then show full Kern, Kern
+// Lite, or the choice between them. Each mode's code loads on demand.
+
 import { lazy, Suspense, useEffect, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { listen } from "@tauri-apps/api/event";
 import { queryClient } from "@/lib/query";
 import { useSettings } from "@/stores/settings";
 import { useRouter, type Route } from "@/stores/router";
 import { useFocus } from "@/features/focus/store";
 import { useSessions } from "@/features/sessions/store";
-import { SessionGapHost } from "@/features/sessions/SessionUi";
-import { StartWorkHost } from "@/features/sessions/StartWork";
-import { FileViewerHost } from "@/features/files/FileViewerHost";
-import { useWorktreeDialog } from "@/features/dev/worktreeDialog";
-import { useTerminal, reattachTerminals } from "@/features/terminal/store";
-import { useUi } from "@/stores/ui";
+import { reattachTerminals } from "@/features/terminal/store";
 import { TooltipProvider } from "@/components/ui/Tooltip";
-import { Toaster } from "@/components/ui/Toaster";
-import { ConfirmHost, PromptHost } from "@/components/ui/Dialog";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { Inspector } from "@/components/layout/Inspector";
-import { Routes } from "./Routes";
-import { useAppearance, useBackendEvents, useGlobalShortcuts, useOsIntegration, useRememberRoute, useWorkSessions } from "./effects";
-import { CommandPalette } from "@/features/search/CommandPalette";
-import { QuickCapture } from "@/features/capture/QuickCapture";
-import { CreateProjectDialog } from "@/features/projects/CreateProjectDialog";
-import { TaskModal } from "@/features/tasks/TaskModal";
-import { TaskComposer } from "@/features/tasks/TaskComposer";
-import { TrustPromptHost } from "@/features/projects/folders";
-import { RepoPickerHost } from "@/features/github/shared";
-import { ShortcutsDialog } from "@/features/settings/ShortcutsDialog";
-import { BriefingPrompt } from "@/features/daily-briefing/BriefingPrompt";
-import { Onboarding } from "@/features/onboarding/Onboarding";
 import { Button } from "@/components/ui/Button";
-import { describeError } from "@/lib/ipc";
+import { describeError, isTauri } from "@/lib/ipc";
 import { BrandMark } from "./BrandMark";
-import { CloudHost } from "@/features/cloud/CloudHost";
+import { hideSplash } from "./splash";
+import { loadMode, switchMode, useMode, type AppMode } from "./mode";
+import { StartChooser } from "./StartChooser";
 
-const TerminalPanel = lazy(() => import("@/features/terminal/TerminalPanel"));
-const CatchupHost = lazy(() => import("@/features/catchup/CatchupDialog"));
-const WorktreeDialogHost = lazy(() => import("@/features/dev/Worktrees"));
-
-/** Hosts that load their code only once they're needed. */
-function LazyHosts() {
-  const catchup = useUi((s) => !!s.catchupProjectId);
-  const worktree = useWorktreeDialog((s) => !!s.req);
-  return (
-    <Suspense fallback={null}>
-      {catchup && <CatchupHost />}
-      {worktree && <WorktreeDialogHost />}
-    </Suspense>
-  );
-}
-
-function TerminalDrawer() {
-  const needed = useTerminal((s) => s.open && s.tabs.length > 0);
-  return needed ? (
-    <Suspense fallback={null}>
-      <TerminalPanel />
-    </Suspense>
-  ) : null;
-}
-
-/** Fades out and removes the startup splash painted by index.html. */
-function hideSplash() {
-  const el = document.getElementById("splash");
-  if (!el || el.dataset.hidden !== undefined) return;
-  el.dataset.hidden = "";
-  window.setTimeout(() => el.remove(), 200);
-}
+const Shell = lazy(() => import("./Shell"));
+const LiteApp = lazy(() => import("@/features/lite/LiteApp"));
 
 function initialRoute(): Route {
   const { values, raw } = useSettings.getState();
@@ -82,57 +37,15 @@ function initialRoute(): Route {
   }
 }
 
-function Shell() {
-  useEffect(() => {
-    // Startup marker (ms since the page started loading); see PERFORMANCE.md.
-    (window as unknown as { __kernReadyAt?: number }).__kernReadyAt ??= performance.now();
-  }, []);
-  useAppearance();
-  useOsIntegration();
-  useBackendEvents();
-  useGlobalShortcuts();
-  useRememberRoute();
-  useWorkSessions();
-  return (
-    <div className="shell">
-      <Sidebar />
-      <main className="workspace">
-        <div className="workspace__main">
-          <Routes />
-        </div>
-        <TerminalDrawer />
-      </main>
-      <Inspector />
-      <CommandPalette />
-      <QuickCapture />
-      <CreateProjectDialog />
-      <TaskModal />
-      <TaskComposer />
-      <ShortcutsDialog />
-      <BriefingPrompt />
-      <Onboarding />
-      <TrustPromptHost />
-      <RepoPickerHost />
-      <SessionGapHost />
-      <StartWorkHost />
-      <FileViewerHost />
-      <LazyHosts />
-      <CloudHost />
-      <ConfirmHost />
-      <PromptHost />
-      <Toaster />
-    </div>
-  );
-}
-
 export function App() {
   const loaded = useSettings((s) => s.loaded);
+  const mode = useMode((s) => s.mode);
   const [error, setError] = useState<string | null>(null);
 
   const boot = async () => {
     setError(null);
     try {
-      await useSettings.getState().load();
+      await Promise.all([useSettings.getState().load(), loadMode()]);
       useRouter.setState({ route: initialRoute() });
       void useFocus.getState().hydrate();
       void useSessions.getState().hydrate();
@@ -144,11 +57,15 @@ export function App() {
 
   useEffect(() => {
     void boot();
+    // The tray menu and "Kern Lite" / "Kern" shortcuts switch modes.
+    if (!isTauri) return;
+    const off = listen<AppMode>("kern://switch-mode", (e) => void switchMode(e.payload));
+    return () => void off.then((f) => f());
   }, []);
 
   useEffect(() => {
-    if (loaded || error) hideSplash();
-  }, [loaded, error]);
+    if (error || (loaded && mode === null)) hideSplash();
+  }, [loaded, error, mode]);
 
   if (error)
     return (
@@ -160,12 +77,16 @@ export function App() {
         </div>
       </div>
     );
-  if (!loaded) return null;
+  if (!loaded || mode === undefined) return null;
 
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Shell />
+        {mode === null ? (
+          <StartChooser />
+        ) : (
+          <Suspense fallback={null}>{mode === "lite" ? <LiteApp /> : <Shell />}</Suspense>
+        )}
       </TooltipProvider>
     </QueryClientProvider>
   );

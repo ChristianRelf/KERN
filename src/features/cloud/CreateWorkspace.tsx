@@ -13,7 +13,7 @@ import { GithubMark } from "@/features/github/shared";
 import { errorText, refreshMe, useCloud } from "./store";
 import { spaceRef, switchSpace } from "./actions";
 import { AboutFields, BasicsFields, GithubPicker, InviteEditor, localTimeZone, TEAM_SIZES, validWebsite, type GithubChoice, type InviteDraft, type WorkspaceDraft } from "./workspaceFields";
-import { ROLE_LABEL, SpaceLogo } from "./ui";
+import { ROLE_LABEL, SpaceLogo, spaceLook } from "./ui";
 
 const STEPS = [
   { id: "basics", label: "Basics" },
@@ -38,6 +38,8 @@ function Wizard() {
     description: "",
     logo: null,
     accent: null,
+    icon: null,
+    tint: false,
     website: "",
     industry: "",
     teamSize: null,
@@ -72,6 +74,7 @@ function Wizard() {
         description: draft.description.trim(),
         logo: draft.logo,
         accent: draft.accent,
+        settings: { icon: draft.icon, tint: draft.tint },
         website: draft.website.trim() || null,
         industry: draft.industry || null,
         teamSize: draft.teamSize,
@@ -112,7 +115,7 @@ function Wizard() {
     return (
       <Dialog open onOpenChange={(o) => !o && close()} centered title="Your workspace is ready">
         <div className="col" style={{ gap: 14, alignItems: "center", textAlign: "center", padding: "8px 0" }}>
-          <SpaceLogo name={done.space.name} logo={done.space.logo} accent={done.space.accent} size={56} />
+          <SpaceLogo name={done.space.name} logo={done.space.logo} accent={done.space.accent} icon={spaceLook(done.space.settings).icon} size={56} />
           <div className="col" style={{ gap: 4 }}>
             <strong style={{ fontSize: "var(--fs-lg)" }}>{done.space.name}</strong>
             <span className="muted">You're in it now. Everything you add here - projects, boards, tasks, notes, whiteboards - is shared with members in real time.</span>
@@ -238,7 +241,7 @@ function Review({ draft, github, invites }: { draft: WorkspaceDraft; github: Git
   return (
     <div className="col" style={{ gap: 16 }}>
       <div className="row" style={{ gap: 12 }}>
-        <SpaceLogo name={draft.name} logo={draft.logo} accent={draft.accent} size={48} />
+        <SpaceLogo name={draft.name} logo={draft.logo} accent={draft.accent} icon={draft.icon} size={48} />
         <div className="col" style={{ minWidth: 0 }}>
           <strong style={{ fontSize: "var(--fs-lg)" }} className="truncate">{draft.name}</strong>
           <span className="faint mono">kern/{draft.slug || "…"}</span>

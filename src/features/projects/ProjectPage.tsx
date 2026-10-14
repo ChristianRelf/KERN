@@ -1,5 +1,4 @@
 import {
-  Activity as ActivityIcon,
   ArrowRight,
   Bookmark,
   Ellipsis,
@@ -7,20 +6,13 @@ import {
   EyeOff,
   File,
   FileWarning,
-  Flag,
   FolderGit2,
   FolderOpen,
-  GitBranch,
   Globe,
   History,
-  LayoutDashboard,
-  ListTodo,
   Plus,
-  Presentation,
   Save,
-  SquareKanban,
   SquareTerminal,
-  StickyNote,
   Trash,
   Upload,
 } from "lucide-react";
@@ -38,6 +30,7 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { Dropdown, type MenuItems } from "@/components/ui/Menu";
 import { EmptyState, Skeleton } from "@/components/ui/Controls";
 import { ProjectGlyph } from "./ProjectGlyph";
+import { PROJECT_TABS } from "./tabs";
 import { projectMenu, updateProject } from "./actions";
 import { TaskList, type TaskSection } from "@/features/tasks/TaskList";
 import { ProjectBoard } from "@/features/boards/ProjectBoard";
@@ -62,17 +55,7 @@ const CommandCentre = lazy(() => import("@/features/command-centre/CommandCentre
 const MilestonesTab = lazy(() => import("@/features/milestones/MilestonesTab").then((m) => ({ default: m.MilestonesTab })));
 const CodeTab = lazy(() => import("@/features/github/CodeTab").then((m) => ({ default: m.CodeTab })));
 
-const TABS: { id: ProjectTab; label: string; icon: typeof ListTodo }[] = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "tasks", label: "Tasks", icon: ListTodo },
-  { id: "board", label: "Board", icon: SquareKanban },
-  { id: "whiteboard", label: "Whiteboard", icon: Presentation },
-  { id: "notes", label: "Notes", icon: StickyNote },
-  { id: "milestones", label: "Milestones", icon: Flag },
-  { id: "files", label: "Files", icon: File },
-  { id: "code", label: "Code", icon: GitBranch },
-  { id: "activity", label: "Activity", icon: ActivityIcon },
-];
+const TABS = PROJECT_TABS;
 
 export function ProjectPage({ id, tab, boardId, whiteboardId, column }: { id: string; tab?: ProjectTab; boardId?: string; whiteboardId?: string; column?: string }) {
   const { data: p, isLoading, isError } = useProject(id);

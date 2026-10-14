@@ -26,7 +26,7 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import type { Space, SyncStatus } from "@/lib/types";
 import { useActiveSpace, useCloud } from "./store";
 import { enableCloud, openInvite, openPersonal, signOut, spaceRef, switchSpace } from "./actions";
-import { Avatar, ROLE_LABEL, SpaceLogo, timeAgo } from "./ui";
+import { Avatar, ROLE_LABEL, SpaceLogo, spaceLook, timeAgo } from "./ui";
 
 export function syncLabel(s: SyncStatus | undefined, active: boolean): { tone: string; text: string } {
   if (!active || !s) return { tone: "off", text: "Offline data on this computer" };
@@ -77,7 +77,7 @@ export function SpaceSwitcher({ collapsed }: { collapsed: boolean }) {
   const trigger = (
     <button type="button" className="space-switch" data-collapsed={collapsed || undefined} aria-label={`Space: ${name}. ${status.text}`}>
       <span className="space-switch__logo">
-        <SpaceLogo name={name} logo={active?.logo} kind={active ? active.kind : "offline"} size={collapsed ? 20 : 22} accent={active?.accent} />
+        <SpaceLogo name={name} logo={active?.logo} kind={active ? active.kind : "offline"} size={collapsed ? 20 : 22} accent={active?.accent} icon={active?.icon} />
         <span className="sync-dot" data-tone={status.tone} />
       </span>
       {!collapsed && (
@@ -149,7 +149,7 @@ export function SpaceSwitcher({ collapsed }: { collapsed: boolean }) {
               </Item>
               {workspaces.map((w: Space) => (
                 <Item key={w.id} onSelect={() => void switchSpace(spaceRef(w))} active={active?.id === w.id}>
-                  <SpaceLogo name={w.name} logo={w.logo} accent={w.accent} size={20} />
+                  <SpaceLogo name={w.name} logo={w.logo} accent={w.accent} icon={spaceLook(w.settings).icon} size={20} />
                   <span className="space-menu__label">
                     <span className="truncate">{w.name}</span>
                     <span className="faint">

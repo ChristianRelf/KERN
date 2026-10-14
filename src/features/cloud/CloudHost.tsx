@@ -10,10 +10,13 @@ import type { ActiveSpace, SyncStatus } from "@/lib/types";
 import { useRouter, type Route } from "@/stores/router";
 import { getSetting, useSetting } from "@/stores/settings";
 import { toast } from "@/stores/toast";
+import { markShownSpace, resetInterface } from "@/app/reset";
 import { AuthDialog } from "./AuthDialog";
 import { handleDeepLinks, leaveLostSpace, onApplied } from "./actions";
 import { startRealtime, setPresence } from "./realtime";
-import { openAuth, refreshMe, refreshStatus, setSync, useCloud } from "./store";
+import { openAuth, refreshMe, refreshStatus, setSync, useActiveSpace, useCloud } from "./store";
+import { tintVars } from "./ui";
+import { accentColor } from "@/features/projects/ProjectGlyph";
 
 // Larger dialogs load on first use.
 const CreateWorkspaceDialog = lazy(() => import("./CreateWorkspace").then((m) => ({ default: m.CreateWorkspaceDialog })));
@@ -43,6 +46,7 @@ function useCloudEffects() {
   useEffect(() => {
     if (!isTauri) return;
     void refreshStatus().then((info) => {
+      markShownSpace(info?.active?.id ?? null);
       if (info?.signedIn) void refreshMe();
     });
     void handleDeepLinks();
@@ -51,7 +55,12 @@ function useCloudEffects() {
         if (e.payload.space === useCloud.getState().info?.active?.id) onApplied(e.payload.tables, e.payload.whiteboards);
       }),
       listen<SyncStatus>("kern://cloud-sync", (e) => setSync(e.payload)),
-      listen<ActiveSpace | null>("kern://cloud-space", () => void refreshStatus()),
+      // Any change of open data (a switch, signing out, another account
+      // signing in) rebuilds the interface straight away.
+      listen<ActiveSpace | null>("kern://cloud-space", (e) => {
+        useCloud.setState({ peers: {} });
+        void refreshStatus().then(() => resetInterface(e.payload?.id ?? null));
+      }),
       listen<string>("kern://cloud-auth", (e) => {
         void refreshStatus().then(() => refreshMe());
         if (e.payload === "expired" && getSetting("cloud.enabled")) {
@@ -92,6 +101,17 @@ function useCloudEffects() {
       if (s.route !== prev.route) announce(s.route);
     });
   }, [share]);
+
+  // A workspace can tint the interface with its colour while it's open.
+  const active = useActiveSpace();
+  const tint = active?.tint ? tintVars(accentColor(active.accent)) : null;
+  const tintKey = tint ? JSON.stringify(tint) : "";
+  useEffect(() => {
+    if (!tint) return;
+    const root = document.documentElement;
+    for (const [k, v] of Object.entries(tint)) root.style.setProperty(k, v);
+    return () => Object.keys(tint).forEach((k) => root.style.removeProperty(k));
+  }, [tintKey]);
 
   // Workspace data shown in dialogs is refreshed when membership changes.
   useEffect(

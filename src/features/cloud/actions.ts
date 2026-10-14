@@ -5,12 +5,10 @@
 import { api } from "@/lib/ipc";
 import { invalidate, queryClient, TASK_DOMAINS, type Domain } from "@/lib/query";
 import type { ActiveSpace, Me, Space } from "@/lib/types";
-import { navigate, useRouter } from "@/stores/router";
+import { navigate } from "@/stores/router";
 import { getSetting, setSetting } from "@/stores/settings";
 import { toast, toastError } from "@/stores/toast";
-import { useUndo } from "@/stores/undo";
-import { useSessions } from "@/features/sessions/store";
-import { useFocus } from "@/features/focus/store";
+import { resetInterface } from "@/app/reset";
 import { confirm } from "@/components/ui/Dialog";
 import { errorText, openAuth, refreshMe, refreshStatus, useCloud } from "./store";
 
@@ -52,14 +50,10 @@ export async function switchSpace(space: ActiveSpace | null, opts: { quiet?: boo
     navigate({ name: "dashboard" }, { replace: true });
     await new Promise((r) => window.setTimeout(r, 60));
     await api.cloud.openSpace(space);
-    // Nothing cached from the old space may leak into the new one.
-    queryClient.removeQueries();
-    useRouter.setState({ back: [], forward: [] });
-    useUndo.setState({ stack: [] });
     useCloud.setState({ peers: {} });
     await refreshStatus();
-    void useSessions.getState().hydrate();
-    void useFocus.getState().hydrate();
+    // Nothing from the old space may stay on screen or in the cache.
+    resetInterface(space?.id ?? null);
     if (!opts.quiet) toast(space ? `Switched to ${space.kind === "personal" ? "your personal space" : space.name}` : "Switched to offline data");
   } catch (e) {
     toastError(errorText(e, "Couldn't open that space."));
@@ -90,9 +84,9 @@ export async function signOut() {
   if (!forget) return;
   try {
     await api.cloud.signOut(false);
-    queryClient.removeQueries();
     useCloud.setState({ me: null, peers: {} });
-    await refreshStatus();
+    const info = await refreshStatus();
+    resetInterface(info?.active?.id ?? null);
     toast("Signed out of Kern Cloud");
   } catch (e) {
     toastError(errorText(e, "Couldn't sign out."));

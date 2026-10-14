@@ -17,6 +17,7 @@ import {
   Hourglass,
   Flag,
   RotateCcw,
+  Grid3x3,
 } from "lucide-react";
 import { StorageWidget } from "@/features/storage/StorageWidget";
 import type { WidgetDef, WidgetConfig } from "./types";
@@ -54,7 +55,13 @@ import {
 import { ProgressWidget, ProgressConfigForm, WeeklyActivityWidget, CalendarWidget, type ProgressConfig } from "./widgets/StatsWidgets";
 import { FocusWidgetBody } from "@/features/focus/FocusControls";
 import { MilestonesWidget, ResumeWidget, TimeWidget, type MilestonesWidgetConfig } from "./widgets/WorkWidgets";
-import { Segmented } from "@/components/ui/Controls";
+import { Segmented, Switch } from "@/components/ui/Controls";
+import { YearHeatmap } from "@/features/stats/YearHeatmap";
+
+interface HeatmapConfig extends Record<string, unknown> {
+  weeks: number;
+  stats: boolean;
+}
 
 function def<C extends WidgetConfig>(d: WidgetDef<C>): WidgetDef {
   return d as unknown as WidgetDef;
@@ -180,6 +187,41 @@ export const WIDGETS: WidgetDef[] = [
     defaultSize: { w: 4, h: 4 },
     minSize: { w: 3, h: 3 },
     Component: WeeklyActivityWidget,
+  }),
+  def<HeatmapConfig>({
+    type: "heatmap",
+    name: "Activity Heatmap",
+    description: "Tasks completed per day, with your streak.",
+    icon: Grid3x3,
+    defaultConfig: { weeks: 26, stats: false },
+    defaultSize: { w: 6, h: 5 },
+    minSize: { w: 3, h: 3 },
+    Component: ({ config }) => (
+      <div className="heatmap-widget">
+        <YearHeatmap weeks={config.weeks || 26} stats={!!config.stats} framed={false} />
+      </div>
+    ),
+    Config: ({ config, setConfig }) => (
+      <div className="col" style={{ gap: 10 }}>
+        <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
+          <span className="muted">Range</span>
+          <Segmented
+            size="sm"
+            value={String(config.weeks || 26)}
+            onChange={(v) => setConfig({ weeks: Number(v) })}
+            options={[
+              { value: "13", label: "3 months" },
+              { value: "26", label: "6 months" },
+              { value: "53", label: "Year" },
+            ]}
+          />
+        </div>
+        <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
+          <span className="muted">Totals and streaks</span>
+          <Switch checked={!!config.stats} onChange={(stats) => setConfig({ stats })} label="Show totals and streaks" />
+        </div>
+      </div>
+    ),
   }),
   def({
     type: "storage",

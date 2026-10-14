@@ -37,7 +37,9 @@ import {
   Flag,
   Radio,
   type LucideIcon,
+  Minimize2,
 } from "lucide-react";
+import { switchMode } from "@/app/mode";
 import { navigate, useRouter } from "@/stores/router";
 import { useUi } from "@/stores/ui";
 import { getSetting, setSetting } from "@/stores/settings";
@@ -137,6 +139,7 @@ export function getCommands(): Command[] {
         ? { id: "resumeFocus", title: "Resume focus session", icon: Play, section: "Actions", run: () => focus.resume() }
         : { id: "startFocus", title: "Start focus session", icon: Timer, section: "Actions", keywords: "pomodoro timer", run: () => { focus.start({ kind: "focus" }); navigate({ name: "focus" }); } },
     { id: "focusMode", title: "Open focus mode", icon: Timer, section: "Actions", shortcut: "focusMode", run: () => navigate({ name: "focus" }) },
+    { id: "kernLite", title: "Switch to Kern Lite", icon: Minimize2, section: "Actions", keywords: "lite mini compact simple task tracker small window", run: () => void switchMode("lite") },
     { id: "toggleSidebar", title: "Toggle sidebar", icon: PanelLeft, section: "Actions", shortcut: "toggleSidebar", run: () => void setSetting("appearance.sidebarCollapsed", !getSetting("appearance.sidebarCollapsed")) },
     {
       id: "editDashboard",

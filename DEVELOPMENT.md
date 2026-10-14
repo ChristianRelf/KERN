@@ -195,6 +195,22 @@ opt-in two-replica test against a running server (see KERNWEB's README).
 - **GitHub issues**: two-way, three-way-merged per field (newer edit wins when
   both sides changed). Deleting a task unlinks it; it never closes the issue.
 
+### Kern Lite
+
+The same window can run as full Kern or as **Kern Lite**, a small task tracker
+(`src/features/lite/`, its own lazily loaded chunk; full Kern lives in
+`src/app/Shell.tsx`). Both use the same backend and data, so there's nothing to
+sync between them. `window.rs` tracks the mode, gives each mode its own minimum
+size and remembered geometry (`internal.windowState` / `internal.liteWindowState`),
+and handles `--lite` / `--full` on the command line (also forwarded by the
+single-instance plugin, and used by the Windows installer's "Kern Lite" Start menu
+shortcut from `src-tauri/windows/hooks.nsh`). `general.startMode` (ask, kern, lite)
+picks the mode at launch; "ask" shows `src/app/StartChooser.tsx`.
+
+Switching cloud space or account calls `resetInterface` (`src/app/reset.ts`):
+the query cache is cleared and the shell remounts, so nothing from the previous
+data stays on screen.
+
 ### Projects, with optional development tools
 
 A project needs only a name. Everything else - folders, repositories, commands,

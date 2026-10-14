@@ -3,7 +3,8 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { useUi } from "@/stores/ui";
 import { createProject } from "./actions";
-import { ACCENTS, PROJECT_ICONS, ProjectGlyph } from "./ProjectGlyph";
+import { ProjectGlyph } from "./ProjectGlyph";
+import { AppearancePicker } from "./AppearancePicker";
 import { useGroups } from "@/hooks/data";
 import { Select } from "@/components/ui/Controls";
 import { DuePopover } from "@/features/tasks/pickers";
@@ -12,37 +13,9 @@ import { useSetting } from "@/stores/settings";
 import { api } from "@/lib/ipc";
 import { FolderField, type PickedFolder } from "./folders";
 
-export function IconAccentPicker({
-  icon,
-  accent,
-  onChange,
-  name,
-}: {
-  icon: string | null;
-  accent: string | null;
-  onChange: (p: { icon?: string | null; accent?: string | null }) => void;
-  name: string;
-}) {
-  return (
-    <div className="col" style={{ gap: 10 }}>
-      <div className="icon-grid">
-        <button type="button" className="icon-grid__item" data-active={!icon || undefined} onClick={() => onChange({ icon: null })} aria-label="Letter">
-          <ProjectGlyph project={{ name: name || "A", icon: null, accent }} size={16} />
-        </button>
-        {Object.entries(PROJECT_ICONS).map(([key, Icon]) => (
-          <button key={key} type="button" className="icon-grid__item" data-active={icon === key || undefined} onClick={() => onChange({ icon: key })} aria-label={key}>
-            <Icon size={16} strokeWidth={1.75} />
-          </button>
-        ))}
-      </div>
-      <div className="row" style={{ gap: 6 }}>
-        <button type="button" className="swatch" data-active={!accent || undefined} onClick={() => onChange({ accent: null })} aria-label="No colour" style={{ background: "var(--text-3)" }} />
-        {Object.entries(ACCENTS).map(([k, c]) => (
-          <button key={k} type="button" className="swatch" data-active={accent === k || undefined} onClick={() => onChange({ accent: k })} aria-label={k} style={{ background: c }} />
-        ))}
-      </div>
-    </div>
-  );
+/** Icon, emoji and colour for a project (kept for existing callers). */
+export function IconAccentPicker(props: { icon: string | null; accent: string | null; onChange: (p: { icon?: string | null; accent?: string | null }) => void; name: string }) {
+  return <AppearancePicker {...props} />;
 }
 
 export function CreateProjectDialog() {

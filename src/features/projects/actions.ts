@@ -4,6 +4,7 @@ import {
   Copy,
   FolderInput,
   LayoutDashboard,
+  Palette,
   Pencil,
   Pin,
   PinOff,
@@ -21,6 +22,7 @@ import type { Project, ProjectGroup, ProjectInput, ProjectPatch } from "@/lib/ty
 import { pushUndo } from "@/stores/undo";
 import { toast, toastError } from "@/stores/toast";
 import { navigate, useRouter } from "@/stores/router";
+import { useUi } from "@/stores/ui";
 import { confirmDelete, prompt } from "@/components/ui/Dialog";
 import type { MenuItems } from "@/components/ui/Menu";
 import { openNewTask } from "@/features/tasks/creation";
@@ -135,6 +137,7 @@ export function projectMenu(p: Project, groups: ProjectGroup[]): MenuItems {
     },
     { type: "separator" },
     { label: "Rename", icon: Pencil, onSelect: () => void renameProject(p) },
+    { label: "Customize…", icon: Palette, onSelect: () => useUi.getState().set({ customizeProjectId: p.id }) },
     {
       label: p.pinned ? "Unpin" : "Pin to sidebar",
       icon: p.pinned ? PinOff : Pin,

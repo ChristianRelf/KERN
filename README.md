@@ -21,6 +21,13 @@ collaborate with others in shared workspaces, in real time.
 - **Write things down.** Notes with formatting and checklists, linked to your projects.
 - **Stay focused.** A focus timer, and work sessions that track time spent on a task
   or project, with simple reports.
+- **Kern Lite.** A tiny, distraction-free task list over the same data: pick a
+  list or project from the slim sidebar, add tasks, tick them off. Open it from the
+  **Kern Lite** shortcut, the tray, the sidebar or **Ctrl+K**, and choose whether
+  Kern starts as Kern, Kern Lite, or asks (**Settings → General**).
+- **Make it yours.** Give projects and workspaces an icon or emoji and any colour,
+  choose which project sections show and which one opens first (**Customize…**
+  in a project's menu).
 - **Find anything.** Press **Ctrl+K** to search tasks, notes, projects and
   commands from anywhere in the app.
 - **Optional extras for developers.** Link git repositories to a project to see

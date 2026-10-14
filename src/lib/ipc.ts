@@ -546,4 +546,10 @@ export const api = {
     quit: () => call<void>("quit_app"),
     showWindow: () => call<void>("show_main_window"),
   },
+  /** Full Kern or Kern Lite, in the same window. */
+  app: {
+    mode: () => call<{ mode: "kern" | "lite"; ask: boolean }>("app_mode_get"),
+    setMode: (mode: "kern" | "lite") => call<void>("app_mode_set", { mode }),
+    pinLite: (on: boolean) => call<void>("app_lite_pin", { on }),
+  },
 };

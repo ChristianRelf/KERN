@@ -538,3 +538,36 @@
   margin-top: auto;
   min-width: 0;
 }
+
+/* Activity Heatmap widget */
+.heatmap-widget {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.heatmap-widget .year-stats {
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+}
+.heatmap-widget .year-stat {
+  padding: 6px 10px;
+}
+.heatmap-widget .year-stat__value {
+  font-size: 17px;
+}
+.heatmap-widget .heatmap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.heatmap-widget .heatmap__months,
+.heatmap-widget .heatmap__grid {
+  grid-template-columns: repeat(var(--weeks), 11px);
+  min-width: 0;
+}
+.heatmap-widget .heatmap__grid i {
+  width: 11px;
+}
+.heatmap-widget .heatmap__legend {
+  align-self: stretch;
+}

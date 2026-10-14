@@ -25,6 +25,7 @@ import {
   Blocks,
   SquareTerminal,
   Cloud,
+  Minimize2,
 } from "lucide-react";
 import { CloudSection } from "@/features/cloud/CloudSection";
 import { IntegrationsSection } from "@/features/github/IntegrationsSection";
@@ -34,10 +35,10 @@ import { navigate, type ApiTab, type SettingsSection } from "@/stores/router";
 import { useSetting, setSetting, useSettings, getSetting } from "@/stores/settings";
 import { pushUndo } from "@/stores/undo";
 import { DEFAULTS } from "./schema";
-import { useAppInfo, useDashboards, useLabels, useProjects } from "@/hooks/data";
+import { useDashboards, useLabels, useProjects } from "@/hooks/data";
 import { api, describeError } from "@/lib/ipc";
 import { invalidate } from "@/lib/query";
-import { toast, toastError } from "@/stores/toast";
+import { toastError } from "@/stores/toast";
 import { Button, IconButton, Kbd } from "@/components/ui/Button";
 import { Checkbox, Select, Skeleton, Switch } from "@/components/ui/Controls";
 
@@ -53,9 +54,10 @@ import { STATUS_LABELS } from "@/features/tasks/meta";
 import type { NavItemId, Accent } from "./schema";
 import type { TaskStatus } from "@/lib/types";
 import { APP_NAME } from "@/app/brand";
-import { BrandMark } from "@/app/BrandMark";
 import { comboFromEvent } from "@/lib/shortcuts";
 import { ACCENTS } from "@/features/projects/ProjectGlyph";
+import { switchMode } from "@/app/mode";
+import { AboutSection } from "./AboutSection";
 import { PluginsSection } from "@/features/plugins/PluginsSection";
 import { developerGroups } from "./DeveloperSection";
 
@@ -361,7 +363,6 @@ async function resetProjectOrder() {
 
 function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | ReactNode> {
   const data = [...useStorageGroups(), ...useDataGroups()];
-  const { data: info } = useAppInfo();
   const { data: dashboards } = useDashboards();
   const notificationsOn = useSetting("notifications.enabled");
   const quiet = useSetting("notifications.quietHours");
@@ -376,6 +377,12 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
       {
         title: "Startup",
         rows: [
+          {
+            label: "When Kern starts",
+            hint: "Kern Lite is a tiny task tracker over the same data. Switch any time from the sidebar, the tray or Ctrl+K.",
+            keywords: "kern lite mini mode ask choose start",
+            control: <SSegmented k="general.startMode" options={[{ value: "ask", label: "Ask" }, { value: "kern", label: "Kern" }, { value: "lite", label: "Kern Lite" }]} />,
+          },
           { label: "Launch at login", hint: `Start ${APP_NAME} when you sign in.`, keywords: "autostart boot", control: <SToggle k="general.launchAtLogin" /> },
           { label: "Start minimised at login", hint: "When launched at login, stay in the tray (or taskbar) until opened.", control: <SToggle k="general.launchMinimized" /> },
           { label: "Start maximised", control: <SToggle k="general.startMaximized" /> },
@@ -395,6 +402,15 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
               />
             ),
           },
+        ],
+      },
+      {
+        title: "Kern Lite",
+        rows: [
+          { label: "Open Kern Lite", hint: "Switch this window to Kern Lite now.", keywords: "mini compact", control: <Button size="sm" icon={Minimize2} onClick={() => void switchMode("lite")}>Switch</Button> },
+          { label: "Keep on top", hint: "Keep the Kern Lite window above other windows.", keywords: "always on top pin float", control: <SToggle k="lite.alwaysOnTop" /> },
+          { label: "Show tasks done today", control: <SToggle k="lite.showDone" /> },
+          { label: "Celebrate a cleared list", hint: "A little confetti when you finish the last task in a list.", keywords: "confetti animation", control: <SToggle k="lite.celebrate" /> },
         ],
       },
       {
@@ -759,53 +775,7 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
         ],
       },
     ],
-    about: (
-      <div className="col" style={{ gap: 16 }}>
-        <div className="row" style={{ gap: 12 }}>
-          <BrandMark size={40} />
-          <div className="col">
-            <span style={{ fontSize: "var(--fs-xl)", fontWeight: 650 }}>{APP_NAME}</span>
-            <span className="faint">Version {info?.version ?? "…"}</span>
-          </div>
-        </div>
-        <div className="set-group">
-          {[
-            ["Data schema", info ? `v${info.schemaVersion}` : ""],
-            ["Runtime", info ? `Tauri ${info.tauriVersion} · ${info.platform}` : ""],
-            ["Data folder", info?.dataDir ?? ""],
-            ["Account", "None needed - everything stays on this computer"],
-            ["Telemetry", "None"],
-          ].map(([k, v]) => (
-            <div key={k} className="set-row">
-              <span className="set-row__text">
-                <span className="set-row__label">{k}</span>
-              </span>
-              <span className="faint selectable truncate" style={{ fontSize: "var(--fs-sm)", maxWidth: 420 }}>
-                {v}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="row">
-          <Button size="sm" onClick={() => navigate({ name: "settings", section: "keyboard" })}>
-            Keyboard shortcuts
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={async () => {
-              if (await confirm({ title: "Reset all settings?", message: "Appearance, behaviour and shortcuts return to defaults. Your data is not affected.", confirmLabel: "Reset settings", danger: true })) {
-                await useSettings.getState().reset();
-                await setSetting("general.onboarded", true);
-                toast("Settings reset");
-              }
-            }}
-          >
-            Reset all settings
-          </Button>
-        </div>
-      </div>
-    ),
+    about: <AboutSection />,
   };
 }
 

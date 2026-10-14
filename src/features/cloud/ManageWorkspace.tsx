@@ -15,7 +15,7 @@ import { GithubMark } from "@/features/github/shared";
 import { errorText, refreshMe, useCloud, type ManageTab } from "./store";
 import { leaveLostSpace } from "./actions";
 import { AboutFields, BasicsFields, GithubPicker, InviteEditor, validWebsite, type GithubChoice, type InviteDraft, type WorkspaceDraft } from "./workspaceFields";
-import { Avatar, ROLE_HINT, ROLE_LABEL, SpaceLogo, timeAgo } from "./ui";
+import { Avatar, ROLE_HINT, ROLE_LABEL, SpaceLogo, spaceLook, timeAgo } from "./ui";
 
 const TABS: { id: ManageTab; label: string; icon: typeof Users; admin?: boolean }[] = [
   { id: "general", label: "General", icon: Building2 },
@@ -58,7 +58,7 @@ function Manage({ id, tab }: { id: string; tab: ManageTab }) {
       className="manage"
       title={
         <span className="row" style={{ gap: 8 }}>
-          {ws ? <SpaceLogo name={ws.name} logo={ws.logo} accent={ws.accent} size={18} /> : <Building2 size={16} />}
+          {ws ? <SpaceLogo name={ws.name} logo={ws.logo} accent={ws.accent} icon={spaceLook(ws.settings).icon} size={18} /> : <Building2 size={16} />}
           {ws?.name ?? "Workspace"}
         </span>
       }
@@ -116,6 +116,7 @@ function draftOf(ws: Space): WorkspaceDraft {
     description: ws.description ?? "",
     logo: ws.logo,
     accent: ws.accent,
+    ...spaceLook(ws.settings),
     website: ws.website ?? "",
     industry: ws.industry ?? "",
     teamSize: ws.teamSize,
@@ -141,6 +142,7 @@ function General({ ws, canEdit, onSaved }: { ws: Space; canEdit: boolean; onSave
         description: draft.description.trim(),
         logo: draft.logo,
         accent: draft.accent,
+        settings: { icon: draft.icon, tint: draft.tint },
         website: draft.website.trim(),
         industry: draft.industry || null,
         teamSize: draft.teamSize,
@@ -159,7 +161,7 @@ function General({ ws, canEdit, onSaved }: { ws: Space; canEdit: boolean; onSave
     return (
       <div className="col" style={{ gap: 14 }}>
         <div className="row" style={{ gap: 12 }}>
-          <SpaceLogo name={ws.name} logo={ws.logo} accent={ws.accent} size={56} />
+          <SpaceLogo name={ws.name} logo={ws.logo} accent={ws.accent} icon={spaceLook(ws.settings).icon} size={56} />
           <div className="col">
             <strong style={{ fontSize: "var(--fs-lg)" }}>{ws.name}</strong>
             <span className="faint mono">kern/{ws.slug}</span>

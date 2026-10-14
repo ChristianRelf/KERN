@@ -12,6 +12,7 @@ import { addDaysStr, formatDue, todayStr } from "@/lib/dates";
 import { getSetting } from "@/stores/settings";
 import { scheduleIssuePush } from "@/features/github/push";
 import { confirmDelete } from "@/components/ui/Dialog";
+import { taskEasterEgg } from "@/app/easterEggs";
 
 /** Builds the patch that reverts `patch` given the task's previous state. */
 export function inversePatch(prev: Task, patch: TaskPatch, spawned: boolean): TaskPatch {
@@ -158,6 +159,7 @@ export async function setCompleted(task: Task, completed: boolean) {
       );
       if (!res) return; // failure was reported and rolled back
       run.applied = target;
+      if (target) taskEasterEgg(task.title);
       if (target && res.spawned) run.spawnedId = res.spawned.id;
     }
     if (run.applied && run.spawnedId) {

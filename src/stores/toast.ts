@@ -21,7 +21,10 @@ export const useToasts = create<ToastState>((set, get) => ({
   push: (t) => {
     const id = seq++;
     const toast: Toast = { tone: "info", duration: t.action ? 6000 : 3500, ...t, id };
-    set({ toasts: [...get().toasts.slice(-3), toast] });
+    // A repeat of the same message (e.g. completing several tasks) replaces
+    // the older toast instead of stacking; Ctrl+Z still undoes each in turn.
+    const rest = toast.tone === "error" ? get().toasts : get().toasts.filter((x) => x.tone === "error" || x.message !== toast.message);
+    set({ toasts: [...rest.slice(-3), toast] });
     if (toast.duration > 0) window.setTimeout(() => get().dismiss(id), toast.duration);
     return id;
   },

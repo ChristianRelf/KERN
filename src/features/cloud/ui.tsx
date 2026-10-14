@@ -4,7 +4,7 @@
 import { useRef, type CSSProperties, type KeyboardEvent } from "react";
 import { Cloud, HardDrive, User } from "lucide-react";
 import type { SpaceRole } from "@/lib/types";
-import { ACCENTS } from "@/features/projects/ProjectGlyph";
+import { PROJECT_ICONS, accentColor, iconEmoji } from "@/features/projects/ProjectGlyph";
 
 const HUES = ["var(--hue-0)", "var(--hue-1)", "var(--hue-2)", "var(--hue-3)", "var(--hue-4)", "var(--hue-5)", "var(--hue-6)", "var(--hue-7)"];
 
@@ -35,7 +35,7 @@ export function Avatar({ name, image, color, size = 22, ring, title }: { name: s
   );
 }
 
-export function SpaceLogo({ name, logo, kind, size = 20, accent }: { name: string; logo?: string | null; kind?: "personal" | "workspace" | "offline"; size?: number; accent?: string | null }) {
+export function SpaceLogo({ name, logo, kind, size = 20, accent, icon }: { name: string; logo?: string | null; kind?: "personal" | "workspace" | "offline"; size?: number; accent?: string | null; icon?: string | null }) {
   const style: CSSProperties = { width: size, height: size, fontSize: Math.max(9, Math.round(size * 0.45)), borderRadius: Math.round(size * 0.28) };
   if (kind === "offline")
     return (
@@ -55,11 +55,42 @@ export function SpaceLogo({ name, logo, kind, size = 20, accent }: { name: strin
         <img src={logo} alt="" />
       </span>
     );
+  const emoji = iconEmoji(icon);
+  const Icon = icon && !emoji ? PROJECT_ICONS[icon] : undefined;
   return (
-    <span className="space-logo" style={{ ...style, background: (accent && (ACCENTS[accent] ?? (accent.startsWith("#") ? accent : undefined))) || hueFor(name), color: "#111" }} aria-hidden>
-      {name.trim().slice(0, 1).toUpperCase() || <Cloud size={12} />}
+    <span className="space-logo" style={{ ...style, background: accentColor(accent) ?? hueFor(name), color: "#111" }} aria-hidden>
+      {emoji ? (
+        <span style={{ fontSize: Math.round(size * 0.6), lineHeight: 1 }}>{emoji}</span>
+      ) : Icon ? (
+        <Icon size={Math.round(size * 0.6)} strokeWidth={2} />
+      ) : (
+        name.trim().slice(0, 1).toUpperCase() || <Cloud size={12} />
+      )}
     </span>
   );
+}
+
+/** A workspace's optional mark and tint, kept in its shared settings. */
+export function spaceLook(settings: Record<string, unknown> | null | undefined): { icon: string | null; tint: boolean } {
+  const icon = settings?.icon;
+  return { icon: typeof icon === "string" && icon ? icon : null, tint: settings?.tint === true };
+}
+
+/**
+ * Accent variables for tinting the interface with a colour: the colour, a
+ * readable foreground and soft/line variants. Null for an unusable colour.
+ */
+export function tintVars(color: string | undefined): Record<string, string> | null {
+  if (!color || !/^#[0-9a-f]{6}$/i.test(color)) return null;
+  const n = parseInt(color.slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return {
+    "--accent": color,
+    "--accent-fg": lum > 0.55 ? "#111111" : "#ffffff",
+    "--accent-soft": `rgba(${r}, ${g}, ${b}, 0.14)`,
+    "--accent-line": `rgba(${r}, ${g}, ${b}, 0.7)`,
+  };
 }
 
 export const ROLE_LABEL: Record<SpaceRole, string> = { owner: "Owner", admin: "Admin", member: "Member", viewer: "Viewer" };

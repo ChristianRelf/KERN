@@ -37,6 +37,8 @@ export interface Settings {
   "general.rememberWindow": boolean;
   "general.startMaximized": boolean;
   "general.landing": "dashboard" | "last" | "tasks" | "inbox";
+  /** Open full Kern, Kern Lite, or ask each time. Read by the backend too. */
+  "general.startMode": "ask" | "kern" | "lite";
   "general.confirmPermanentDelete": boolean;
   "general.confirmDelete": boolean;
   "plugins.suggestSyntax": boolean;
@@ -196,6 +198,13 @@ export interface Settings {
   // Performance
   "performance.reduceBackground": boolean;
   "performance.cacheMinutes": number;
+  // Kern Lite
+  /** Keep the Lite window above other windows. */
+  "lite.alwaysOnTop": boolean;
+  /** Show today's completed tasks under the list. */
+  "lite.showDone": boolean;
+  /** Little celebrations when a list is cleared. */
+  "lite.celebrate": boolean;
 }
 
 export const DEFAULTS: Settings = {
@@ -207,6 +216,7 @@ export const DEFAULTS: Settings = {
   "general.rememberWindow": true,
   "general.startMaximized": false,
   "general.landing": "dashboard",
+  "general.startMode": "ask",
   "general.confirmPermanentDelete": true,
   "general.confirmDelete": true,
   "plugins.suggestSyntax": true,
@@ -370,6 +380,9 @@ export const DEFAULTS: Settings = {
 
   "performance.reduceBackground": false,
   "performance.cacheMinutes": 5,
+  "lite.alwaysOnTop": false,
+  "lite.showDone": true,
+  "lite.celebrate": true,
 };
 
 export type SettingKey = keyof Settings;

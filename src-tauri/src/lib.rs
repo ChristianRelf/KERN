@@ -23,8 +23,12 @@ pub fn run() {
     // An isolated test/development instance (KERN_DATA_DIR) runs alongside
     // the normal one instead of handing over to it.
     if std::env::var_os("KERN_DATA_DIR").is_none() {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             window::show_main(app);
+            // "Kern Lite" / "Kern" shortcuts while Kern is already running.
+            if let Some(mode) = window::mode_from_args(&args) {
+                let _ = app.emit("kern://switch-mode", mode);
+            }
         }));
     }
     builder
@@ -451,6 +455,9 @@ pub fn run() {
             system::tray_set_visible,
             system::quit_app,
             system::show_main_window,
+            window::app_mode_get,
+            window::app_mode_set,
+            window::app_lite_pin,
             updates::check_for_update,
         ])
         .build(tauri::generate_context!())

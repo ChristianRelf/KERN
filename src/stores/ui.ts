@@ -30,6 +30,8 @@ interface UiState {
   paletteQuery: string;
   capture: { open: boolean; mode: CaptureMode; projectId?: string | null; dueDate?: string | null; text?: string };
   createProjectOpen: boolean;
+  /** Project the "Customize project" dialog is open for. */
+  customizeProjectId: string | null;
   /** Full task composer (modal). */
   composer: { open: boolean; ctx: ComposerContext };
   /** Keeps the inspector open while working elsewhere. */
@@ -64,6 +66,7 @@ export const useUi = create<UiState>((set) => ({
   paletteQuery: "",
   capture: { open: false, mode: "task" },
   createProjectOpen: false,
+  customizeProjectId: null,
   composer: { open: false, ctx: {} },
   inspectorPinned: false,
   shortcutsOpen: false,

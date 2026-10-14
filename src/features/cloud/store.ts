@@ -4,6 +4,7 @@
 import { create } from "zustand";
 import { api, describeError, KernError } from "@/lib/ipc";
 import type { ActiveSpace, CloudInfo, Me, Space, SyncStatus } from "@/lib/types";
+import { spaceLook } from "./ui";
 
 export type AuthMode = "sign-in" | "sign-up" | "verify" | "code" | "forgot" | "reset";
 
@@ -124,7 +125,8 @@ export function useActiveSpace() {
   const a = info?.active;
   if (!a) return null;
   const full = a.kind === "personal" ? me?.personal : me?.workspaces.find((w) => w.id === a.id);
-  return { ...a, role: full?.role, logo: full?.logo ?? null, name: full?.name ?? a.name, accent: full?.accent ?? null };
+  const look = a.kind === "workspace" ? spaceLook(full?.settings) : { icon: null, tint: false };
+  return { ...a, role: full?.role, logo: full?.logo ?? null, name: full?.name ?? a.name, accent: full?.accent ?? null, ...look };
 }
 
 /** True when the open space only allows viewing. */
