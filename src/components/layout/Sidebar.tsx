@@ -77,7 +77,7 @@ import { AUTO_SCROLL, DROP_ANIMATION, DragPreview, SORT_TRANSITION, SortableRow,
 function UpdateBanner({ collapsed }: { collapsed: boolean }) {
   const { data } = useUpdateCheck();
   if (!data?.latest) return null;
-  const label = `Update to ${APP_NAME} v${data.latest} (you have v${data.current})`;
+  const label = `${data.security ? "Required security update" : "Update"} to ${APP_NAME} v${data.latest} (you have v${data.current})`;
   return (
     <Tooltip content={label} side="right">
       <button
@@ -85,12 +85,13 @@ function UpdateBanner({ collapsed }: { collapsed: boolean }) {
         className="update-banner"
         data-collapsed={collapsed || undefined}
         aria-label={label}
-        onClick={() => void startUpdate({ current: data.current, target: data.latest!, fallbackUrl: data.url })}
+        data-security={data.security || undefined}
+        onClick={() => void startUpdate({ current: data.current, target: data.latest!, fallbackUrl: data.url, forced: data.security })}
       >
         <CircleArrowDown strokeWidth={2} />
         {!collapsed && (
           <>
-            <span className="truncate">Update Available</span>
+            <span className="truncate">{data.security ? "Security Update" : "Update Available"}</span>
             <span className="update-banner__dot" aria-hidden />
             <span className="update-banner__version">v{data.latest}</span>
           </>

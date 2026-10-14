@@ -66,6 +66,18 @@ with the `.exe`, `.msi` and `latest.json` attached. Without `--publish` it
 stops after building. The key can also come from `TAURI_SIGNING_PRIVATE_KEY`
 (its contents) or `KERN_UPDATER_KEY` (a path).
 
+### Security releases
+
+Add `--security` to make a release a required update. The script puts
+`<!-- kern:security -->` at the top of its notes (invisible on GitHub); any
+copy older than a release carrying that marker updates without asking, even
+when newer, ordinary releases have come out since. Kern starts the update screen
+by itself in every mode. If it doesn't finish, Kern stays usable (it's
+local-first, so nobody is locked out of their data while offline), shows a
+*Security update required* notice, and tries again every 10 minutes and on
+each start. Copies with network access turned off in Settings → Privacy don't
+check, so they aren't forced either. Use it only for real security fixes.
+
 ## Renaming the app
 
 The name "Kern" is provisional. To change it:

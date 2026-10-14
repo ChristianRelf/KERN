@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/Controls";
 import { BrandMark } from "@/app/BrandMark";
 import { APP_NAME } from "@/app/brand";
 import { formatBytes } from "@/lib/dates";
-import { FAILED_RETURN_MS, MAX_ATTEMPTS, leaveUpdate, useUpdater } from "./store";
+import { FAILED_RETURN_MS, FORCED_RETRY_MS, MAX_ATTEMPTS, leaveUpdate, useUpdater } from "./store";
 import "./updates.css";
 
 export function UpdateScreen() {
@@ -52,6 +52,7 @@ export function UpdateScreen() {
         s.failedStep === "install"
           ? `The update couldn't be installed. You're still on ${s.current ? `v${s.current}` : "the current version"}.`
           : `The update couldn't be downloaded after ${MAX_ATTEMPTS} attempts. You're still on ${s.current ? `v${s.current}` : "the current version"}.`;
+      if (s.forced) status += ` It's a required security update, so ${APP_NAME} will try again in ${FORCED_RETRY_MS / 60_000} minutes.`;
       break;
     default:
       status = "Getting the update…";
@@ -62,8 +63,9 @@ export function UpdateScreen() {
       <div className="update-screen__card" data-failed={failed || undefined}>
         <BrandMark size={36} className="update-screen__mark" />
         <h1 id="update-screen-title" className="update-screen__title">
-          {failed ? "Update didn't finish" : `Updating ${APP_NAME}`}
+          {failed ? "Update didn't finish" : s.forced ? "Installing a security update" : `Updating ${APP_NAME}`}
         </h1>
+        {s.forced && !failed && <span className="security-badge">Required</span>}
         {versions && <span className="update-screen__versions">{versions}</span>}
         {!failed && (
           <div className="update-screen__bar" data-indeterminate={progress === null || undefined}>

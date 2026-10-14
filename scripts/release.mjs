@@ -4,6 +4,8 @@
 //
 //   node scripts/release.mjs --notes notes.md            build + manifest
 //   node scripts/release.mjs --notes notes.md --publish  ...then publish
+//   add --security for a security release: installs update to it without
+//   asking (it marks the notes with <!-- kern:security -->)
 //
 // The updater signing key is read from TAURI_SIGNING_PRIVATE_KEY, or the file
 // at KERN_UPDATER_KEY, or ~/.tauri/kern-updater.key. Keep that file backed
@@ -59,7 +61,10 @@ if (!conf.plugins?.updater?.pubkey) fail("tauri.conf.json has no plugins.updater
 const notesPath = option("--notes");
 if (!notesPath) fail("Pass the release notes: --notes <file.md>");
 if (!existsSync(notesPath)) fail(`No notes at ${notesPath}`);
-const notes = readFileSync(notesPath, "utf8").trim();
+const MARKER = "<!-- kern:security -->";
+let notes = readFileSync(notesPath, "utf8").trim();
+if (flag("--security") && !notes.toLowerCase().includes(MARKER)) notes = `${MARKER}\n${notes}`;
+if (notes.toLowerCase().includes(MARKER)) console.log("\n! Security release: installs will update to it without asking.");
 
 // ------------------------------------------------------------ signing key
 
@@ -75,8 +80,12 @@ if (!key) {
 console.log(`\n▸ Building Kern ${version} with updater artifacts…\n`);
 // Updater artifacts are only made for releases, so everyday builds don't
 // need the key.
-const overrides = join(mkdtempSync(join(tmpdir(), "kern-release-")), "release.conf.json");
+const work = mkdtempSync(join(tmpdir(), "kern-release-"));
+const overrides = join(work, "release.conf.json");
 writeFileSync(overrides, JSON.stringify({ bundle: { createUpdaterArtifacts: true } }));
+// The notes as published (with the security marker, when there is one).
+const publishedNotes = join(work, "notes.md");
+writeFileSync(publishedNotes, notes + "\n");
 run("npx", ["tauri", "build", "--config", q(overrides)], {
   env: { ...process.env, TAURI_SIGNING_PRIVATE_KEY: key, TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? "" },
 });
@@ -122,7 +131,7 @@ run("gh", [
   "release", "create", tag,
   "--repo", REPO,
   "--title", q(`Kern ${version}`),
-  "--notes-file", q(resolve(notesPath)),
+  "--notes-file", q(publishedNotes),
   ...[artifacts.nsis, artifacts.msi, manifestPath].map(q),
 ]);
 console.log(`\n✓ Released https://github.com/${REPO}/releases/tag/${tag}`);

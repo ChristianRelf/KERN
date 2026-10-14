@@ -20,6 +20,7 @@ import { StartChooser } from "./StartChooser";
 import { useUpdater } from "@/features/updates/store";
 import { UpdateScreen } from "@/features/updates/UpdateScreen";
 import { WhatsNewHost } from "@/features/updates/WhatsNew";
+import { ForcedUpdate } from "@/features/updates/ForcedUpdate";
 
 const Shell = lazy(() => import("./Shell"));
 const LiteApp = lazy(() => import("@/features/lite/LiteApp"));
@@ -99,6 +100,8 @@ export function App() {
             <WhatsNewHost />
           </>
         )}
+        {/* Outside the swap, so it keeps watching while the update screen shows. */}
+        <ForcedUpdate />
       </TooltipProvider>
     </QueryClientProvider>
   );

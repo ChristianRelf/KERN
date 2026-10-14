@@ -263,6 +263,11 @@
     box-shadow 220ms var(--ease-out),
     border-color 220ms var(--ease-out);
 }
+/* A required security update reads as one. */
+.update-banner[data-security="true"] {
+  --update: var(--danger);
+  --update-soft: var(--danger-soft);
+}
 .update-banner:hover {
   transform: translateY(-1px);
   background: color-mix(in srgb, var(--update) 22%, transparent);

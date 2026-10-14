@@ -18,13 +18,20 @@ export function compareVersions(a: string, b: string): number {
   return x.pre < y.pre ? -1 : 1;
 }
 
+/** Security releases carry this marker (an HTML comment) in their notes. */
+export const SECURITY_MARKER = "<!-- kern:security -->";
+
+export function isSecurityRelease(body: string | null | undefined): boolean {
+  return !!body && body.toLowerCase().includes(SECURITY_MARKER);
+}
+
 /**
  * The parts of a release's notes worth reading once installed: without a
  * leading "What's new" heading (the dialog has its own title) and without the
  * "Install" section.
  */
 export function inAppNotes(body: string): string {
-  const lines = body.replace(/\r\n/g, "\n").split("\n");
+  const lines = body.replace(/\r\n/g, "\n").replace(/<!--\s*kern:security\s*-->\s*/gi, "").split("\n");
   const out: string[] = [];
   let skipping = false;
   for (const line of lines) {

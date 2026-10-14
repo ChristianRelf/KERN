@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareVersions, inAppNotes } from "./notes";
+import { compareVersions, inAppNotes, isSecurityRelease } from "./notes";
 
 describe("compareVersions", () => {
   it("compares numerically, not as text", () => {
@@ -39,5 +39,17 @@ describe("inAppNotes", () => {
 
   it("leaves other notes alone", () => {
     expect(inAppNotes("Small fixes.")).toBe("Small fixes.");
+  });
+
+  it("drops the security marker before tidying", () => {
+    expect(inAppNotes("<!-- kern:security -->\n## What's new\n- Fix")).toBe("- Fix");
+  });
+});
+
+describe("isSecurityRelease", () => {
+  it("finds the marker in any case", () => {
+    expect(isSecurityRelease("<!-- KERN:SECURITY -->\nnotes")).toBe(true);
+    expect(isSecurityRelease("Mentions security, but no marker")).toBe(false);
+    expect(isSecurityRelease(null)).toBe(false);
   });
 });

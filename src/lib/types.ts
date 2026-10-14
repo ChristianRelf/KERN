@@ -661,6 +661,8 @@ export interface UpdateInfo {
   /** Newest release when newer than the running version. */
   latest: string | null;
   url: string;
+  /** A newer release fixes a security issue: the update is required. */
+  security: boolean;
 }
 
 export interface ReleaseNotes {

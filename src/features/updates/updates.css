@@ -88,3 +88,47 @@
   font-size: var(--fs-sm);
   text-transform: none;
 }
+
+/* ---------- Required update notice (after a failed attempt) */
+.forced-update {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  z-index: 900;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+  padding: 8px 8px 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--fs-sm);
+  animation: rise-in var(--t-layout) var(--ease);
+}
+.forced-update__icon {
+  flex-shrink: 0;
+  color: var(--danger);
+}
+.forced-update__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Security release badge */
+.security-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--danger);
+  background: var(--danger-soft);
+}

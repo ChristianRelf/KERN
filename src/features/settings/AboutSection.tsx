@@ -83,8 +83,8 @@ export function AboutSection() {
           <span className="row" style={{ gap: 6, marginTop: 6, flexWrap: "wrap" }}>
             <span className="about-pill">v{info?.version ?? "…"}</span>
             {update?.latest ? (
-              <Button size="sm" variant="primary" icon={Download} onClick={() => void startUpdate({ current: update.current, target: update.latest!, fallbackUrl: update.url })}>
-                Update to v{update.latest}
+              <Button size="sm" variant="primary" icon={Download} onClick={() => void startUpdate({ current: update.current, target: update.latest!, fallbackUrl: update.url, forced: update.security })}>
+                {update.security ? "Install security update" : "Update to"} v{update.latest}
               </Button>
             ) : (
               <Tooltip content="Check again">

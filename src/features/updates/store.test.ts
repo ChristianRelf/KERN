@@ -13,7 +13,7 @@ vi.mock("@/lib/ipc", () => ({
 }));
 vi.mock("@/stores/toast", () => ({ toast: (m: string) => toast(m) }));
 
-const { startUpdate, useUpdater, leaveUpdate, MAX_ATTEMPTS, PENDING_KEY } = await import("./store");
+const { startUpdate, useUpdater, useForcedRetry, leaveUpdate, MAX_ATTEMPTS, PENDING_KEY, FORCED_RETRY_MS } = await import("./store");
 
 function fakeUpdate(opts: { download?: () => Promise<void>; install?: () => Promise<void> } = {}) {
   return {
@@ -47,6 +47,7 @@ beforeEach(() => {
   settingsSet.mockResolvedValue(undefined);
   open.mockResolvedValue(undefined);
   leaveUpdate();
+  useForcedRetry.setState({ retryAt: null, manualOnly: false });
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -123,6 +124,35 @@ describe("startUpdate", () => {
     expect(useUpdater.getState().phase).toBeNull();
     expect(open).toHaveBeenCalledWith("https://example.com/release");
     expect(toast).toHaveBeenCalled();
+  });
+
+  it("schedules another try when a required update fails", async () => {
+    check.mockRejectedValue(new Error("offline"));
+    const before = Date.now();
+    await run({ forced: true });
+    const s = useUpdater.getState();
+    expect([s.phase, s.forced]).toEqual(["failed", true]);
+    const { retryAt } = useForcedRetry.getState();
+    expect(retryAt).toBeGreaterThanOrEqual(before + FORCED_RETRY_MS);
+  });
+
+  it("schedules another try when installing a required update fails", async () => {
+    check.mockResolvedValue(fakeUpdate({ install: async () => Promise.reject(new Error("refused")) }));
+    await run({ forced: true });
+    expect(useForcedRetry.getState().retryAt).not.toBeNull();
+  });
+
+  it("leaves a required update that can't be installed in the app to the release page", async () => {
+    check.mockResolvedValue(null);
+    await run({ forced: true, fallbackUrl: "https://example.com/release" });
+    expect(useForcedRetry.getState()).toEqual({ retryAt: null, manualOnly: true });
+    expect(open).toHaveBeenCalledWith("https://example.com/release");
+  });
+
+  it("doesn't schedule anything for an optional update", async () => {
+    check.mockRejectedValue(new Error("offline"));
+    await run();
+    expect(useForcedRetry.getState().retryAt).toBeNull();
   });
 
   it("ignores a second start while one is running", async () => {

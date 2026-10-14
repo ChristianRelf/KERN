@@ -13,7 +13,7 @@ import { api } from "@/lib/ipc";
 import { renderMarkdown, safeHref } from "@/lib/markdown";
 import { useSettings } from "@/stores/settings";
 import { APP_NAME } from "@/app/brand";
-import { compareVersions, inAppNotes } from "./notes";
+import { compareVersions, inAppNotes, isSecurityRelease } from "./notes";
 import { PENDING_KEY, type PendingUpdate } from "./store";
 import { RELEASES_PAGE } from "./constants";
 import "./updates.css";
@@ -85,7 +85,12 @@ export function WhatsNewHost() {
         </>
       }
     >
-      {published && <div className="whats-new__meta">Released {published}</div>}
+      {(published || isSecurityRelease(body)) && (
+        <div className="whats-new__meta">
+          {isSecurityRelease(body) && <span className="security-badge">Security update</span>}
+          {published && `Released ${published}`}
+        </div>
+      )}
       {html ? (
         <div
           className="prose whats-new__notes selectable"
