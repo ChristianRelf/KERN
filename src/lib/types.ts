@@ -1,6 +1,8 @@
 // Domain types mirroring the Rust command payloads (camelCase).
 
 export type TaskStatus = "inbox" | "todo" | "in_progress" | "blocked" | "completed";
+/** How a completed task was closed; null means done. */
+export type TaskResolution = "cancelled" | "duplicate";
 export type Priority = 0 | 1 | 2 | 3 | 4;
 
 export interface Recurrence {
@@ -45,6 +47,25 @@ export interface Task {
   milestoneId?: string | null;
   /** Explicitly linked development resources. */
   devLinks?: DevLinkRef[];
+  /** Set on completed tasks that were cancelled or closed as duplicates. */
+  resolution?: TaskResolution | null;
+  /** Open tasks that block this one. */
+  blockedBy?: number;
+}
+
+/** A relation from one task's point of view. */
+export type TaskRelationKind = "blocks" | "blocked_by" | "related" | "duplicate_of" | "duplicated_by";
+
+export interface TaskRelation {
+  kind: TaskRelationKind;
+  task: {
+    id: string;
+    title: string;
+    status: TaskStatus;
+    resolution: TaskResolution | null;
+    priority: number;
+    projectId: string | null;
+  };
 }
 
 export interface DevLinkRef {
@@ -126,12 +147,15 @@ export interface TaskPatch {
   removeLabelIds?: string[];
   addTrackedSeconds?: number;
   milestoneId?: string | null;
+  resolution?: TaskResolution | null;
 }
 
 export interface TaskUpdateResult {
   task: Task;
   previous: Task;
   spawned: Task | null;
+  /** Blocked tasks reopened because this was their last open blocker. */
+  unblocked: Task[];
 }
 
 export interface Label {
@@ -537,9 +561,24 @@ export interface TaskFilters {
   search?: string;
   sort?: TaskOrder;
   group?: TaskGrouping;
+  /** Second level of grouping inside each group. */
+  subGroup?: TaskGrouping;
+  /** List subtasks alongside top-level tasks. */
+  showSubtasks?: boolean;
+  /** Properties shown on rows in this view (overrides Appearance settings). */
+  display?: Partial<TaskMeta>;
 }
 
-export type TaskGrouping = "none" | "project" | "due" | "priority" | "status";
+export type TaskGrouping = "none" | "project" | "due" | "priority" | "status" | "label" | "milestone";
+
+export interface TaskMeta {
+  project: boolean;
+  due: boolean;
+  priority: boolean;
+  labels: boolean;
+  subtasks: boolean;
+  estimate: boolean;
+}
 
 export interface RecentItem {
   entityType: "project" | "note" | "whiteboard";

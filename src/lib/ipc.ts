@@ -66,6 +66,13 @@ export const api = {
     purge: (ids: string[]) => call<void>("tasks_purge", { ids }),
     reorder: (ids: string[], field?: "board" | "list") => call<void>("tasks_reorder", { ids, field: field ?? null }),
   },
+  relations: {
+    list: (taskId: string) => call<T.TaskRelation[]>("task_relations", { taskId }),
+    /** `kind` is from `taskId`'s point of view; replaces any existing relation between the two. */
+    set: (taskId: string, otherId: string, kind: "blocks" | "blocked_by" | "related" | "duplicate_of") =>
+      call<void>("task_relation_set", { taskId, otherId, kind }),
+    remove: (taskId: string, otherId: string) => call<void>("task_relation_remove", { taskId, otherId }),
+  },
   labels: {
     list: () => call<T.Label[]>("labels_list"),
     create: (name: string, color?: string | null) => call<T.Label>("label_create", { name, color: color ?? null }),

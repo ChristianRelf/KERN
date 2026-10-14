@@ -31,7 +31,7 @@ export function MiniTask({
   return (
     <ContextMenu items={() => taskMenu(task, { projects: projects ?? [], labels: labels ?? [] })}>
       <div className="mini-task" data-done={done} data-flip-id={task.id} onClick={() => openTask(task.id)} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && openTask(task.id)}>
-        <TaskCheck checked={done} onToggle={() => void toggleComplete(task)} priority={task.priority} blocked={task.status === "blocked"} />
+        <TaskCheck checked={done} onToggle={() => void toggleComplete(task)} priority={task.priority} blocked={task.status === "blocked" || !!task.blockedBy} cancelled={!!task.resolution} />
         <span className="mini-task__title">
           <TaskTitle title={task.title} done={done} />
         </span>

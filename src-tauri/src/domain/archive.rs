@@ -44,6 +44,7 @@ const TABLES: &[&str] = &[
     "board_columns",
     "tasks",
     "task_labels",
+    "task_relations",
     "attachments",
     "notes",
     "inbox_items",

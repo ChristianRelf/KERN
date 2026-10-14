@@ -418,7 +418,7 @@ export const TaskNode = memo(function TaskNode({ id, data, selected }: NodeProps
           <>
             <div className="wbn__row">
               <span className="nodrag" style={{ display: "flex" }}>
-                <TaskCheck checked={done} onToggle={() => void toggleComplete(task)} priority={task.priority} />
+                <TaskCheck checked={done} onToggle={() => void toggleComplete(task)} priority={task.priority} cancelled={!!task.resolution} />
               </span>
               <TaskTitle title={task.title} done={done} className="grow" />
             </div>

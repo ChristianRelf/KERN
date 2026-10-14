@@ -144,7 +144,7 @@ fn local_part(conn: &Connection, b: &mut B, project_id: &str, from: i64, to: i64
     if inc.tasks {
         let mut stmt = conn.prepare(
             "SELECT id, title, completed_at FROM tasks WHERE project_id = ?1 AND deleted_at IS NULL AND parent_id IS NULL
-             AND completed_at >= ?2 AND completed_at < ?3 ORDER BY completed_at DESC LIMIT 40",
+             AND resolution IS NULL AND completed_at >= ?2 AND completed_at < ?3 ORDER BY completed_at DESC LIMIT 40",
         )?;
         let done: Vec<(String, String, i64)> = stmt.query_map(params![project_id, from, to], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect::<Result<_, _>>()?;
         b.count("tasksCompleted", done.len() as i64);

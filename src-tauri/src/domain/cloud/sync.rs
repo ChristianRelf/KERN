@@ -38,6 +38,7 @@ pub const TABLES: &[SyncTable] = &[
     SyncTable { name: "milestones", pk: &["id"], local: &["repository_id"] },
     SyncTable { name: "tasks", pk: &["id"], local: &["pinned"] },
     SyncTable { name: "task_labels", pk: &["task_id", "label_id"], local: &[] },
+    SyncTable { name: "task_relations", pk: &["task_id", "related_id"], local: &[] },
     SyncTable { name: "milestone_deps", pk: &["milestone_id", "depends_on"], local: &[] },
     SyncTable { name: "release_links", pk: &["id"], local: &[] },
     SyncTable { name: "notes", pk: &["id"], local: &[] },

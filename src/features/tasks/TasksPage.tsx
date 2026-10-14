@@ -1,7 +1,8 @@
 import { CalendarDays, Columns3, List, ListFilter, Plus, Save, SquareCheckBig, Sun, CalendarRange } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import type { TaskFilters } from "@/lib/types";
-import { useProjectMap, useTasks, useViews } from "@/hooks/data";
+import { useQueries } from "@tanstack/react-query";
+import type { Milestone, Task, TaskFilters } from "@/lib/types";
+import { useLabelMap, useProjectMap, useTasks, useViews } from "@/hooks/data";
 import { useToday } from "@/hooks/useToday";
 import { navigate, useRouter, type TasksView } from "@/stores/router";
 import { useSetting } from "@/stores/settings";
@@ -10,7 +11,7 @@ import { EmptyState, Segmented } from "@/components/ui/Controls";
 import { prompt } from "@/components/ui/Dialog";
 import { TaskList, type TaskSection } from "./TaskList";
 import { FilterBar } from "./FilterBar";
-import { activeFilterCount, filtersToQuery, groupTasks, upcomingSections } from "./grouping";
+import { activeFilterCount, filtersToQuery, groupSections, upcomingSections } from "./grouping";
 import { defaultTaskPlacement } from "./actions";
 import { api, describeError } from "@/lib/ipc";
 import { invalidate } from "@/lib/query";
@@ -109,12 +110,31 @@ export function TasksPage({ viewId }: { viewId?: string }) {
   );
 }
 
+/** Milestones of the projects these tasks belong to, by id (only when grouping by milestone). */
+function useMilestoneMap(tasks: Task[] | undefined, enabled: boolean): Map<string, Milestone> {
+  const projectIds = useMemo(
+    () => (enabled ? [...new Set((tasks ?? []).filter((t) => t.milestoneId && t.projectId).map((t) => t.projectId!))].sort() : []),
+    [tasks, enabled],
+  );
+  return useQueries({
+    queries: projectIds.map((id) => ({ queryKey: ["milestones", id], queryFn: () => api.milestones.list(id), staleTime: 30_000 })),
+    combine: combineMilestones,
+  });
+}
+
+// Module-level so useQueries can keep the result stable between renders.
+function combineMilestones(results: { data?: Milestone[] }[]): Map<string, Milestone> {
+  return new Map(results.flatMap((r) => r.data ?? []).map((m) => [m.id, m]));
+}
+
 function ListView({ filters }: { filters: TaskFilters }) {
   const today = useToday();
   const projects = useProjectMap();
+  const labels = useLabelMap();
   const { data: tasks, isLoading } = useTasks(filtersToQuery(filters, today));
+  const milestones = useMilestoneMap(tasks, filters.group === "milestone" || filters.subGroup === "milestone");
   const sections = useMemo<TaskSection[]>(() => {
-    const groups = groupTasks(tasks ?? [], filters.group ?? "none", { today, projects });
+    const groups = groupSections(tasks ?? [], filters.group ?? "none", filters.subGroup, { today, projects, labels, milestones });
     // A single add row at the top creates tasks with the user's defaults
     // (or the filtered project, when filtering by exactly one project).
     const defaults =
@@ -123,7 +143,7 @@ function ListView({ filters }: { filters: TaskFilters }) {
         : defaultTaskPlacement();
     if (groups.length === 1 && groups[0].key === "all") return [{ ...groups[0], addDefaults: defaults }];
     return [{ key: "add", tasks: [], addDefaults: defaults, collapsible: false }, ...groups];
-  }, [tasks, filters, today, projects]);
+  }, [tasks, filters, today, projects, labels, milestones]);
   if (isLoading && !tasks) return <div className="page-loading" />;
   const manual = (filters.sort ?? "manual") === "manual" && (filters.group ?? "none") === "none";
   return (
@@ -131,6 +151,7 @@ function ListView({ filters }: { filters: TaskFilters }) {
       sections={sections}
       sortable={manual}
       quickAddPosition="top"
+      meta={filters.display}
       empty={
         <EmptyState icon={SquareCheckBig} title={activeFilterCount(filters) ? "No tasks match these filters" : "No tasks yet"}>
           {activeFilterCount(filters) ? "Try clearing a filter." : "Type above and press Enter to add one."}

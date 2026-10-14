@@ -20,6 +20,7 @@ import { ACTION_TEXT, AUTH_TEXT, refreshStreams, STATUS_TEXT, streamsApi, useStr
 import { Deliveries } from "./Deliveries";
 import { samplePayload, snippet, snippetKinds, SNIPPET_LABEL, type SnippetKind } from "./snippets";
 import { CopyField } from "./StreamsPage";
+import { LabelDot } from "@/features/tasks/labels";
 
 const TABS: { id: StreamTab; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -474,7 +475,7 @@ function Destination({ draft, setCfg, setDraft }: SectionProps) {
                   const on = cfg.task.labelIds.includes(l.id);
                   return (
                     <button key={l.id} type="button" className="chip chip-btn" data-active={on || undefined} aria-pressed={on} onClick={() => setCfg("task", { labelIds: on ? cfg.task.labelIds.filter((x) => x !== l.id) : [...cfg.task.labelIds, l.id] })}>
-                      {l.color && <span className="chip__dot" style={{ background: l.color }} />}
+                      {l.color && <LabelDot label={l} size={6} />}
                       {l.name}
                     </button>
                   );

@@ -593,6 +593,30 @@
 .prose > * + * {
   margin-top: 0.6em;
 }
+.prose--compact {
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  min-height: 0;
+}
+.prose--compact > * + * {
+  margin-top: 0.45em;
+}
+.prose--compact h1 {
+  font-size: 1.35em;
+  margin-top: 0.8em;
+}
+.prose--compact h2 {
+  font-size: 1.2em;
+  margin-top: 0.8em;
+}
+.prose--compact h3 {
+  font-size: 1.05em;
+  margin-top: 0.7em;
+}
+.slash-menu {
+  max-height: 300px;
+  min-width: 210px;
+}
 .prose h1 {
   font-size: 1.55em;
   font-weight: 650;

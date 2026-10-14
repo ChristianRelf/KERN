@@ -1,10 +1,11 @@
-import type { Project, Task, TaskFilters, TaskGrouping, TaskQuery } from "@/lib/types";
+import type { Label, Milestone, Project, Task, TaskFilters, TaskGrouping, TaskQuery } from "@/lib/types";
 import { addDaysStr, diffDays, formatDayHeading, weekStartStr } from "@/lib/dates";
 import { PRIORITY_LABELS, STATUS_LABELS, STATUS_ORDER } from "./meta";
 import type { TaskSection } from "./TaskList";
+import { accentColor } from "@/features/projects/ProjectGlyph";
 
 export function filtersToQuery(f: TaskFilters, today: string): TaskQuery {
-  const q: TaskQuery = { topLevelOnly: !f.search, order: f.sort ?? "manual" };
+  const q: TaskQuery = { topLevelOnly: !f.search && !f.showSubtasks, order: f.sort ?? "manual" };
   if (f.projectIds?.length) q.projectIds = f.projectIds;
   if (f.noProject) q.noProject = true;
   if (f.statuses?.length) q.statuses = f.statuses;
@@ -67,15 +68,18 @@ function dueBucket(t: Task, today: string): { key: string; title: string; order:
   return { key: "later", title: "Later", order: 4 };
 }
 
-export function groupTasks(
-  tasks: Task[],
-  grouping: TaskGrouping,
-  ctx: { today: string; projects: Map<string, Project> },
-): TaskSection[] {
+export interface GroupContext {
+  today: string;
+  projects: Map<string, Project>;
+  labels?: Map<string, Label>;
+  milestones?: Map<string, Milestone>;
+}
+
+export function groupTasks(tasks: Task[], grouping: TaskGrouping, ctx: GroupContext): TaskSection[] {
   if (grouping === "none") return [{ key: "all", tasks, collapsible: false }];
-  const map = new Map<string, { title: string; order: number; tasks: Task[]; defaults?: TaskSection["addDefaults"] }>();
-  const push = (key: string, title: string, order: number, t: Task, defaults?: TaskSection["addDefaults"]) => {
-    if (!map.has(key)) map.set(key, { title, order, tasks: [], defaults });
+  const map = new Map<string, { title: string; order: number; tasks: Task[]; defaults?: TaskSection["addDefaults"]; color?: string }>();
+  const push = (key: string, title: string, order: number, t: Task, defaults?: TaskSection["addDefaults"], color?: string) => {
+    if (!map.has(key)) map.set(key, { title, order, tasks: [], defaults, color });
     map.get(key)!.tasks.push(t);
   };
   for (const t of tasks) {
@@ -96,11 +100,34 @@ export function groupTasks(
       case "status":
         push(t.status, STATUS_LABELS[t.status], STATUS_ORDER.indexOf(t.status), t, { status: t.status });
         break;
+      case "label": {
+        // A task with several labels appears under each of them.
+        const named = t.labelIds.map((id) => ctx.labels?.get(id)).filter(Boolean) as Label[];
+        if (!named.length) push("none", "No label", Number.MAX_SAFE_INTEGER, t);
+        for (const l of named) push(l.id, l.name, 0, t, { labelIds: [l.id] }, accentColor(l.color));
+        break;
+      }
+      case "milestone": {
+        const m = t.milestoneId ? ctx.milestones?.get(t.milestoneId) : undefined;
+        const order = m ? (m.targetDate ? Date.parse(m.targetDate) : 8e15) + m.sortOrder : 9e15;
+        push(m?.id ?? "none", m?.title ?? "No milestone", order, t);
+        break;
+      }
     }
   }
   return [...map.entries()]
-    .sort((a, b) => a[1].order - b[1].order)
-    .map(([key, g]) => ({ key, title: g.title, tasks: g.tasks }));
+    .sort((a, b) => a[1].order - b[1].order || a[1].title.localeCompare(b[1].title))
+    .map(([key, g]) => ({ key, title: g.title, tasks: g.tasks, color: g.color }));
+}
+
+/** Groups, then optionally sub-groups each group (a header row, then its sub-sections). */
+export function groupSections(tasks: Task[], grouping: TaskGrouping, subGrouping: TaskGrouping | undefined, ctx: GroupContext): TaskSection[] {
+  const top = groupTasks(tasks, grouping, ctx);
+  if (grouping === "none" || !subGrouping || subGrouping === "none" || subGrouping === grouping) return top;
+  return top.flatMap((s) => [
+    { ...s, tasks: [], count: s.tasks.length },
+    ...groupTasks(s.tasks, subGrouping, ctx).map((c) => ({ ...c, key: `${s.key}/${c.key}`, level: 1, parentKey: s.key })),
+  ]);
 }
 
 /** Upcoming view: one section per day for the next `days` days, then later. */

@@ -129,6 +129,9 @@ pub fn run() {
             tasks::tasks_restore,
             tasks::tasks_purge,
             tasks::tasks_reorder,
+            relations::task_relations,
+            relations::task_relation_set,
+            relations::task_relation_remove,
             // labels
             labels::labels_list,
             labels::label_create,

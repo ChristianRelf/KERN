@@ -48,7 +48,7 @@ function CalTask({ task, overlay, still }: { task: Task; overlay?: boolean; stil
       }}
       title={task.title}
     >
-      <TaskCheck checked={task.status === "completed"} onToggle={() => void toggleComplete(task)} priority={task.priority} />
+      <TaskCheck checked={task.status === "completed"} onToggle={() => void toggleComplete(task)} priority={task.priority} cancelled={!!task.resolution} />
       {task.dueTime && <span className="faint tabular">{formatTime(task.dueTime)}</span>}
       <TaskTitle title={task.title} done={task.status === "completed"} />
     </div>

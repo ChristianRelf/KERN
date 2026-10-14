@@ -54,12 +54,15 @@ export function TaskCheck({
   onToggle,
   priority = 0,
   blocked,
+  cancelled,
   size,
 }: {
   checked: boolean;
   onToggle: () => void;
   priority?: number;
   blocked?: boolean;
+  /** Closed without being done (cancelled or duplicate): shows a cross. */
+  cancelled?: boolean;
   size?: number;
 }) {
   return (
@@ -68,8 +71,9 @@ export function TaskCheck({
       className="task-check"
       role="checkbox"
       aria-checked={checked}
-      aria-label={checked ? "Mark incomplete" : "Mark complete"}
+      aria-label={checked ? (cancelled ? "Reopen" : "Mark incomplete") : "Mark complete"}
       data-checked={checked}
+      data-cancelled={(checked && cancelled) || undefined}
       data-priority={checked ? undefined : priority}
       data-blocked={blocked || undefined}
       style={size ? ({ "--size": `${size}px` } as CSSProperties) : undefined}
@@ -81,7 +85,7 @@ export function TaskCheck({
     >
       {/* Drawn from the short stroke so the tick "writes" itself in. */}
       <svg viewBox="0 0 24 24" aria-hidden>
-        <path d="M5 12.5l4.5 4.5L19 7.5" pathLength={1} />
+        {checked && cancelled ? <path d="M7.5 7.5l9 9M16.5 7.5l-9 9" pathLength={1} /> : <path d="M5 12.5l4.5 4.5L19 7.5" pathLength={1} />}
       </svg>
     </button>
   );

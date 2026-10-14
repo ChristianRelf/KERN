@@ -14,6 +14,8 @@ use serde_json::Value;
 use tauri::State;
 
 pub const STATUSES: &[&str] = &["inbox", "todo", "in_progress", "blocked", "completed"];
+/// How a completed task was closed; none means done.
+pub const RESOLUTIONS: &[&str] = &["cancelled", "duplicate"];
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -54,6 +56,12 @@ pub struct Task {
     /// Explicitly linked development resources (branches, worktrees, …).
     #[serde(default)]
     pub dev_links: Vec<DevLinkRef>,
+    /// Set on completed tasks that were cancelled or closed as duplicates.
+    #[serde(default)]
+    pub resolution: Option<String>,
+    /// Open tasks that block this one.
+    #[serde(default)]
+    pub blocked_by: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -83,7 +91,10 @@ pub const TASK_SELECT: &str = "SELECT t.id, t.title, t.description, t.status, t.
   (SELECT count(*) FROM attachments a WHERE a.task_id = t.id),
   (SELECT l.repo || char(31) || l.issue_number || char(31) || l.html_url FROM task_issue_links l WHERE l.task_id = t.id),
   t.milestone_id,
-  (SELECT group_concat(d.kind || char(31) || coalesce(d.repository_id, '') || char(31) || d.ref, char(30)) FROM task_dev_links d WHERE d.task_id = t.id)
+  (SELECT group_concat(d.kind || char(31) || coalesce(d.repository_id, '') || char(31) || d.ref, char(30)) FROM task_dev_links d WHERE d.task_id = t.id),
+  t.resolution,
+  (SELECT count(*) FROM task_relations r JOIN tasks b ON b.id = r.task_id
+     WHERE r.related_id = t.id AND r.kind = 'blocks' AND b.status != 'completed' AND b.deleted_at IS NULL)
 FROM tasks t";
 
 pub fn map_task(r: &Row) -> rusqlite::Result<Task> {
@@ -126,6 +137,8 @@ pub fn map_task(r: &Row) -> rusqlite::Result<Task> {
         }),
         milestone_id: r.get(29)?,
         dev_links: r.get::<_, Option<String>>(30)?.map(|s| parse_dev_links(&s)).unwrap_or_default(),
+        resolution: r.get(31)?,
+        blocked_by: r.get(32)?,
     })
 }
 
@@ -554,6 +567,9 @@ pub struct TaskPatch {
     pub add_tracked_seconds: Option<i64>,
     #[serde(deserialize_with = "some")]
     pub milestone_id: Option<Option<String>>,
+    /// 'cancelled' | 'duplicate' | null (done); only kept on completed tasks.
+    #[serde(deserialize_with = "some")]
+    pub resolution: Option<Option<String>>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -564,6 +580,8 @@ pub struct TaskUpdateResult {
     pub previous: Task,
     /// Next occurrence created when completing a recurring task.
     pub spawned: Option<Task>,
+    /// Blocked tasks reopened because this was their last open blocker.
+    pub unblocked: Vec<Task>,
 }
 
 fn today_local() -> NaiveDate {
@@ -734,6 +752,21 @@ pub fn update_task(conn: &Connection, id: &str, patch: &TaskPatch) -> AppResult<
     } else if reopening {
         t.completed_at = None;
     }
+    // A resolution only describes a completed task; completing afresh
+    // without one means done.
+    if let Some(r) = &patch.resolution {
+        if let Some(v) = r {
+            if !RESOLUTIONS.contains(&v.as_str()) {
+                return invalid(format!("Unknown resolution '{v}'."));
+            }
+        }
+        t.resolution = r.clone();
+    } else if completing {
+        t.resolution = None;
+    }
+    if t.status != "completed" {
+        t.resolution = None;
+    }
 
     // Recurrence: completing an occurrence moves the rule onto a new one.
     let mut spawned: Option<Task> = None;
@@ -816,7 +849,7 @@ pub fn update_task(conn: &Connection, id: &str, patch: &TaskPatch) -> AppResult<
            parent_id = ?7, due_date = ?8, due_time = ?9, start_date = ?10, estimate_minutes = ?11,
            tracked_seconds = ?12, sort_order = ?13, board_order = ?14, pinned = ?15, recurrence = ?16,
            series_id = ?17, reminder_minutes = ?18, completed_at = ?19, archived_at = ?20, updated_at = ?21,
-           milestone_id = ?23
+           milestone_id = ?23, resolution = ?24
          WHERE id = ?22",
         params![
             t.title,
@@ -841,7 +874,8 @@ pub fn update_task(conn: &Connection, id: &str, patch: &TaskPatch) -> AppResult<
             t.archived_at,
             now,
             id,
-            t.milestone_id
+            t.milestone_id,
+            t.resolution
         ],
     )?;
 
@@ -869,7 +903,8 @@ pub fn update_task(conn: &Connection, id: &str, patch: &TaskPatch) -> AppResult<
     // Activity (meaningful events only).
     let proj = t.project_id.as_deref();
     if completing {
-        activity::log(conn, proj, "task", id, "completed", &t.title)?;
+        let action = if t.resolution.is_some() { "cancelled" } else { "completed" };
+        activity::log(conn, proj, "task", id, action, &t.title)?;
     } else if reopening {
         activity::log(conn, proj, "task", id, "reopened", &t.title)?;
     }
@@ -892,7 +927,24 @@ pub fn update_task(conn: &Connection, id: &str, patch: &TaskPatch) -> AppResult<
         activity::log(conn, proj, "task", id, "archived", &t.title)?;
     }
 
-    Ok(TaskUpdateResult { task: get_task(conn, id)?, previous: prev, spawned })
+    // Tasks marked Blocked go back to To Do once their last blocker closes.
+    let mut unblocked = Vec::new();
+    if completing {
+        let mut stmt = conn.prepare(
+            "SELECT b.id FROM task_relations r JOIN tasks b ON b.id = r.related_id
+             WHERE r.task_id = ?1 AND r.kind = 'blocks' AND b.status = 'blocked' AND b.deleted_at IS NULL
+               AND NOT EXISTS (SELECT 1 FROM task_relations o JOIN tasks ob ON ob.id = o.task_id
+                 WHERE o.related_id = b.id AND o.kind = 'blocks' AND ob.status != 'completed' AND ob.deleted_at IS NULL)",
+        )?;
+        let ids: Vec<String> = stmt.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
+        for b in ids {
+            let r = update_task(conn, &b, &TaskPatch { status: Some("todo".into()), ..Default::default() })?;
+            activity::log(conn, r.task.project_id.as_deref(), "task", &b, "unblocked", &r.task.title)?;
+            unblocked.push(r.task);
+        }
+    }
+
+    Ok(TaskUpdateResult { task: get_task(conn, id)?, previous: prev, spawned, unblocked })
 }
 
 // ---------------------------------------------------------- duplication

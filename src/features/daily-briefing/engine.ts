@@ -93,6 +93,7 @@ export function scoreTask(t: Task, ctx: { today: string; carryIds?: Set<string>;
   if (t.pinned) add("Pinned", 20);
   if (t.status === "in_progress") add("In progress", 10);
   if (t.status === "blocked") add("Blocked", -40);
+  else if (t.blockedBy) add("Waiting on another task", -40);
   if (ctx.carryIds?.has(t.id)) add("Carried over", 8);
   if (t.projectId && ctx.projects) {
     const p = ctx.projects.get(t.projectId);
@@ -144,7 +145,7 @@ export function buildRundown(data: RundownData, opts: RundownOptions): Rundown {
     .map((t) => scoreTask(t, { today, carryIds: opts.carryIds, projects }))
     .filter((s) => s.score > 0 && !opts.skipped?.has(s.task.id))
     .sort((a, b) => b.score - a.score || (a.task.dueDate ?? "9").localeCompare(b.task.dueDate ?? "9") || a.task.sortOrder - b.task.sortOrder);
-  const suggestions = scored.filter((s) => s.task.status !== "blocked").slice(0, Math.min(3, opts.maxTasks));
+  const suggestions = scored.filter((s) => s.task.status !== "blocked" && !s.task.blockedBy).slice(0, Math.min(3, opts.maxTasks));
 
   const counts = {
     today: data.today.length,

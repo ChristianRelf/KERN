@@ -30,13 +30,13 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS as DndCSS } from "@dnd-kit/utilities";
-import type { Attachment, Task, TaskPatch, TaskStatus } from "@/lib/types";
+import type { Attachment, Task, TaskPatch } from "@/lib/types";
 import { useAttachments, useLabelMap, useProjectMap, useSubtasks, useTask } from "@/hooks/data";
 import { TaskCheck, EmptyState, Skeleton } from "@/components/ui/Controls";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Dropdown } from "@/components/ui/Menu";
 import { DuePopover, LabelPicker, ProjectPicker, RecurrencePicker, describeRecurrence } from "./pickers";
-import { PRIORITY_LABELS, PriorityIcon, STATUS_LABELS, StatusIcon } from "./meta";
+import { PRIORITY_LABELS, PriorityIcon, StatusIcon, statusChoices, statusKey, statusLabel } from "./meta";
 import { createTask, deleteTasks, duplicateTask, reorderTasks, setCompleted, updateTask } from "./actions";
 import { formatBytes, formatDue, formatDuration, relativeTime, todayStr } from "@/lib/dates";
 import { ProjectGlyph } from "@/features/projects/ProjectGlyph";
@@ -56,6 +56,10 @@ import { openMilestone } from "@/features/milestones/actions";
 import { useMilestones } from "@/features/dev/hooks";
 import { TaskDevSection } from "@/features/dev/TaskDevSection";
 import { startWork } from "@/features/sessions/StartWork";
+import { NoteEditor, getMarkdown } from "@/features/notes/NoteEditor";
+import type { Editor } from "@tiptap/react";
+import { Relations } from "./Relations";
+import { LabelChip } from "./labels";
 
 function useAutosize(ref: React.RefObject<HTMLTextAreaElement | null>, value: string) {
   useLayoutEffect(() => {
@@ -153,8 +157,12 @@ function TaskDetailBody({ task }: { task: Task }) {
     drafts?.description,
   );
   useAutosize(titleRef, title.value);
-  const descRef = useRef<HTMLTextAreaElement>(null);
-  useAutosize(descRef, desc.value);
+  const [editor, setEditor] = useState<Editor | null>(null);
+  // Show edits made elsewhere (another window or device) unless typing here.
+  useEffect(() => {
+    if (!editor || editor.isFocused || drafts?.description !== undefined) return;
+    if (getMarkdown(editor) !== task.description) editor.commands.setContent(task.description, false);
+  }, [editor, task.description]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const parent = useTask(task.parentId);
 
@@ -181,7 +189,7 @@ function TaskDetailBody({ task }: { task: Task }) {
         </div>
       )}
       <div className="task-detail__title">
-        <TaskCheck checked={done} onToggle={() => void setCompleted(task, !done)} priority={task.priority} size={18} />
+        <TaskCheck checked={done} onToggle={() => void setCompleted(task, !done)} priority={task.priority} blocked={!!task.blockedBy} cancelled={!!task.resolution} size={18} />
         <textarea
           ref={titleRef}
           rows={1}
@@ -193,7 +201,7 @@ function TaskDetailBody({ task }: { task: Task }) {
             if (e.key === "Enter") {
               e.preventDefault();
               title.flush();
-              descRef.current?.focus();
+              editor?.commands.focus("start");
             }
           }}
         />
@@ -212,15 +220,15 @@ function TaskDetailBody({ task }: { task: Task }) {
         </span>
         <div>
           <Dropdown
-            items={(["inbox", "todo", "in_progress", "blocked", "completed"] as TaskStatus[]).map((s) => ({
-              label: STATUS_LABELS[s],
-              checked: task.status === s,
-              onSelect: () => patch({ status: s }, STATUS_LABELS[s]),
+            items={statusChoices({ inbox: true }).map((c) => ({
+              label: c.label,
+              checked: statusKey(task) === c.key,
+              onSelect: () => patch(c.patch, c.label),
             }))}
           >
             <button type="button" className="prop-btn">
-              <StatusIcon status={task.status} />
-              {STATUS_LABELS[task.status]}
+              <StatusIcon status={statusKey(task)} />
+              {statusLabel(task)}
             </button>
           </Dropdown>
         </div>
@@ -324,11 +332,10 @@ function TaskDetailBody({ task }: { task: Task }) {
             trigger={
               <button type="button" className="prop-btn" data-empty={!task.labelIds.length}>
                 {task.labelIds.length
-                  ? task.labelIds.map((l) => (
-                      <span key={l} className="chip">
-                        {labelMap.get(l)?.name ?? "…"}
-                      </span>
-                    ))
+                  ? task.labelIds.map((l) => {
+                      const label = labelMap.get(l);
+                      return label ? <LabelChip key={l} label={label} /> : <span key={l} className="chip">…</span>;
+                    })
                   : "Add labels"}
               </button>
             }
@@ -379,18 +386,20 @@ function TaskDetailBody({ task }: { task: Task }) {
         )}
       </div>
 
-      <textarea
-        ref={descRef}
-        className="textarea desc-area"
-        placeholder="Notes"
-        value={desc.value}
-        onChange={(e) => desc.onChange(e.target.value)}
-        onBlur={desc.flush}
-        aria-label="Notes"
-      />
+      <div className="desc-editor" aria-label="Notes" onMouseDown={(e) => e.target === e.currentTarget && (e.preventDefault(), editor?.commands.focus("end"))}>
+        <NoteEditor
+          compact
+          initial={desc.value}
+          onChange={desc.onChange}
+          onBlur={desc.flush}
+          onEditor={setEditor}
+          placeholder="Add notes… Type / for headings, lists and checklists"
+        />
+      </div>
       <DescriptionLinks text={desc.value} />
 
       <Subtasks task={task} depth={0} />
+      <Relations task={task} />
       <Attachments task={task} />
       <TaskDevSection task={task} />
 
@@ -517,7 +526,7 @@ function SubtaskRow({ task, depth, canNest }: { task: Task; depth: number; canNe
         <span {...attributes} {...listeners} style={{ cursor: "grab", color: "var(--text-4)", display: "flex" }} aria-label="Drag to reorder">
           <GripVertical size={12} />
         </span>
-        <TaskCheck checked={done} onToggle={() => void setCompleted(task, !done)} size={14} />
+        <TaskCheck checked={done} onToggle={() => void setCompleted(task, !done)} cancelled={!!task.resolution} size={14} />
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}

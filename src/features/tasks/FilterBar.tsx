@@ -1,12 +1,14 @@
-import { ArrowUpDown, CalendarDays, Check, CircleCheck, CircleDashed, Flag, FolderKanban, Layers, Search, Tag, X } from "lucide-react";
+import { CalendarDays, Check, CircleCheck, CircleDashed, Flag, FolderKanban, Layers, Search, SlidersHorizontal, Tag, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import type { TaskFilters, TaskGrouping, TaskOrder, TaskStatus } from "@/lib/types";
-import { Popover } from "@/components/ui/Controls";
+import type { TaskFilters, TaskGrouping, TaskMeta, TaskOrder, TaskStatus } from "@/lib/types";
+import { Popover, Select, Switch } from "@/components/ui/Controls";
+import { useSetting } from "@/stores/settings";
 import { Dropdown } from "@/components/ui/Menu";
 import { useLabels, useProjects } from "@/hooks/data";
 import { PRIORITY_LABELS, STATUS_LABELS } from "./meta";
 import { activeFilterCount } from "./grouping";
 import { ProjectGlyph } from "@/features/projects/ProjectGlyph";
+import { LabelDot } from "./labels";
 
 const DUE_OPTIONS: { value: NonNullable<TaskFilters["due"]>; label: string }[] = [
   { value: "any", label: "Any date" },
@@ -34,7 +36,100 @@ export const GROUP_OPTIONS: { value: TaskGrouping; label: string }[] = [
   { value: "due", label: "Due date" },
   { value: "priority", label: "Priority" },
   { value: "status", label: "Status" },
+  { value: "label", label: "Label" },
+  { value: "milestone", label: "Milestone" },
 ];
+
+const PROPERTY_OPTIONS: { key: keyof TaskMeta; label: string }[] = [
+  { key: "project", label: "Project" },
+  { key: "due", label: "Due date" },
+  { key: "priority", label: "Priority" },
+  { key: "labels", label: "Labels" },
+  { key: "subtasks", label: "Sub-tasks" },
+  { key: "estimate", label: "Estimate" },
+];
+
+/** The view settings that aren't filters: kept when filters are cleared. */
+function viewOptions(f: TaskFilters): TaskFilters {
+  return { sort: f.sort, group: f.group, subGroup: f.subGroup, showSubtasks: f.showSubtasks, display: f.display };
+}
+
+/** Linear-style view options: grouping, ordering and the properties rows show. */
+function DisplayMenu({ filters, set, showGrouping }: { filters: TaskFilters; set: (p: Partial<TaskFilters>) => void; showGrouping: boolean }) {
+  const globalMeta = useSetting("appearance.taskMeta");
+  const meta = { ...globalMeta, ...filters.display };
+  const group = filters.group ?? "none";
+  const grouped = showGrouping && group !== "none";
+  return (
+    <Popover
+      align="end"
+      pad
+      trigger={
+        <button type="button" className="btn btn--ghost btn--sm">
+          {grouped ? <Layers /> : <SlidersHorizontal />}
+          {SORT_OPTIONS.find((o) => o.value === (filters.sort ?? "manual"))?.label}
+          {grouped && ` · ${GROUP_OPTIONS.find((o) => o.value === group)?.label}`}
+        </button>
+      }
+    >
+      <div className="display-menu">
+        {showGrouping && (
+          <div className="display-menu__row">
+            <span>Grouping</span>
+            <Select<TaskGrouping>
+              value={group}
+              onChange={(v) => set({ group: v, subGroup: v === "none" || v === filters.subGroup ? undefined : filters.subGroup })}
+              options={GROUP_OPTIONS}
+              ariaLabel="Grouping"
+              style={{ width: 150 }}
+            />
+          </div>
+        )}
+        {grouped && (
+          <div className="display-menu__row">
+            <span>Sub-grouping</span>
+            <Select<TaskGrouping>
+              value={filters.subGroup ?? "none"}
+              onChange={(v) => set({ subGroup: v === "none" ? undefined : v })}
+              options={GROUP_OPTIONS.filter((o) => o.value !== group).map((o) => (o.value === "none" ? { ...o, label: "No sub-grouping" } : o))}
+              ariaLabel="Sub-grouping"
+              style={{ width: 150 }}
+            />
+          </div>
+        )}
+        <div className="display-menu__row">
+          <span>Ordering</span>
+          <Select<TaskOrder> value={filters.sort ?? "manual"} onChange={(v) => set({ sort: v })} options={SORT_OPTIONS} ariaLabel="Ordering" style={{ width: 150 }} />
+        </div>
+        <div className="display-menu__row">
+          <span>Show sub-tasks</span>
+          <Switch checked={!!filters.showSubtasks} onChange={(v) => set({ showSubtasks: v || undefined })} label="Show sub-tasks" />
+        </div>
+        <div className="display-menu__sep" />
+        <div className="display-menu__label">Display properties</div>
+        <div className="display-menu__props">
+          {PROPERTY_OPTIONS.map((o) => (
+            <button
+              key={o.key}
+              type="button"
+              className="chip chip-btn"
+              aria-pressed={meta[o.key]}
+              data-active={meta[o.key] || undefined}
+              onClick={() => set({ display: { ...filters.display, [o.key]: !meta[o.key] } })}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+        {filters.display && (
+          <button type="button" className="btn btn--ghost btn--sm" style={{ alignSelf: "flex-start" }} onClick={() => set({ display: undefined })}>
+            Use Appearance defaults
+          </button>
+        )}
+      </div>
+    </Popover>
+  );
+}
 
 function MultiPick<T extends string | number>({
   options,
@@ -208,7 +303,7 @@ export function FilterBar({
           }
         >
           <MultiPick<string>
-            options={labels.map((l) => ({ value: l.id, label: l.name }))}
+            options={labels.map((l) => ({ value: l.id, label: l.name, icon: <LabelDot label={l} /> }))}
             value={filters.labelIds ?? []}
             onChange={(v) => set({ labelIds: v })}
           />
@@ -239,33 +334,14 @@ export function FilterBar({
           className="btn btn--ghost btn--sm"
           onClick={() => {
             setSearch("");
-            onChange({ sort: filters.sort, group: filters.group });
+            onChange(viewOptions(filters));
           }}
         >
           Clear
         </button>
       )}
       <span className="spacer" />
-      <Dropdown
-        align="end"
-        items={[
-          { type: "label", label: "Sort" },
-          ...SORT_OPTIONS.map((o) => ({ label: o.label, checked: (filters.sort ?? "manual") === o.value, onSelect: () => set({ sort: o.value }) })),
-          ...(showGrouping
-            ? [
-                { type: "separator" as const },
-                { type: "label" as const, label: "Group" },
-                ...GROUP_OPTIONS.map((o) => ({ label: o.label, checked: (filters.group ?? "none") === o.value, onSelect: () => set({ group: o.value }) })),
-              ]
-            : []),
-        ]}
-      >
-        <button type="button" className="btn btn--ghost btn--sm">
-          {showGrouping && (filters.group ?? "none") !== "none" ? <Layers /> : <ArrowUpDown />}
-          {SORT_OPTIONS.find((o) => o.value === (filters.sort ?? "manual"))?.label}
-          {showGrouping && (filters.group ?? "none") !== "none" && ` · ${GROUP_OPTIONS.find((o) => o.value === filters.group)?.label}`}
-        </button>
-      </Dropdown>
+      <DisplayMenu filters={filters} set={set} showGrouping={showGrouping} />
       {trailing}
     </div>
   );

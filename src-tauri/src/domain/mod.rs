@@ -30,6 +30,7 @@ pub mod projects;
 pub mod pty;
 pub mod recent;
 pub mod recurrence;
+pub mod relations;
 pub mod repos;
 pub mod search;
 pub mod services;

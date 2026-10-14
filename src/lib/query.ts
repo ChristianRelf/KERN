@@ -64,13 +64,14 @@ export type Domain =
   | "deps"
   | "health"
   | "capabilities"
-  | "pty";
+  | "pty"
+  | "relations";
 
 export function invalidate(...domains: Domain[]) {
   for (const d of domains) void queryClient.invalidateQueries({ queryKey: [d] });
 }
 
-export const TASK_DOMAINS: Domain[] = ["tasks", "task", "board", "projects", "project", "rundown", "stats", "activity", "labels", "milestones", "health"];
+export const TASK_DOMAINS: Domain[] = ["tasks", "task", "board", "projects", "project", "rundown", "stats", "activity", "labels", "milestones", "health", "relations"];
 
 export function invalidateTasks() {
   invalidate(...TASK_DOMAINS);
@@ -98,12 +99,15 @@ export function applyPatch(t: Task, p: TaskPatch): Task {
     "pinned",
     "labelIds",
     "milestoneId",
+    "resolution",
   ];
   for (const k of keys) {
     if (p[k] !== undefined) (next as unknown as Record<string, unknown>)[k] = p[k];
   }
   if (p.status === "completed" && t.status !== "completed") next.completedAt = Date.now();
   if (p.status && p.status !== "completed") next.completedAt = null;
+  if (p.status === "completed" && t.status !== "completed" && p.resolution === undefined) next.resolution = null;
+  if (next.status !== "completed") next.resolution = null;
   if (p.archived !== undefined) next.archivedAt = p.archived ? Date.now() : null;
   if (p.addLabelIds) next.labelIds = Array.from(new Set([...next.labelIds, ...p.addLabelIds]));
   if (p.removeLabelIds) next.labelIds = next.labelIds.filter((l) => !p.removeLabelIds!.includes(l));

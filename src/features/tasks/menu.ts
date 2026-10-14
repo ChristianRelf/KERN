@@ -26,14 +26,15 @@ import {
   CircleDot,
   CircleSlash,
   Circle,
+  CircleX,
   Play,
 } from "lucide-react";
 import type { MenuEntry, MenuItems } from "@/components/ui/Menu";
 import { api, describeError } from "@/lib/ipc";
 import { invalidateTasks } from "@/lib/query";
-import type { Label, Project, Task, TaskStatus } from "@/lib/types";
+import type { Label, Project, Task } from "@/lib/types";
 import { deleteTasks, duplicateTask, quickDates, rescheduleTasks, setCompleted, updateTask, updateTasks } from "./actions";
-import { PRIORITY_LABELS, STATUS_LABELS } from "./meta";
+import { PRIORITY_LABELS, statusChoices, statusKey } from "./meta";
 import { useUi } from "@/stores/ui";
 import { getSetting } from "@/stores/settings";
 import { navigate } from "@/stores/router";
@@ -54,7 +55,7 @@ export function startFocusOn(task: Pick<Task, "id" | "title">) {
   toast(`Focusing on “${task.title}”`);
 }
 
-const STATUS_ICONS = { inbox: Inbox, todo: Circle, in_progress: CircleDot, blocked: CircleSlash, completed: CircleCheck };
+const STATUS_ICONS = { inbox: Inbox, todo: Circle, in_progress: CircleDot, blocked: CircleSlash, completed: CircleCheck, cancelled: CircleX, duplicate: CircleX };
 
 export function taskMenu(
   task: Task,
@@ -92,15 +93,16 @@ export function taskMenu(
         onSelect: () => void updateTasks(ids, { priority: p }, multi ? "Priority changed" : undefined),
       })),
     },
-    !multi && {
+    {
       type: "submenu",
       label: "Status",
       icon: CircleDashed,
-      items: (["todo", "in_progress", "blocked", "completed"] as TaskStatus[]).map((s) => ({
-        label: STATUS_LABELS[s],
-        icon: STATUS_ICONS[s],
-        checked: task.status === s,
-        onSelect: () => void updateTask(task.id, { status: s }, { undoLabel: STATUS_LABELS[s] }),
+      items: statusChoices().map((c) => ({
+        label: c.label,
+        icon: STATUS_ICONS[c.key],
+        checked: !multi && statusKey(task) === c.key,
+        onSelect: () =>
+          multi ? void updateTasks(ids, c.patch, `${c.label} · ${ids.length} tasks`) : void updateTask(task.id, c.patch, { undoLabel: c.label }),
       })),
     },
     !ctx.hideProject && {

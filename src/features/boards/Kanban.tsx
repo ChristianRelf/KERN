@@ -2,7 +2,7 @@
 // local ordering, a drag overlay that tracks the pointer exactly, keyboard
 // dragging, collapsible/resizable columns, WIP limits and inline adding.
 
-import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -38,6 +38,7 @@ import { DueLabel } from "@/features/tasks/TaskRow";
 import { PriorityIcon, PRIORITY_LABELS } from "@/features/tasks/meta";
 import { toggleComplete, updateTask } from "@/features/tasks/actions";
 import { openTask, taskMenu } from "@/features/tasks/menu";
+import { LabelChip } from "@/features/tasks/labels";
 import { ProjectGlyph } from "@/features/projects/ProjectGlyph";
 import { GithubMark } from "@/features/github/shared";
 
@@ -126,7 +127,7 @@ const KanbanCard = memo(function KanbanCard({
       data-task-id={task.id}
     >
       <div className="kcard__title-row">
-        <TaskCheck checked={done} onToggle={() => void toggleComplete(task)} priority={task.priority} blocked={task.status === "blocked"} />
+        <TaskCheck checked={done} onToggle={() => void toggleComplete(task)} priority={task.priority} blocked={task.status === "blocked" || !!task.blockedBy} cancelled={!!task.resolution} />
         {editing ? (
           <textarea
             className="kcard__title-input"
@@ -211,9 +212,7 @@ const KanbanCard = memo(function KanbanCard({
             </span>
           )}
           {labels.map((l) => (
-            <span key={l.id} className="chip">
-              {l.name}
-            </span>
+            <LabelChip key={l.id} label={l} />
           ))}
         </div>
       )}
@@ -235,16 +234,26 @@ const KanbanCard = memo(function KanbanCard({
 });
 
 function SortableCard({ task, ctx }: { task: Task; ctx: CardContext }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: "card" },
   });
+  // The card is also the activator, so Enter/Space only start a keyboard
+  // drag when the card itself is focused - not when pressed in its menu
+  // (portaled, but React still bubbles the key to the card) or checkbox.
+  const setRef = useCallback(
+    (el: HTMLElement | null) => {
+      setNodeRef(el);
+      setActivatorNodeRef(el);
+    },
+    [setNodeRef, setActivatorNodeRef],
+  );
   return (
     <KanbanCard
       task={task}
       ctx={ctx}
       ghost={isDragging}
-      setRef={setNodeRef}
+      setRef={setRef}
       dragProps={{ ...attributes, ...listeners }}
       style={{ transform: DndCSS.Translate.toString(transform), transition }}
     />
@@ -332,7 +341,7 @@ function ColumnView({
   lanes: boolean;
   defaultWidth: number;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: COL_PREFIX + col.id,
     data: { type: "column" },
   });
@@ -390,7 +399,7 @@ function ColumnView({
   let lastLane = -1;
   return (
     <div ref={setNodeRef} className="kcol" style={style} data-col-id={col.id} data-dragging={isDragging || undefined} data-over={isOver || undefined}>
-      <div className="kcol__head" {...attributes} {...listeners} onDoubleClick={() => onRename && setRenaming(true)}>
+      <div ref={setActivatorNodeRef} className="kcol__head" {...attributes} {...listeners} onDoubleClick={() => onRename && setRenaming(true)}>
         {renaming ? (
           <input
             className="input kcol__name-input"

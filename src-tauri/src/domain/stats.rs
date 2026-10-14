@@ -29,8 +29,8 @@ pub fn stats_overview(state: State<AppState>, today: String, day_start: i64, wee
                (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND archived_at IS NULL AND status = 'inbox' AND parent_id IS NULL)
                  + (SELECT count(*) FROM inbox_items),
                (SELECT count(*) FROM projects WHERE deleted_at IS NULL AND archived_at IS NULL),
-               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND completed_at >= ?2),
-               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND completed_at >= ?3)",
+               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND resolution IS NULL AND completed_at >= ?2),
+               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND resolution IS NULL AND completed_at >= ?3)",
             params![today, day_start, week_start],
             |r| {
                 Ok(Overview {
@@ -52,7 +52,7 @@ pub fn stats_overview(state: State<AppState>, today: String, day_start: i64, wee
 pub fn stats_completions(state: State<AppState>, from: i64, to: i64) -> AppResult<Vec<i64>> {
     state.with(|c| {
         let mut stmt = c.prepare(
-            "SELECT completed_at FROM tasks WHERE deleted_at IS NULL AND completed_at >= ?1 AND completed_at < ?2 ORDER BY completed_at",
+            "SELECT completed_at FROM tasks WHERE deleted_at IS NULL AND resolution IS NULL AND completed_at >= ?1 AND completed_at < ?2 ORDER BY completed_at",
         )?;
         let rows = stmt.query_map(params![from, to], |r| r.get(0))?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)

@@ -1,9 +1,9 @@
-import { Check, Inbox, Plus, Search, Tag } from "lucide-react";
+import { Check, Inbox, Plus, Search } from "lucide-react";
 import { useMemo, useState, type ReactElement } from "react";
 import { Popover } from "@/components/ui/Controls";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { useLabels, useProjects } from "@/hooks/data";
-import { api, describeError } from "@/lib/ipc";
+import { describeError } from "@/lib/ipc";
 import { invalidate } from "@/lib/query";
 import type { Recurrence } from "@/lib/types";
 import { ProjectGlyph } from "@/features/projects/ProjectGlyph";
@@ -12,6 +12,7 @@ import { Segmented, Switch } from "@/components/ui/Controls";
 import { Button } from "@/components/ui/Button";
 import { isoWeekday, parseDateStr, todayStr } from "@/lib/dates";
 import { getSetting } from "@/stores/settings";
+import { LabelDot, createLabel } from "./labels";
 
 // ------------------------------------------------------------ list popover
 
@@ -24,6 +25,9 @@ export function FilterList<T>({
   getKey,
   getText,
   emptyCreate,
+  width = 240,
+  autoFocus = true,
+  onKeyDown,
 }: {
   items: T[];
   placeholder: string;
@@ -33,6 +37,10 @@ export function FilterList<T>({
   getKey: (item: T) => string;
   getText: (item: T) => string;
   emptyCreate?: (q: string) => void;
+  width?: number;
+  autoFocus?: boolean;
+  /** Runs before the list's own keys; call preventDefault to take a key over. */
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>, query: string) => void;
 }) {
   const [q, setQ] = useState("");
   const [idx, setIdx] = useState(0);
@@ -42,12 +50,12 @@ export function FilterList<T>({
   }, [q, items, getText]);
   const canCreate = !!emptyCreate && q.trim() && !items.some((i) => getText(i).toLowerCase() === q.trim().toLowerCase());
   return (
-    <div style={{ width: 240, padding: 4 }}>
+    <div style={{ width, padding: 4 }}>
       <div className="input-wrap" style={{ margin: 4 }}>
         <Search />
         <input
           className="input"
-          autoFocus
+          autoFocus={autoFocus}
           placeholder={placeholder}
           value={q}
           onChange={(e) => {
@@ -55,6 +63,8 @@ export function FilterList<T>({
             setIdx(0);
           }}
           onKeyDown={(e) => {
+            onKeyDown?.(e, q);
+            if (e.defaultPrevented) return;
             if (e.key === "ArrowDown") {
               e.preventDefault();
               setIdx((i) => Math.min(filtered.length - 1, i + 1));
@@ -154,7 +164,7 @@ export function LabelPicker({
   const [open, setOpen] = useState(false);
   const create = async (name: string) => {
     try {
-      const l = await api.labels.create(name);
+      const l = await createLabel(name);
       invalidate("labels");
       onToggle(l.id, true);
     } catch (e) {
@@ -172,7 +182,7 @@ export function LabelPicker({
         emptyCreate={(q) => void create(q)}
         render={(l) => (
           <>
-            <Tag size={14} />
+            <LabelDot label={l} />
             <span className="truncate grow">{l.name}</span>
             {value.includes(l.id) && <Check size={14} className="menu__check" />}
           </>

@@ -19,7 +19,10 @@ export function inversePatch(prev: Task, patch: TaskPatch, spawned: boolean): Ta
   const inv: TaskPatch = {};
   if (patch.title !== undefined) inv.title = prev.title;
   if (patch.description !== undefined) inv.description = prev.description;
-  if (patch.status !== undefined || patch.columnId !== undefined) inv.status = prev.status;
+  if (patch.status !== undefined || patch.columnId !== undefined || patch.resolution !== undefined) {
+    inv.status = prev.status;
+    inv.resolution = prev.resolution ?? null;
+  }
   if (patch.priority !== undefined) inv.priority = prev.priority;
   if (patch.projectId !== undefined || patch.columnId !== undefined) {
     inv.projectId = prev.projectId;
@@ -72,11 +75,19 @@ interface UpdateOpts {
   refreshDelay?: number;
 }
 
+/** Says which waiting tasks closing a blocker reopened. */
+function announceUnblocked(results: TaskUpdateResult[]) {
+  const freed = results.flatMap((r) => r.unblocked ?? []);
+  if (freed.length === 1) toast(`Unblocked “${freed[0].title}”`);
+  else if (freed.length > 1) toast(`Unblocked ${freed.length} tasks`);
+}
+
 export async function updateTask(id: string, patch: TaskPatch, opts: UpdateOpts = {}): Promise<TaskUpdateResult | null> {
   const rollback = optimisticPatch([id], patch);
   try {
     const res = await api.tasks.update(id, patch);
     if (res.task.issue) scheduleIssuePush(id);
+    announceUnblocked([res]);
     const refresh = () => invalidateTasks();
     if (opts.refreshDelay) window.setTimeout(refresh, opts.refreshDelay);
     else refresh();
@@ -179,6 +190,7 @@ export async function updateTasks(ids: string[], patch: TaskPatch, label?: strin
   try {
     const results = await api.tasks.updateMany(ids, patch);
     for (const r of results) if (r.task.issue) scheduleIssuePush(r.task.id);
+    announceUnblocked(results);
     invalidateTasks();
     if (label) {
       pushUndo(label, async () => {

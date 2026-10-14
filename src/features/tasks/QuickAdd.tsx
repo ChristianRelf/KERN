@@ -1,10 +1,10 @@
 import { CalendarDays, Clock, Flag, FolderKanban, Plus, Repeat, Tag } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import type { TaskInput } from "@/lib/types";
+import type { Label, TaskInput } from "@/lib/types";
 import { useLabels, useProjects } from "@/hooks/data";
 import { parseQuickTask, type ParsedTask } from "./parse";
 import { createTask } from "./actions";
-import { api } from "@/lib/ipc";
+import { createLabel } from "./labels";
 import { invalidate } from "@/lib/query";
 import { formatDue, formatTime } from "@/lib/dates";
 import { PRIORITY_LABELS } from "./meta";
@@ -13,11 +13,9 @@ import { getSetting } from "@/stores/settings";
 
 export async function resolveLabelIds(names: string[]): Promise<string[]> {
   if (!names.length) return [];
-  const ids: string[] = [];
-  for (const n of names) {
-    const l = await api.labels.create(n); // returns the existing label if present
-    ids.push(l.id);
-  }
+  const made: Label[] = [];
+  for (const n of names) made.push(await createLabel(n, made)); // returns the existing label if present
+  const ids = made.map((l) => l.id);
   invalidate("labels");
   return ids;
 }

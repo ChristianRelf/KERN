@@ -549,3 +549,121 @@
   font-size: var(--fs-sm);
   color: var(--text-2);
 }
+
+/* ---------- Relations */
+.relation-group {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  padding: 6px 6px 2px;
+}
+.relation-row[data-done="true"] button {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+.relation-row .icon-btn {
+  visibility: hidden;
+}
+.relation-row:hover .icon-btn,
+.relation-row:focus-within .icon-btn {
+  visibility: visible;
+}
+
+/* ---------- Description editor */
+.desc-editor {
+  padding: 6px 8px;
+  margin: 0 -8px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  cursor: text;
+  transition: border-color var(--t-hover) var(--ease), background-color var(--t-hover) var(--ease);
+}
+.desc-editor:hover {
+  border-color: var(--border);
+}
+.desc-editor:focus-within {
+  border-color: var(--border-strong);
+  background: var(--bg-sunken);
+}
+.desc-editor .prose {
+  min-height: 72px;
+}
+
+/* ---------- Label colours */
+.label-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.label-chip {
+  gap: 5px;
+}
+.label-dot-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-xs);
+}
+.label-dot-btn:hover {
+  background: var(--hover);
+}
+.label-swatches {
+  display: grid;
+  grid-template-columns: repeat(6, 20px);
+  gap: 6px;
+}
+.label-swatches .swatch {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---------- Display options */
+.display-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 290px;
+  font-size: var(--fs-sm);
+}
+.display-menu__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+  color: var(--text-2);
+}
+.display-menu__sep {
+  height: 1px;
+  background: var(--border);
+  margin: 2px -12px;
+}
+.display-menu__label {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+.display-menu__props {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.display-menu__props .chip-btn {
+  height: 24px;
+  padding: 0 8px;
+  color: var(--text-3);
+  border: 1px solid var(--border);
+  background: transparent;
+}
+.display-menu__props .chip-btn[data-active="true"] {
+  color: var(--text);
+  background: var(--hover-strong);
+  border-color: transparent;
+}
+
+/* Sub-group headers sit under their group. */
+.task-group-head[data-level="1"] {
+  height: 26px;
+  padding-left: 28px;
+  font-size: var(--fs-xs);
+}

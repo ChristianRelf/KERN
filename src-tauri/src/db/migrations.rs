@@ -3,7 +3,7 @@
 //! interrupted migration rolls back cleanly; additionally a full database
 //! copy is taken before migrating an existing database (see `db::open`).
 
-pub const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4];
+pub const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5];
 
 const MIGRATION_1: &str = r#"
 CREATE TABLE settings (
@@ -807,4 +807,22 @@ CREATE VIRTUAL TABLE file_fts USING fts5(
   tokenize = 'unicode61 remove_diacritics 2',
   prefix = '2 3'
 );
+"#;
+
+const MIGRATION_5: &str = r#"
+-- How a completed task was closed: NULL means done; 'cancelled' and
+-- 'duplicate' close it without counting it as accomplished.
+ALTER TABLE tasks ADD COLUMN resolution TEXT;
+
+-- Relations between tasks. One relation per ordered pair: 'blocks' and
+-- 'duplicate' read "task_id blocks / duplicates related_id"; 'related' is
+-- symmetric.
+CREATE TABLE task_relations (
+  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  related_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('blocks', 'related', 'duplicate')),
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (task_id, related_id)
+);
+CREATE INDEX idx_task_relations_related ON task_relations(related_id);
 "#;

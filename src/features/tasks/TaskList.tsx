@@ -16,7 +16,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS as DndCSS } from "@dnd-kit/utilities";
 import { ContextMenu as CM } from "radix-ui";
 import { ChevronDown, type LucideIcon } from "lucide-react";
-import type { Task, TaskInput } from "@/lib/types";
+import type { Task, TaskInput, TaskMeta } from "@/lib/types";
 import { useLabelMap, useLabels, useProjectMap, useProjects } from "@/hooks/data";
 import { useSetting } from "@/stores/settings";
 import { useUi } from "@/stores/ui";
@@ -39,14 +39,23 @@ export interface TaskSection {
   addDefaults?: Partial<TaskInput>;
   collapsible?: boolean;
   actions?: ReactNode;
+  /** Colour of a dot before the title (label groups). */
+  color?: string;
+  /** Nesting depth of the header (1 = a sub-group). */
+  level?: number;
+  /** The group this sub-group belongs to; hidden while that is collapsed. */
+  parentKey?: string;
+  /** Count shown in the header when it differs from `tasks` (a parent group). */
+  count?: number;
 }
 
-export function useRowContext(opts: { hideProject?: boolean } = {}): RowContext {
+export function useRowContext(opts: { hideProject?: boolean; meta?: Partial<TaskMeta> } = {}): RowContext {
   const { data: projects } = useProjects();
   const { data: labels } = useLabels();
   const projectMap = useProjectMap();
   const labelMap = useLabelMap();
-  const meta = useSetting("appearance.taskMeta");
+  const globalMeta = useSetting("appearance.taskMeta");
+  const meta = useMemo(() => (opts.meta ? { ...globalMeta, ...opts.meta } : globalMeta), [globalMeta, opts.meta]);
   const expanded = useSetting("appearance.taskRowStyle") === "expanded";
   const today = useToday();
   const selection = useUi((s) => s.selectedTaskIds);
@@ -80,15 +89,18 @@ export function TaskList({
   empty,
   quickAddPosition = "bottom",
   padding = "8px 12px 80px",
+  meta,
 }: {
   sections: TaskSection[];
   sortable?: boolean;
   hideProject?: boolean;
+  /** Row properties for this list, over the Appearance settings. */
+  meta?: Partial<TaskMeta>;
   empty?: ReactNode;
   quickAddPosition?: "top" | "bottom";
   padding?: string;
 }) {
-  const ctx = useRowContext({ hideProject });
+  const ctx = useRowContext({ hideProject, meta });
   const selection = useUi((s) => s.selectedTaskIds);
   const anchor = useUi((s) => s.selectionAnchor);
   const setSelection = useUi((s) => s.setSelection);
@@ -118,6 +130,7 @@ export function TaskList({
   const rows: FlatRow[] = useMemo(() => {
     const out: FlatRow[] = [];
     for (const s of ordered) {
+      if (s.parentKey && collapsed[s.parentKey]) continue;
       const isCollapsed = !!collapsed[s.key];
       if (s.title) out.push({ type: "header", section: s, collapsed: isCollapsed });
       if (s.addDefaults && quickAddPosition === "top" && !isCollapsed) out.push({ type: "add", section: s });
@@ -315,7 +328,7 @@ export function TaskList({
       const Icon = r.section.icon;
       return (
         <div key={key} style={style} ref={measure} data-index={typeof key === "number" ? key : undefined}>
-          <div className="task-group-head">
+          <div className="task-group-head" data-level={r.section.level || undefined}>
             {r.section.collapsible !== false && (
               <button
                 type="button"
@@ -326,16 +339,18 @@ export function TaskList({
               >
                 <ChevronDown size={14} style={{ transform: r.collapsed ? "rotate(-90deg)" : undefined, transition: "transform var(--t-hover)" }} />
                 {Icon && <Icon />}
+                {r.section.color && <span className="label-dot" style={{ width: 8, height: 8, background: r.section.color }} />}
                 <span>{r.section.title}</span>
               </button>
             )}
             {r.section.collapsible === false && (
               <>
                 {Icon && <Icon />}
+                {r.section.color && <span className="label-dot" style={{ width: 8, height: 8, background: r.section.color }} />}
                 <span>{r.section.title}</span>
               </>
             )}
-            <span className="count">{r.section.tasks.length}</span>
+            <span className="count">{r.section.count ?? r.section.tasks.length}</span>
             {r.section.actions && <div className="task-group-head__actions">{r.section.actions}</div>}
           </div>
         </div>

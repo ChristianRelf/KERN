@@ -1,5 +1,5 @@
 import { memo, type CSSProperties } from "react";
-import { CalendarDays, ClockAlert, Ellipsis, GripVertical, ListChecks, Paperclip, Pin, Repeat, Timer } from "lucide-react";
+import { Ban, CalendarDays, ClockAlert, Ellipsis, GripVertical, ListChecks, Paperclip, Pin, Repeat, Timer } from "lucide-react";
 import type { Label, Project, Task } from "@/lib/types";
 import { TaskCheck, TaskTitle } from "@/components/ui/Controls";
 import { IconButton } from "@/components/ui/Button";
@@ -10,6 +10,7 @@ import { GithubMark } from "@/features/github/shared";
 import { ProjectGlyph } from "@/features/projects/ProjectGlyph";
 import { DuePopover } from "./pickers";
 import { taskMenu } from "./menu";
+import { LabelChip } from "./labels";
 import { toggleComplete, updateTask } from "./actions";
 import type { Settings } from "@/features/settings/schema";
 
@@ -82,7 +83,7 @@ function TaskRowInner({
           <GripVertical size={12} />
         </span>
       )}
-      <TaskCheck checked={done} onToggle={() => void toggleComplete(t)} priority={t.priority} blocked={t.status === "blocked"} />
+      <TaskCheck checked={done} onToggle={() => void toggleComplete(t)} priority={t.priority} blocked={t.status === "blocked" || !!t.blockedBy} cancelled={!!t.resolution} />
       <div className="task-row__main">
         <div className="task-row__line">
           <span className="task-row__title">
@@ -90,10 +91,14 @@ function TaskRowInner({
           </span>
           {t.pinned && <Pin size={12} className="faint" aria-label="Pinned" />}
           <div className="task-row__meta">
-            {labels.slice(0, 2).map((l) => (
-              <span key={l.id} className="chip">
-                {l.name}
+            {!!t.blockedBy && !done && (
+              <span title={`Blocked by ${t.blockedBy} open ${t.blockedBy === 1 ? "task" : "tasks"}`} aria-label={`Blocked by ${t.blockedBy}`}>
+                <Ban />
+                {t.blockedBy}
               </span>
+            )}
+            {labels.slice(0, 2).map((l) => (
+              <LabelChip key={l.id} label={l} />
             ))}
             {labels.length > 2 && <span className="chip">+{labels.length - 2}</span>}
             {ctx.meta.subtasks && t.subtaskCount > 0 && (

@@ -1,6 +1,7 @@
 import { Pencil, Tag, Trash } from "lucide-react";
 import { useLabels, useTasks } from "@/hooks/data";
 import { TaskList } from "./TaskList";
+import { LabelColorPicker, labelColor } from "./labels";
 import { IconButton } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/Controls";
 import { confirm, prompt } from "@/components/ui/Dialog";
@@ -18,11 +19,12 @@ export function LabelPage({ labelId }: { labelId: string }) {
     <div className="page">
       <header className="page-header">
         <h1 className="page-header__title">
-          <Tag /> {label?.name ?? "Label"}
+          <Tag style={{ color: labelColor(label) }} /> {label?.name ?? "Label"}
         </h1>
         <div className="page-header__actions">
           {label && (
             <>
+              <LabelColorPicker label={label} size={12} />
               <IconButton
                 icon={Pencil}
                 label="Rename label"

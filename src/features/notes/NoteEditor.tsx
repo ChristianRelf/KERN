@@ -22,14 +22,16 @@ import {
   SquareCode,
   Strikethrough,
   Plus,
+  Pilcrow,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { IconButton } from "@/components/ui/Button";
 import { Dropdown } from "@/components/ui/Menu";
 import { prompt } from "@/components/ui/Dialog";
 import { api } from "@/lib/ipc";
 
-function getMarkdown(editor: Editor): string {
+export function getMarkdown(editor: Editor): string {
   return (editor.storage as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown();
 }
 
@@ -55,28 +57,123 @@ export function insertItems(editor: Editor) {
   ];
 }
 
+// ------------------------------------------------------------ slash menu
+
+interface SlashState {
+  /** Position of the "/" that opened the menu. */
+  from: number;
+  query: string;
+  index: number;
+  left: number;
+  top: number;
+  /** Open upwards when there's no room below. */
+  up: boolean;
+}
+
+function slashItems(editor: Editor, query: string) {
+  const all = [
+    { label: "Text", icon: Pilcrow, shortcut: "", onSelect: () => editor.chain().focus().setParagraph().run() },
+    ...insertItems(editor),
+  ];
+  const q = query.toLowerCase().replace(/\s/g, "");
+  return q ? all.filter((i) => i.label.toLowerCase().replace(/\s/g, "").includes(q)) : all;
+}
+
+/** Finds a "/command" being typed just before the cursor. */
+function detectSlash(editor: Editor): SlashState | null {
+  const { selection } = editor.state;
+  if (!selection.empty) return null;
+  const $from = selection.$from;
+  if ($from.parent.type.name === "codeBlock") return null;
+  const before = $from.parent.textBetween(0, $from.parentOffset, undefined, "￼");
+  const m = /(?:^|\s)\/([a-z0-9]{0,20})$/i.exec(before);
+  if (!m) return null;
+  const from = selection.from - m[1].length - 1;
+  const c = editor.view.coordsAtPos(from);
+  const up = window.innerHeight - c.bottom < 300;
+  return { from, query: m[1], index: 0, left: c.left, top: up ? c.top - 4 : c.bottom + 4, up };
+}
+
+function SlashMenu({ editor, state, onPick, onHover }: { editor: Editor; state: SlashState; onPick: (i: number) => void; onHover: (i: number) => void }) {
+  const items = slashItems(editor, state.query);
+  if (!items.length) return null;
+  return createPortal(
+    <div
+      className="menu slash-menu"
+      role="listbox"
+      aria-label="Insert block"
+      style={{ position: "fixed", left: state.left, ...(state.up ? { bottom: window.innerHeight - state.top } : { top: state.top }) }}
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      {items.map((it, i) => {
+        const Icon = it.icon;
+        return (
+          <div
+            key={it.label}
+            className="menu__item"
+            role="option"
+            aria-selected={i === state.index}
+            data-highlighted={i === state.index ? "" : undefined}
+            onMouseEnter={() => onHover(i)}
+            onClick={() => onPick(i)}
+          >
+            <Icon strokeWidth={1.75} />
+            <span className="truncate grow">{it.label}</span>
+            {it.shortcut && <span className="menu__hint">{it.shortcut.trim()}</span>}
+          </div>
+        );
+      })}
+    </div>,
+    document.body,
+  );
+}
+
 /**
  * Markdown-backed rich text editor. Content is stored as Markdown (portable);
- * typing Markdown syntax formats inline. Changes are reported via onChange
- * (debounced by the caller) and flushed on unmount.
+ * typing Markdown syntax formats inline, and "/" opens a block menu. Changes
+ * are reported via onChange (debounced by the caller) and flushed on unmount.
  */
 export function NoteEditor({
   initial,
   onChange,
   onFlush,
-  placeholder = "Start writing… Markdown shortcuts work: #, -, [ ], ```, **bold**",
+  onBlur,
+  placeholder = "Start writing… Type / for blocks, or use Markdown: #, -, [ ], ```, **bold**",
   autoFocus,
   onEditor,
+  compact,
 }: {
   initial: string;
   onChange: (markdown: string) => void;
   onFlush?: () => void;
+  onBlur?: () => void;
   placeholder?: string;
   autoFocus?: boolean;
   onEditor?: (e: Editor | null) => void;
+  /** Smaller type and no minimum height (task descriptions). */
+  compact?: boolean;
 }) {
   const changeRef = useRef(onChange);
   changeRef.current = onChange;
+  const blurRef = useRef(onBlur);
+  blurRef.current = onBlur;
+  const [slash, setSlash] = useState<SlashState | null>(null);
+  const slashRef = useRef(slash);
+  slashRef.current = slash;
+  // The "/" whose menu was dismissed with Escape stays closed.
+  const dismissedAt = useRef<number | null>(null);
+  const editorRef = useRef<Editor | null>(null);
+
+  const pick = (e: Editor, i: number) => {
+    const s = slashRef.current;
+    if (!s) return;
+    const item = slashItems(e, s.query)[i];
+    setSlash(null);
+    if (!item) return;
+    e.chain().focus().deleteRange({ from: s.from, to: e.state.selection.from }).run();
+    item.onSelect();
+  };
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
@@ -90,7 +187,29 @@ export function NoteEditor({
     content: initial,
     autofocus: autoFocus ? "end" : false,
     editorProps: {
-      attributes: { class: "prose", spellcheck: "true" },
+      attributes: { class: compact ? "prose prose--compact" : "prose", spellcheck: "true" },
+      handleKeyDown: (_view, event) => {
+        const s = slashRef.current;
+        const ed = editorRef.current;
+        if (!s || !ed) return false;
+        const count = slashItems(ed, s.query).length;
+        if (!count) return false;
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          const d = event.key === "ArrowDown" ? 1 : -1;
+          setSlash({ ...s, index: (s.index + d + count) % count });
+          return true;
+        }
+        if (event.key === "Enter" || event.key === "Tab") {
+          pick(ed, s.index);
+          return true;
+        }
+        if (event.key === "Escape") {
+          dismissedAt.current = s.from;
+          setSlash(null);
+          return true;
+        }
+        return false;
+      },
       handleClick: (_view, _pos, event) => {
         const a = (event.target as HTMLElement).closest("a");
         if (a && (event.ctrlKey || event.metaKey)) {
@@ -101,7 +220,36 @@ export function NoteEditor({
       },
     },
     onUpdate: ({ editor: e }) => changeRef.current(getMarkdown(e)),
+    onTransaction: ({ editor: e }) => {
+      const next = detectSlash(e);
+      // Once the dismissed "/" is gone, a new one may open the menu again.
+      if (!next) dismissedAt.current = null;
+      if (!next || next.from === dismissedAt.current) {
+        if (slashRef.current) setSlash(null);
+        return;
+      }
+      const prev = slashRef.current;
+      setSlash(prev && prev.from === next.from ? { ...next, index: prev.query === next.query ? prev.index : 0 } : next);
+    },
+    onBlur: () => {
+      setSlash(null);
+      blurRef.current?.();
+    },
   });
+  editorRef.current = editor;
+
+  // A fixed menu can't follow scrolling; close it instead.
+  const slashOpen = !!slash;
+  useEffect(() => {
+    if (!slashOpen) return;
+    const close = () => setSlash(null);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [slashOpen]);
 
   useEffect(() => {
     onEditor?.(editor);
@@ -125,6 +273,7 @@ export function NoteEditor({
         </div>
       </BubbleMenu>
       <EditorContent editor={editor} />
+      {slash && <SlashMenu editor={editor} state={slash} onPick={(i) => pick(editor, i)} onHover={(i) => setSlash({ ...slash, index: i })} />}
     </>
   );
 }

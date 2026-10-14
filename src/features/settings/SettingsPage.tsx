@@ -60,6 +60,7 @@ import { switchMode } from "@/app/mode";
 import { AboutSection } from "./AboutSection";
 import { PluginsSection } from "@/features/plugins/PluginsSection";
 import { developerGroups } from "./DeveloperSection";
+import { LabelColorPicker } from "@/features/tasks/labels";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: typeof Settings }[] = [
   { id: "general", label: "General", icon: Settings },
@@ -241,7 +242,8 @@ function LabelsEditor() {
   return (
     <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
       {labels.map((l) => (
-        <span key={l.id} className="chip chip--outline" style={{ height: 26, gap: 2, paddingRight: 2 }}>
+        <span key={l.id} className="chip chip--outline" style={{ height: 26, gap: 2, paddingLeft: 2, paddingRight: 2 }}>
+          <LabelColorPicker label={l} />
           <button type="button" onClick={() => navigate({ name: "label", id: l.id })}>{l.name}</button>
           <span className="faint">{l.taskCount}</span>
           <IconButton
