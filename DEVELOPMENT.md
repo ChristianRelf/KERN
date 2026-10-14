@@ -39,8 +39,11 @@ instance runs alongside the normal one and uses its own credential-store namespa
 Kern updates itself: when a newer release exists, the sidebar's *Update
 available* button (or *Update to …* in Settings → About) swaps the window for a
 minimal update screen, downloads the signed installer (up to three attempts;
-if all fail it returns to the running version), and installs it passively. On
-the first start of the new version a *What's new* dialog shows that release's
+if all fail it returns to the running version), and installs it. Copies
+installed with the `.exe` update silently, with Kern's update screen as the only
+UI; `.msi` copies are per-machine, so their installer runs passively and Windows
+asks for admin approval (see `context()` in `src-tauri/src/lib.rs`). On the
+first start of the new version a *What's new* dialog shows that release's
 notes, read from its GitHub release (or from `latest.json` when offline). The
 code is in `src/features/updates/`.
 

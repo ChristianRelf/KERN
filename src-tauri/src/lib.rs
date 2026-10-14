@@ -18,6 +18,20 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
+/// The app context, with the updater's install mode chosen for how this copy
+/// was installed: the per-user .exe installer runs with no window of its own
+/// (Kern's update screen is the only UI); an .msi install is per-machine, so
+/// it stays passive, which lets Windows ask for admin approval.
+fn context() -> tauri::Context {
+    let mut ctx = tauri::generate_context!();
+    if matches!(tauri::utils::platform::bundle_type(), Some(tauri::utils::config::BundleType::Nsis)) {
+        if let Some(windows) = ctx.config_mut().plugins.0.get_mut("updater").and_then(|u| u.get_mut("windows")).and_then(|w| w.as_object_mut()) {
+            windows.insert("installMode".into(), "quiet".into());
+        }
+    }
+    ctx
+}
+
 pub fn run() {
     let mut builder = tauri::Builder::default();
     // An isolated test/development instance (KERN_DATA_DIR) runs alongside
@@ -467,7 +481,7 @@ pub fn run() {
             updates::check_for_update,
             updates::release_notes,
         ])
-        .build(tauri::generate_context!())
+        .build(context())
         .expect("error while building Kern")
         .run(|app, event| {
             // Terminal processes never outlive the app.
