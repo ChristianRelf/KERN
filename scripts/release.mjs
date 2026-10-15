@@ -11,6 +11,13 @@
 //   node scripts/release.mjs --notes notes.md --publish  ...then publish
 //   add --security for a security release: installs update to it without
 //   asking (it marks the notes with <!-- kern:security -->)
+//   add --linux release/linux to include the Linux bundles in the release
+//
+// Linux bundles can't be built here: they're made in the Ubuntu container
+// under scripts/linux (so the glibc baseline stays low) and copied to a
+// folder, which --linux then points at. A signed AppImage joins latest.json
+// as the linux-x86_64 target; an unsigned one is attached as a download
+// only.
 //
 // The updater signing key is read from TAURI_SIGNING_PRIVATE_KEY, or the file
 // at KERN_UPDATER_KEY, or ~/.tauri/kern-updater.key. Keep that file backed
@@ -21,7 +28,7 @@
 // can't be created against the wrong commit.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -107,6 +114,36 @@ const platform = (file) => {
   const name = file.split(/[\\/]/).pop();
   return { signature: readFileSync(`${file}.sig`, "utf8").trim(), url: `https://github.com/${REPO}/releases/download/v${version}/${name}` };
 };
+
+// ------------------------------------------------------------ linux bundles
+
+const base = (f) => f.split(/[\\/]/).pop();
+const linuxDir = option("--linux");
+let linuxFiles = [];
+let linuxAppImage = null;
+if (linuxDir) {
+  if (!existsSync(linuxDir)) fail(`No Linux bundles at ${linuxDir} - build them first (see scripts/linux/build.sh).`);
+  const names = readdirSync(linuxDir);
+  const pick = (ext) => names.filter((n) => n.endsWith(ext)).map((n) => join(linuxDir, n));
+  const found = { ".deb": pick(".deb"), ".rpm": pick(".rpm"), ".AppImage": pick(".AppImage") };
+  for (const [ext, list] of Object.entries(found)) {
+    if (!list.length) fail(`No ${ext} in ${linuxDir} - the container build didn't finish.`);
+    if (list.length > 1) fail(`More than one ${ext} in ${linuxDir} (${list.map(base).join(", ")}). Empty it and rebuild.`);
+  }
+  linuxFiles = [found[".deb"][0], found[".rpm"][0], found[".AppImage"][0]];
+  // Stale bundles from an earlier version would otherwise be published as
+  // though they were this one.
+  for (const f of linuxFiles) {
+    if (!base(f).includes(version)) fail(`${base(f)} isn't version ${version}. Empty ${linuxDir} and rebuild.`);
+  }
+  linuxAppImage = found[".AppImage"][0];
+  if (!existsSync(`${linuxAppImage}.sig`)) {
+    console.log(`\n! ${base(linuxAppImage)} has no .sig, so Linux installs won't update themselves.`);
+    console.log("  Rebuild with TAURI_SIGNING_PRIVATE_KEY set in the container to sign it.");
+    linuxAppImage = null;
+  }
+  console.log(`\n✓ Linux bundles: ${linuxFiles.map(base).join(", ")}`);
+}
 // The oldest version without known security issues. Installs older than it
 // must update (see check_for_update). It's carried forward from the release
 // being replaced, so skipping a security release doesn't make it optional;
@@ -135,6 +172,9 @@ const manifest = {
     "windows-x86_64": platform(artifacts.nsis),
     "windows-x86_64-nsis": platform(artifacts.nsis),
     "windows-x86_64-msi": platform(artifacts.msi),
+    // Only the AppImage can update itself; .deb and .rpm are the package
+    // manager's business, so they're downloads only.
+    ...(linuxAppImage ? { "linux-x86_64": platform(linuxAppImage), "linux-x86_64-appimage": platform(linuxAppImage) } : {}),
   },
 };
 const manifestPath = join(bundle, "latest.json");
@@ -155,6 +195,6 @@ run("gh", [
   "--repo", REPO,
   "--title", q(`Kern ${version}`),
   "--notes-file", q(publishedNotes),
-  ...[artifacts.nsis, artifacts.msi, manifestPath].map(q),
+  ...[artifacts.nsis, artifacts.msi, ...linuxFiles, manifestPath].map(q),
 ]);
 console.log(`\n✓ Released https://github.com/${REPO}/releases/tag/${tag}`);
