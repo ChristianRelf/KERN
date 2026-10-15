@@ -163,16 +163,22 @@ pub fn board_data(conn: &Connection, board_id: &str) -> AppResult<BoardData> {
     Ok(BoardData { board, columns, tasks })
 }
 
+pub fn list_boards(conn: &Connection, project_id: &str) -> AppResult<Vec<Board>> {
+    list_boards_of(conn, Some(project_id))
+}
+
+fn list_boards_of(conn: &Connection, project_id: Option<&str>) -> AppResult<Vec<Board>> {
+    let mut stmt = conn.prepare(
+        "SELECT b.id FROM boards b JOIN projects p ON p.id = b.project_id
+         WHERE p.deleted_at IS NULL AND (?1 IS NULL OR b.project_id = ?1) ORDER BY p.sort_order, b.sort_order",
+    )?;
+    let ids: Vec<String> = stmt.query_map([project_id], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    ids.iter().map(|id| get_board(conn, id)).collect()
+}
+
 #[tauri::command]
 pub fn boards_list(state: State<AppState>, project_id: Option<String>) -> AppResult<Vec<Board>> {
-    state.with(|c| {
-        let mut stmt = c.prepare(
-            "SELECT b.id FROM boards b JOIN projects p ON p.id = b.project_id
-             WHERE p.deleted_at IS NULL AND (?1 IS NULL OR b.project_id = ?1) ORDER BY p.sort_order, b.sort_order",
-        )?;
-        let ids: Vec<String> = stmt.query_map([project_id], |r| r.get(0))?.collect::<Result<_, _>>()?;
-        ids.iter().map(|id| get_board(c, id)).collect()
-    })
+    state.with(|c| list_boards_of(c, project_id.as_deref()))
 }
 
 #[tauri::command]

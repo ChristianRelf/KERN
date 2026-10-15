@@ -1,4 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
+import { api, isTauri } from "./ipc";
 import type { BoardData, Task, TaskPatch } from "./types";
 
 export const queryClient = new QueryClient({
@@ -65,16 +66,34 @@ export type Domain =
   | "health"
   | "capabilities"
   | "pty"
-  | "relations";
+  | "relations"
+  | "comments"
+  | "templates"
+  | "habits"
+  | "calendar"
+  | "review"
+  | "backlinks"
+  | "estimates"
+  | "shares";
 
 export function invalidate(...domains: Domain[]) {
   for (const d of domains) void queryClient.invalidateQueries({ queryKey: [d] });
+  if (domains.includes("tasks")) refreshTraySoon();
 }
 
-export const TASK_DOMAINS: Domain[] = ["tasks", "task", "board", "projects", "project", "rundown", "stats", "activity", "labels", "milestones", "health", "relations"];
+export const TASK_DOMAINS: Domain[] = ["tasks", "task", "board", "projects", "project", "rundown", "stats", "activity", "labels", "milestones", "health", "relations", "review", "estimates"];
+
+let trayTimer: number | undefined;
+/** The tray menu lists today's tasks; it's rebuilt (debounced) after task changes. */
+function refreshTraySoon() {
+  window.clearTimeout(trayTimer);
+  if (!isTauri) return;
+  trayTimer = window.setTimeout(() => void api.app.trayRefresh().catch(() => undefined), 800);
+}
 
 export function invalidateTasks() {
   invalidate(...TASK_DOMAINS);
+  refreshTraySoon();
 }
 
 /** Applies a patch to a task object the way the backend would (best effort). */
@@ -100,6 +119,8 @@ export function applyPatch(t: Task, p: TaskPatch): Task {
     "labelIds",
     "milestoneId",
     "resolution",
+    "planDate",
+    "planTime",
   ];
   for (const k of keys) {
     if (p[k] !== undefined) (next as unknown as Record<string, unknown>)[k] = p[k];
@@ -112,6 +133,7 @@ export function applyPatch(t: Task, p: TaskPatch): Task {
   if (p.addLabelIds) next.labelIds = Array.from(new Set([...next.labelIds, ...p.addLabelIds]));
   if (p.removeLabelIds) next.labelIds = next.labelIds.filter((l) => !p.removeLabelIds!.includes(l));
   if (p.dueDate === null) next.dueTime = null;
+  if (p.planDate === null) next.planTime = null;
   return next;
 }
 

@@ -266,13 +266,87 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
     }
 }
 
+/// Today's open tasks for the tray menu: (id, title), overdue and due today
+/// first, then time-blocked for today. At most 8.
+fn tray_tasks(app: &AppHandle) -> Vec<(String, String)> {
+    let state = app.state::<AppState>();
+    state
+        .with(|c| {
+            if !settings::get_or(c, "general.trayTasks", true) {
+                return Ok(vec![]);
+            }
+            let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+            let mut stmt = c.prepare(
+                "SELECT id, title FROM tasks WHERE deleted_at IS NULL AND archived_at IS NULL AND status != 'completed' AND parent_id IS NULL
+                   AND (due_date <= ?1 OR plan_date = ?1)
+                 ORDER BY (due_date < ?1) DESC, priority DESC, coalesce(plan_time, due_time, '99'), sort_order LIMIT 8",
+            )?;
+            let rows = stmt.query_map([today], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+            Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        })
+        .unwrap_or_default()
+}
+
+fn tray_signature(today: &[(String, String)]) -> String {
+    today.iter().map(|(id, t)| format!("{id}\u{1f}{t}")).collect::<Vec<_>>().join("\u{1e}")
+}
+
+fn tray_menu(app: &AppHandle, today: &[(String, String)]) -> tauri::Result<Menu<tauri::Wry>> {
+    let menu = Menu::new(app)?;
+    if !today.is_empty() {
+        menu.append(&MenuItem::with_id(app, "today-label", "Today - click to complete", false, None::<&str>)?)?;
+        for (id, title) in today {
+            let short: String = title.chars().take(48).collect();
+            let label = if title.chars().count() > 48 { format!("○  {short}…") } else { format!("○  {short}") };
+            menu.append(&MenuItem::with_id(app, format!("task:{id}"), label, true, None::<&str>)?)?;
+        }
+        menu.append(&PredefinedMenuItem::separator(app)?)?;
+    }
+    menu.append(&MenuItem::with_id(app, "open", "Open Kern", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, "lite", "Open Kern Lite", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(app, "capture", "Quick capture", true, None::<&str>)?)?;
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    menu.append(&MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?)?;
+    Ok(menu)
+}
+
+static TRAY_SIGNATURE: Mutex<Option<String>> = Mutex::new(None);
+
+/// Rebuilds the tray menu when today's tasks changed (cheap to call often).
+pub fn refresh_tray(app: &AppHandle) {
+    let today = tray_tasks(app);
+    let sig = tray_signature(&today);
+    {
+        let mut last = TRAY_SIGNATURE.lock().unwrap_or_else(|e| e.into_inner());
+        if last.as_deref() == Some(sig.as_str()) {
+            return;
+        }
+        *last = Some(sig);
+    }
+    if let (Some(tray), Ok(menu)) = (app.tray_by_id("main"), tray_menu(app, &today)) {
+        let _ = tray.set_menu(Some(menu));
+    }
+}
+
+fn complete_from_tray(app: &AppHandle, id: &str) {
+    let state = app.state::<AppState>();
+    let done = state.with(|c| {
+        let tx = c.transaction()?;
+        let r = crate::domain::tasks::update_task(&tx, id, &crate::domain::tasks::TaskPatch { status: Some("completed".into()), ..Default::default() })?;
+        tx.commit()?;
+        Ok(r.task.title)
+    });
+    if let Ok(title) = done {
+        let _ = app.emit("kern://data-changed", ());
+        let _ = app.emit("kern://tray-completed", title);
+    }
+    refresh_tray(app);
+}
+
 pub fn create_tray(app: &tauri::App) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Open Kern", true, None::<&str>)?;
-    let lite = MenuItem::with_id(app, "lite", "Open Kern Lite", true, None::<&str>)?;
-    let capture = MenuItem::with_id(app, "capture", "Quick capture", true, None::<&str>)?;
-    let sep = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &lite, &capture, &sep, &quit])?;
+    let handle = app.handle().clone();
+    let today = tray_tasks(&handle);
+    let menu = tray_menu(&handle, &today)?;
     let mut builder = TrayIconBuilder::with_id("main")
         .tooltip("Kern")
         .menu(&menu)
@@ -295,7 +369,11 @@ pub fn create_tray(app: &tauri::App) -> tauri::Result<()> {
                 save_window_state(app);
                 app.exit(0);
             }
-            _ => {}
+            other => {
+                if let Some(id) = other.strip_prefix("task:") {
+                    complete_from_tray(app, id);
+                }
+            }
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
@@ -306,6 +384,7 @@ pub fn create_tray(app: &tauri::App) -> tauri::Result<()> {
         builder = builder.icon(icon.clone());
     }
     let tray = builder.build(app)?;
+    *TRAY_SIGNATURE.lock().unwrap_or_else(|e| e.into_inner()) = Some(tray_signature(&today));
     let visible = app
         .state::<AppState>()
         .with(|c| Ok(settings::get_or(c, "general.showTray", true)))
@@ -322,6 +401,12 @@ pub struct ModeInfo {
     pub mode: Mode,
     /// Show the "Kern or Kern Lite?" choice before anything else.
     pub ask: bool,
+}
+
+/// Called after task changes so the tray's Today list stays current.
+#[tauri::command]
+pub fn tray_refresh(app: AppHandle) {
+    refresh_tray(&app);
 }
 
 #[tauri::command]

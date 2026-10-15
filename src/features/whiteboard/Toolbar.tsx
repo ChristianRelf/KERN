@@ -213,7 +213,7 @@ export function TopBar({
   onFit: () => void;
   showMap: boolean;
   onToggleMap: () => void;
-  onExport: (kind: "png" | "svg" | "json") => void;
+  onExport: (kind: "png" | "svg" | "json" | "share") => void;
   onImport: () => void;
 }) {
   return (
@@ -228,6 +228,8 @@ export function TopBar({
       <Dropdown
         align="end"
         items={[
+          { label: "Share link…", icon: Globe, onSelect: () => onExport("share") },
+          { type: "separator" },
           { label: "Export PNG…", icon: Download, onSelect: () => onExport("png") },
           { label: "Export SVG…", icon: Download, onSelect: () => onExport("svg") },
           { label: "Export JSON…", icon: Download, onSelect: () => onExport("json") },

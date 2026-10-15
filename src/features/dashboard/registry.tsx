@@ -18,7 +18,11 @@ import {
   Flag,
   RotateCcw,
   Grid3x3,
+  Repeat2,
+  CalendarClock,
 } from "lucide-react";
+import { HabitsWidget } from "@/features/habits/HabitsWidget";
+import { AgendaWidget } from "@/features/planner/AgendaWidget";
 import { StorageWidget } from "@/features/storage/StorageWidget";
 import type { WidgetDef, WidgetConfig } from "./types";
 import { RundownWidget, RundownConfigForm, RundownHeader, type RundownConfig } from "./widgets/RundownWidget";
@@ -280,6 +284,28 @@ export const WIDGETS: WidgetDef[] = [
 
 /** Opt-in widgets: not on any default layout. */
 export const EXTRA_WIDGETS: WidgetDef[] = [
+  def({
+    type: "agenda",
+    name: "Agenda",
+    description: "Today's calendar events and time-blocked tasks, in order.",
+    icon: CalendarClock,
+    defaultConfig: {},
+    defaultSize: { w: 4, h: 6 },
+    minSize: { w: 3, h: 3 },
+    Component: AgendaWidget,
+    single: true,
+  }),
+  def({
+    type: "habits",
+    name: "Habits",
+    description: "Today's habits, ticked off in one click, with streaks.",
+    icon: Repeat2,
+    defaultConfig: {},
+    defaultSize: { w: 4, h: 5 },
+    minSize: { w: 2, h: 3 },
+    Component: HabitsWidget,
+    single: true,
+  }),
   def({
     type: "resume",
     name: "Resume Work",

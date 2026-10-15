@@ -1,7 +1,7 @@
 use crate::error::{invalid, AppResult};
 use crate::state::AppState;
 use crate::util::{new_id, now_ms};
-use rusqlite::params;
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use tauri::State;
 
@@ -28,6 +28,20 @@ pub fn labels_list(state: State<AppState>) -> AppResult<Vec<Label>> {
         })?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     })
+}
+
+/// The id of the label called `name` (case-insensitive), created if needed.
+pub fn ensure(conn: &Connection, name: &str, color: Option<&str>) -> AppResult<String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return invalid("Label name can't be empty.");
+    }
+    if let Some(id) = conn.query_row("SELECT id FROM labels WHERE name = ?1 COLLATE NOCASE", [name], |r| r.get::<_, String>(0)).optional()? {
+        return Ok(id);
+    }
+    let id = new_id();
+    conn.execute("INSERT INTO labels(id, name, color, created_at) VALUES (?1, ?2, ?3, ?4)", params![id, name, color, now_ms()])?;
+    Ok(id)
 }
 
 #[tauri::command]

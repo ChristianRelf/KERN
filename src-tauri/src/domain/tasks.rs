@@ -62,6 +62,13 @@ pub struct Task {
     /// Open tasks that block this one.
     #[serde(default)]
     pub blocked_by: i64,
+    /// Time block: the day it's planned for, and optionally the start time.
+    #[serde(default)]
+    pub plan_date: Option<String>,
+    #[serde(default)]
+    pub plan_time: Option<String>,
+    #[serde(default)]
+    pub comment_count: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -94,7 +101,9 @@ pub const TASK_SELECT: &str = "SELECT t.id, t.title, t.description, t.status, t.
   (SELECT group_concat(d.kind || char(31) || coalesce(d.repository_id, '') || char(31) || d.ref, char(30)) FROM task_dev_links d WHERE d.task_id = t.id),
   t.resolution,
   (SELECT count(*) FROM task_relations r JOIN tasks b ON b.id = r.task_id
-     WHERE r.related_id = t.id AND r.kind = 'blocks' AND b.status != 'completed' AND b.deleted_at IS NULL)
+     WHERE r.related_id = t.id AND r.kind = 'blocks' AND b.status != 'completed' AND b.deleted_at IS NULL),
+  t.plan_date, t.plan_time,
+  (SELECT count(*) FROM task_comments c WHERE c.task_id = t.id)
 FROM tasks t";
 
 pub fn map_task(r: &Row) -> rusqlite::Result<Task> {
@@ -139,6 +148,9 @@ pub fn map_task(r: &Row) -> rusqlite::Result<Task> {
         dev_links: r.get::<_, Option<String>>(30)?.map(|s| parse_dev_links(&s)).unwrap_or_default(),
         resolution: r.get(31)?,
         blocked_by: r.get(32)?,
+        plan_date: r.get(33)?,
+        plan_time: r.get(34)?,
+        comment_count: r.get(35)?,
     })
 }
 
@@ -188,6 +200,9 @@ pub struct TaskQuery {
     pub pinned: Option<bool>,
     pub milestone_ids: Option<Vec<String>>,
     pub no_milestone: bool,
+    /// Time-blocked within [planned_from, planned_to].
+    pub planned_from: Option<String>,
+    pub planned_to: Option<String>,
     pub limit: Option<i64>,
     /// manual | due | priority | created | updated | title | completed
     pub order: Option<String>,
@@ -266,6 +281,14 @@ pub fn query_tasks(conn: &Connection, q: &TaskQuery) -> AppResult<Vec<Task>> {
         Some(true) => sql.push_str(" AND t.due_date IS NOT NULL"),
         Some(false) => sql.push_str(" AND t.due_date IS NULL"),
         None => {}
+    }
+    if let Some(d) = &q.planned_from {
+        sql.push_str(" AND t.plan_date >= ?");
+        args.push(text(d));
+    }
+    if let Some(d) = &q.planned_to {
+        sql.push_str(" AND t.plan_date <= ?");
+        args.push(text(d));
     }
     if let Some(d) = &q.overdue_as_of {
         sql.push_str(" AND t.due_date < ? AND t.status != 'completed'");
@@ -350,6 +373,8 @@ pub struct TaskInput {
     pub sort_order: Option<f64>,
     pub board_order: Option<f64>,
     pub milestone_id: Option<String>,
+    pub plan_date: Option<String>,
+    pub plan_time: Option<String>,
 }
 
 /// A milestone may only hold tasks from its own project.
@@ -424,6 +449,7 @@ pub fn create_task(conn: &Connection, input: &TaskInput) -> AppResult<Task> {
         return invalid("Task title can't be empty.");
     }
     validate_dates(input.due_date.as_deref(), input.due_time.as_deref(), input.start_date.as_deref())?;
+    validate_dates(input.plan_date.as_deref(), input.plan_time.as_deref(), None)?;
     let mut project_id = input.project_id.clone();
     let mut status = input.status.clone().unwrap_or_else(|| "todo".into());
     if !STATUSES.contains(&status.as_str()) {
@@ -489,8 +515,8 @@ pub fn create_task(conn: &Connection, input: &TaskInput) -> AppResult<Task> {
     conn.execute(
         "INSERT INTO tasks(id, title, description, status, priority, project_id, column_id, parent_id, due_date,
            due_time, start_date, estimate_minutes, sort_order, board_order, pinned, recurrence, series_id,
-           reminder_minutes, completed_at, created_at, updated_at, milestone_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?20, ?21)",
+           reminder_minutes, completed_at, created_at, updated_at, milestone_id, plan_date, plan_time)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?20, ?21, ?22, ?23)",
         params![
             id,
             title,
@@ -512,7 +538,9 @@ pub fn create_task(conn: &Connection, input: &TaskInput) -> AppResult<Task> {
             input.reminder_minutes,
             completed_at,
             now,
-            input.milestone_id
+            input.milestone_id,
+            input.plan_date,
+            input.plan_date.as_ref().and(input.plan_time.clone())
         ],
     )?;
     if let Some(labels) = &input.label_ids {
@@ -570,6 +598,10 @@ pub struct TaskPatch {
     /// 'cancelled' | 'duplicate' | null (done); only kept on completed tasks.
     #[serde(deserialize_with = "some")]
     pub resolution: Option<Option<String>>,
+    #[serde(deserialize_with = "some")]
+    pub plan_date: Option<Option<String>>,
+    #[serde(deserialize_with = "some")]
+    pub plan_time: Option<Option<String>>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -638,6 +670,16 @@ pub fn update_task(conn: &Connection, id: &str, patch: &TaskPatch) -> AppResult<
     validate_dates(t.due_date.as_deref(), t.due_time.as_deref(), t.start_date.as_deref())?;
     if t.due_date.is_none() {
         t.due_time = None;
+    }
+    if let Some(v) = &patch.plan_date {
+        t.plan_date = v.clone();
+    }
+    if let Some(v) = &patch.plan_time {
+        t.plan_time = v.clone();
+    }
+    validate_dates(t.plan_date.as_deref(), t.plan_time.as_deref(), None)?;
+    if t.plan_date.is_none() {
+        t.plan_time = None;
     }
     if let Some(v) = patch.estimate_minutes {
         t.estimate_minutes = v;
@@ -810,6 +852,8 @@ pub fn update_task(conn: &Connection, id: &str, patch: &TaskPatch) -> AppResult<
                 sort_order: Some(t.sort_order + 0.001),
                 board_order: None,
                 milestone_id: t.milestone_id.clone(),
+                plan_date: None,
+                plan_time: None,
             };
             let mut next_task = create_task(conn, &input)?;
             let series = t.series_id.clone().unwrap_or_else(|| t.id.clone());
@@ -849,7 +893,7 @@ pub fn update_task(conn: &Connection, id: &str, patch: &TaskPatch) -> AppResult<
            parent_id = ?7, due_date = ?8, due_time = ?9, start_date = ?10, estimate_minutes = ?11,
            tracked_seconds = ?12, sort_order = ?13, board_order = ?14, pinned = ?15, recurrence = ?16,
            series_id = ?17, reminder_minutes = ?18, completed_at = ?19, archived_at = ?20, updated_at = ?21,
-           milestone_id = ?23, resolution = ?24
+           milestone_id = ?23, resolution = ?24, plan_date = ?25, plan_time = ?26
          WHERE id = ?22",
         params![
             t.title,
@@ -875,7 +919,9 @@ pub fn update_task(conn: &Connection, id: &str, patch: &TaskPatch) -> AppResult<
             now,
             id,
             t.milestone_id,
-            t.resolution
+            t.resolution,
+            t.plan_date,
+            t.plan_time
         ],
     )?;
 
@@ -970,6 +1016,8 @@ pub fn duplicate_task(conn: &Connection, id: &str, parent_override: Option<Optio
         sort_order: Some(src.sort_order + 0.0005),
         board_order: Some(src.board_order + 0.0005),
         milestone_id: if parent_override.is_none() { src.milestone_id.clone() } else { None },
+        plan_date: None,
+        plan_time: None,
     };
     let copy = create_task(conn, &input)?;
     let mut stmt = conn.prepare("SELECT id FROM tasks WHERE parent_id = ?1 AND deleted_at IS NULL ORDER BY sort_order")?;

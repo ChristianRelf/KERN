@@ -14,6 +14,9 @@ import {
   Presentation,
   Settings2,
   FolderOpen,
+  Sparkles,
+  Globe,
+  LayoutTemplate,
 } from "lucide-react";
 import { linkFolder } from "./folders";
 import { api, describeError } from "@/lib/ipc";
@@ -26,6 +29,10 @@ import { useUi } from "@/stores/ui";
 import { confirmDelete, prompt } from "@/components/ui/Dialog";
 import type { MenuItems } from "@/components/ui/Menu";
 import { openNewTask } from "@/features/tasks/creation";
+import { openAssist } from "@/features/assist/open";
+import { openShare } from "@/features/share/open";
+import { openSaveProjectTemplate } from "@/features/templates/open";
+import { todayStr } from "@/lib/dates";
 
 const PROJECT_DOMAINS = ["projects", "project", "groups", "tasks", "board", "boards", "rundown", "stats", "recent", "whiteboards", "notes"] as const;
 const refresh = () => invalidate(...PROJECT_DOMAINS);
@@ -124,6 +131,15 @@ export async function newGroup(projectToMove?: Project) {
   }
 }
 
+/** Asks the AI a question about a project, answered from its own tasks, milestones and notes. */
+export function askAboutProject(p: Pick<Project, "id" | "name">) {
+  openAssist({
+    input: { action: "ask", projectId: p.id, today: todayStr() },
+    title: `Ask about ${p.name}`,
+    intro: "Answers come only from this project's milestones, tasks (with their latest comments) and notes, and point to what they're based on.",
+  });
+}
+
 export function projectMenu(p: Project, groups: ProjectGroup[]): MenuItems {
   return [
     { label: "Open", icon: LayoutDashboard, onSelect: () => navigate({ name: "project", id: p.id }) },
@@ -165,6 +181,10 @@ export function projectMenu(p: Project, groups: ProjectGroup[]): MenuItems {
       onSelect: () => void linkFolder(p),
     },
     { label: "Project settings", icon: Settings2, onSelect: () => navigate({ name: "project", id: p.id, tab: "overview" }) },
+    { type: "separator" },
+    { label: "Ask about this project…", icon: Sparkles, onSelect: () => askAboutProject(p) },
+    { label: "Share link…", icon: Globe, onSelect: () => openShare({ kind: "project", refId: p.id, title: p.name }) },
+    { label: "Save as template…", icon: LayoutTemplate, onSelect: () => openSaveProjectTemplate(p.id, p.name) },
     { label: "Duplicate", icon: Copy, onSelect: () => void duplicateProject(p) },
     {
       label: p.archivedAt ? "Unarchive" : "Archive",

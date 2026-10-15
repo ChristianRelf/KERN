@@ -199,13 +199,18 @@ const TABLE_DOMAINS: Record<string, Domain[]> = {
   milestones: ["milestones", "health", "tasks", "task", "project"],
   milestone_deps: ["milestones"],
   release_links: ["milestones"],
-  notes: ["notes", "note", "search", "trash"],
+  notes: ["notes", "note", "search", "trash", "backlinks"],
   inbox_items: ["inbox", "stats"],
   whiteboards: ["whiteboards", "search", "trash", "recent"],
   wb_nodes: ["whiteboards"],
   wb_edges: [],
   project_repos: ["github", "repos", "project", "capabilities"],
   task_issue_links: ["github", "tasks", "task"],
+  task_relations: ["relations", "tasks", "task"],
+  task_comments: ["comments", "tasks", "task"],
+  templates: ["templates"],
+  habits: ["habits", "review"],
+  habit_checks: ["habits", "review"],
 };
 
 type WbListener = (whiteboardIds: Set<string>) => void;

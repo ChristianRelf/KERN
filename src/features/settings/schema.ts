@@ -9,7 +9,7 @@ export type Density = "compact" | "comfortable" | "relaxed";
 export type Theme = "dark" | "light" | "system";
 export type Accent = "none" | "blue" | "violet" | "green" | "amber" | "rose" | "teal";
 export type MotionPref = "system" | "full" | "reduced" | "off";
-export type NavItemId = "dashboard" | "tasks" | "inbox" | "projects" | "whiteboards" | "notes" | "search" | "focus" | "rundown" | "ai";
+export type NavItemId = "dashboard" | "tasks" | "inbox" | "projects" | "whiteboards" | "notes" | "search" | "focus" | "rundown" | "ai" | "habits" | "review" | "planner";
 export type SidebarSectionId = "views" | "pinned" | "projects";
 export type CompletionIntensity = "subtle" | "standard" | "pronounced";
 export type AiRoutingMode = "manual" | "failover" | "priority" | "cost";
@@ -45,6 +45,10 @@ export interface Settings {
   "plugins.declined": string[];
   "general.detailMode": "inspector" | "modal" | "page";
   "general.globalCaptureShortcut": string | null;
+  /** System-wide shortcut that opens Kern Lite. */
+  "general.globalLiteShortcut": string | null;
+  /** Today's tasks in the tray menu, to tick off without opening Kern. */
+  "general.trayTasks": boolean;
   "general.onboarded": boolean;
   // Interactions
   "interaction.closePanelsOnOutsideClick": boolean;
@@ -81,7 +85,7 @@ export interface Settings {
   // Tasks
   "tasks.defaultPriority": number;
   "tasks.defaultDestination": "inbox" | "today" | "noDate";
-  "tasks.defaultView": "list" | "today" | "upcoming" | "calendar" | "board";
+  "tasks.defaultView": "list" | "today" | "upcoming" | "calendar" | "board" | "plan";
   "tasks.weekStart": 0 | 1;
   "tasks.dateFormat": "relative" | "dmy" | "mdy" | "iso";
   "tasks.timeFormat": "24h" | "12h";
@@ -129,6 +133,22 @@ export interface Settings {
   "notifications.overdueTime": string;
   "notifications.focus": boolean;
   "notifications.quietHours": { enabled: boolean; start: string; end: string };
+  /** Someone @mentions you in a task comment (Kern Cloud). */
+  "notifications.mentions": boolean;
+  // Weekly review
+  "review.enabled": boolean;
+  /** 0 = Sunday … 6 = Saturday. */
+  "review.day": number;
+  "review.time": string;
+  "review.notify": boolean;
+  // Calendars
+  "calendar.showEvents": boolean;
+  "calendar.refreshMinutes": number;
+  /** An .ics file Kern keeps up to date (calendar apps can subscribe to it). */
+  "calendar.autoExportPath": string | null;
+  /** First hour shown in the day planner. */
+  "calendar.dayStart": number;
+  "calendar.dayEnd": number;
   // Daily rundown
   "rundown.enabled": boolean;
   "rundown.time": string;
@@ -223,6 +243,8 @@ export const DEFAULTS: Settings = {
   "plugins.declined": [],
   "general.detailMode": "inspector",
   "general.globalCaptureShortcut": null,
+  "general.globalLiteShortcut": null,
+  "general.trayTasks": true,
   "general.onboarded": false,
 
   "interaction.closePanelsOnOutsideClick": true,
@@ -312,6 +334,18 @@ export const DEFAULTS: Settings = {
   "notifications.overdueTime": "13:00",
   "notifications.focus": true,
   "notifications.quietHours": { enabled: false, start: "22:00", end: "07:00" },
+  "notifications.mentions": true,
+
+  "review.enabled": true,
+  "review.day": 5,
+  "review.time": "16:00",
+  "review.notify": true,
+
+  "calendar.showEvents": true,
+  "calendar.refreshMinutes": 180,
+  "calendar.autoExportPath": null,
+  "calendar.dayStart": 7,
+  "calendar.dayEnd": 21,
 
   "rundown.enabled": true,
   "rundown.time": "09:00",

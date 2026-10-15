@@ -27,19 +27,31 @@ import { useEpoch } from "./reset";
 import { hideSplash } from "./splash";
 import { useEasterEggs } from "./easterEggs";
 import { CloudHost } from "@/features/cloud/CloudHost";
+import { useAssist } from "@/features/assist/open";
+import { useShare } from "@/features/share/open";
+import { useTemplateDialogs } from "@/features/templates/open";
 
 const TerminalPanel = lazy(() => import("@/features/terminal/TerminalPanel"));
 const CatchupHost = lazy(() => import("@/features/catchup/CatchupDialog"));
 const WorktreeDialogHost = lazy(() => import("@/features/dev/Worktrees"));
 const CustomizeProjectHost = lazy(() => import("@/features/projects/CustomizeProject"));
+const AssistHost = lazy(() => import("@/features/assist/AssistDialog"));
+const ShareHost = lazy(() => import("@/features/share/ShareDialog"));
+const TemplateHost = lazy(() => import("@/features/templates/TemplateDialogs"));
 
 /** Hosts that load their code only once they're needed. */
 function LazyHosts() {
   const catchup = useUi((s) => !!s.catchupProjectId);
   const worktree = useWorktreeDialog((s) => !!s.req);
   const customize = useUi((s) => !!s.customizeProjectId);
+  const assist = useAssist((s) => !!s.req);
+  const share = useShare((s) => !!s.req);
+  const template = useTemplateDialogs((s) => !!s.req);
   return (
     <Suspense fallback={null}>
+      {assist && <AssistHost />}
+      {share && <ShareHost />}
+      {template && <TemplateHost />}
       {catchup && <CatchupHost />}
       {customize && <CustomizeProjectHost />}
       {worktree && <WorktreeDialogHost />}

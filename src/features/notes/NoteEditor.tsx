@@ -30,6 +30,83 @@ import { IconButton } from "@/components/ui/Button";
 import { Dropdown } from "@/components/ui/Menu";
 import { prompt } from "@/components/ui/Dialog";
 import { api } from "@/lib/ipc";
+import type { SearchHit } from "@/lib/types";
+import { navigate } from "@/stores/router";
+import { openTask } from "@/features/tasks/menu";
+import { FileText, FolderKanban, SquareCheckBig, Link as LinkIcon } from "lucide-react";
+
+// ------------------------------------------------------------ [[ links
+// Typing "[[" opens a picker of notes, tasks and projects; picking one
+// inserts an ordinary Markdown link to kern://<kind>/<id>, which opens it
+// with a click and shows up in the target's "Linked from".
+
+const LINKABLE = new Set(["note", "task", "project"]);
+
+/** Opens a kern://note|task|project/<id> link; false for anything else. */
+export function openKernLink(href: string | null | undefined): boolean {
+  const m = /^kern:\/\/(note|task|project)\/([A-Za-z0-9_-]+)/.exec(href ?? "");
+  if (!m) return false;
+  if (m[1] === "note") navigate({ name: "notes", id: m[2] });
+  else if (m[1] === "task") openTask(m[2]);
+  else navigate({ name: "project", id: m[2] });
+  return true;
+}
+
+interface LinkState {
+  /** Position of the "[[" that opened the picker. */
+  from: number;
+  query: string;
+  index: number;
+  left: number;
+  top: number;
+  up: boolean;
+}
+
+function detectLink(editor: Editor): LinkState | null {
+  const { selection } = editor.state;
+  if (!selection.empty) return null;
+  const $from = selection.$from;
+  if ($from.parent.type.name === "codeBlock") return null;
+  const before = $from.parent.textBetween(0, $from.parentOffset, undefined, "\ufffc");
+  const m = /\[\[([^\[\]\n]{0,60})$/.exec(before);
+  if (!m) return null;
+  const from = selection.from - m[1].length - 2;
+  const c = editor.view.coordsAtPos(from);
+  const up = window.innerHeight - c.bottom < 300;
+  return { from, query: m[1], index: 0, left: c.left, top: up ? c.top - 4 : c.bottom + 4, up };
+}
+
+const KIND_ICON = { note: FileText, task: SquareCheckBig, project: FolderKanban } as const;
+
+function LinkPicker({ state, hits, onPick, onHover }: { state: LinkState; hits: SearchHit[]; onPick: (h: SearchHit) => void; onHover: (i: number) => void }) {
+  return createPortal(
+    <div
+      className="menu slash-menu"
+      role="listbox"
+      aria-label="Link to"
+      style={{ position: "fixed", left: state.left, ...(state.up ? { bottom: window.innerHeight - state.top } : { top: state.top }), minWidth: 280 }}
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      {!hits.length && (
+        <div className="menu__item" aria-disabled>
+          <LinkIcon strokeWidth={1.75} />
+          <span className="faint">{state.query ? "No notes, tasks or projects match" : "Type to find a note, task or project"}</span>
+        </div>
+      )}
+      {hits.map((h, i) => {
+        const Icon = KIND_ICON[h.kind as keyof typeof KIND_ICON] ?? FileText;
+        return (
+          <div key={`${h.kind}:${h.id}`} className="menu__item" role="option" aria-selected={i === state.index} data-highlighted={i === state.index ? "" : undefined} onMouseEnter={() => onHover(i)} onClick={() => onPick(h)}>
+            <Icon strokeWidth={1.75} />
+            <span className="truncate grow">{h.title || "Untitled"}</span>
+            <span className="menu__hint">{h.kind}</span>
+          </div>
+        );
+      })}
+    </div>,
+    document.body,
+  );
+}
 
 export function getMarkdown(editor: Editor): string {
   return (editor.storage as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown();
@@ -138,7 +215,7 @@ export function NoteEditor({
   onChange,
   onFlush,
   onBlur,
-  placeholder = "Start writing… Type / for blocks, or use Markdown: #, -, [ ], ```, **bold**",
+  placeholder = "Start writing… Type / for blocks, [[ to link a note or task, or use Markdown: #, -, [ ], **bold**",
   autoFocus,
   onEditor,
   compact,
@@ -163,6 +240,41 @@ export function NoteEditor({
   // The "/" whose menu was dismissed with Escape stays closed.
   const dismissedAt = useRef<number | null>(null);
   const editorRef = useRef<Editor | null>(null);
+  const [linkPick, setLinkPick] = useState<LinkState | null>(null);
+  const linkRef = useRef(linkPick);
+  linkRef.current = linkPick;
+  const [hits, setHits] = useState<SearchHit[]>([]);
+  const hitsRef = useRef(hits);
+  hitsRef.current = hits;
+  const linkDismissedAt = useRef<number | null>(null);
+  const linkQuery = linkPick?.query;
+  useEffect(() => {
+    if (linkQuery === undefined) return;
+    let live = true;
+    const run = async () => {
+      const q = linkQuery.trim();
+      const found = q ? await api.search(q, 12).catch(() => []) : (await api.notes.list(null).catch(() => [])).slice(0, 8).map((n) => ({ kind: "note" as const, id: n.id, parentId: n.projectId, title: n.title, snippet: "", meta: null }));
+      if (live) setHits(found.filter((h) => LINKABLE.has(h.kind)).slice(0, 8));
+    };
+    const t = window.setTimeout(() => void run(), 120);
+    return () => {
+      live = false;
+      window.clearTimeout(t);
+    };
+  }, [linkQuery]);
+
+  const pickLink = (e: Editor, h: SearchHit) => {
+    const s = linkRef.current;
+    if (!s) return;
+    setLinkPick(null);
+    const title = h.title || "Untitled";
+    e.chain()
+      .focus()
+      .deleteRange({ from: s.from, to: e.state.selection.from })
+      .insertContent([{ type: "text", text: title, marks: [{ type: "link", attrs: { href: `kern://${h.kind}/${h.id}` } }] }, { type: "text", text: " " }])
+      .unsetMark("link")
+      .run();
+  };
 
   const pick = (e: Editor, i: number) => {
     const s = slashRef.current;
@@ -179,7 +291,7 @@ export function NoteEditor({
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
       TaskList,
       TaskItem.configure({ nested: true }),
-      Link.configure({ openOnClick: false, autolink: true, linkOnPaste: true }),
+      Link.configure({ openOnClick: false, autolink: true, linkOnPaste: true, protocols: ["kern"] }),
       NoteFavicons,
       Placeholder.configure({ placeholder }),
       Markdown.configure({ html: false, tightLists: true, linkify: true, transformPastedText: true, breaks: false }),
@@ -189,8 +301,26 @@ export function NoteEditor({
     editorProps: {
       attributes: { class: compact ? "prose prose--compact" : "prose", spellcheck: "true" },
       handleKeyDown: (_view, event) => {
-        const s = slashRef.current;
         const ed = editorRef.current;
+        const l = linkRef.current;
+        if (l && ed) {
+          const count = hitsRef.current.length;
+          if ((event.key === "ArrowDown" || event.key === "ArrowUp") && count) {
+            const d = event.key === "ArrowDown" ? 1 : -1;
+            setLinkPick({ ...l, index: (l.index + d + count) % count });
+            return true;
+          }
+          if ((event.key === "Enter" || event.key === "Tab") && count) {
+            pickLink(ed, hitsRef.current[Math.min(l.index, count - 1)]);
+            return true;
+          }
+          if (event.key === "Escape") {
+            linkDismissedAt.current = l.from;
+            setLinkPick(null);
+            return true;
+          }
+        }
+        const s = slashRef.current;
         if (!s || !ed) return false;
         const count = slashItems(ed, s.query).length;
         if (!count) return false;
@@ -212,6 +342,8 @@ export function NoteEditor({
       },
       handleClick: (_view, _pos, event) => {
         const a = (event.target as HTMLElement).closest("a");
+        // Links to notes, tasks and projects open with a click.
+        if (a && openKernLink(a.getAttribute("href"))) return true;
         if (a && (event.ctrlKey || event.metaKey)) {
           void api.system.open(a.getAttribute("href") ?? "");
           return true;
@@ -221,6 +353,14 @@ export function NoteEditor({
     },
     onUpdate: ({ editor: e }) => changeRef.current(getMarkdown(e)),
     onTransaction: ({ editor: e }) => {
+      const nextLink = detectLink(e);
+      if (!nextLink) linkDismissedAt.current = null;
+      if (!nextLink || nextLink.from === linkDismissedAt.current) {
+        if (linkRef.current) setLinkPick(null);
+      } else {
+        const prevLink = linkRef.current;
+        setLinkPick(prevLink && prevLink.from === nextLink.from ? { ...nextLink, index: prevLink.query === nextLink.query ? prevLink.index : 0 } : nextLink);
+      }
       const next = detectSlash(e);
       // Once the dismissed "/" is gone, a new one may open the menu again.
       if (!next) dismissedAt.current = null;
@@ -233,16 +373,20 @@ export function NoteEditor({
     },
     onBlur: () => {
       setSlash(null);
+      setLinkPick(null);
       blurRef.current?.();
     },
   });
   editorRef.current = editor;
 
   // A fixed menu can't follow scrolling; close it instead.
-  const slashOpen = !!slash;
+  const slashOpen = !!slash || !!linkPick;
   useEffect(() => {
     if (!slashOpen) return;
-    const close = () => setSlash(null);
+    const close = () => {
+      setSlash(null);
+      setLinkPick(null);
+    };
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
     return () => {
@@ -274,6 +418,7 @@ export function NoteEditor({
       </BubbleMenu>
       <EditorContent editor={editor} />
       {slash && <SlashMenu editor={editor} state={slash} onPick={(i) => pick(editor, i)} onHover={(i) => setSlash({ ...slash, index: i })} />}
+      {linkPick && <LinkPicker state={linkPick} hits={hits} onPick={(h) => pickLink(editor, h)} onHover={(i) => setLinkPick({ ...linkPick, index: i })} />}
     </>
   );
 }

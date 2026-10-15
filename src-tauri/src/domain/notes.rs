@@ -185,6 +185,63 @@ pub fn note_update(state: State<AppState>, id: String, patch: NotePatch) -> AppR
     })
 }
 
+/// A note that links to something (`kern://<kind>/<id>` in its Markdown),
+/// with the line the link is on.
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Backlink {
+    pub id: String,
+    pub title: String,
+    pub project_id: Option<String>,
+    pub context: String,
+    pub updated_at: i64,
+}
+
+/// Markdown link text and plain words from one line: "[Plan](kern://…)" → "Plan".
+fn plain_line(line: &str) -> String {
+    let mut out = String::new();
+    let mut rest = line;
+    while let Some(i) = rest.find('[') {
+        out.push_str(&rest[..i]);
+        let after = &rest[i + 1..];
+        match (after.find("]("), after.find(')')) {
+            (Some(close), Some(end)) if close < end => {
+                out.push_str(&after[..close]);
+                rest = &after[end + 1..];
+            }
+            _ => {
+                out.push('[');
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    let t = out.trim().trim_start_matches(|c: char| c == '#' || c == '>' || c == '-' || c == '*').trim();
+    t.trim_start_matches("[ ]").trim_start_matches("[x]").trim().replace("**", "").chars().take(200).collect()
+}
+
+pub fn backlinks(conn: &Connection, kind: &str, id: &str) -> AppResult<Vec<Backlink>> {
+    if !matches!(kind, "note" | "task" | "project") {
+        return invalid("Unknown link kind.");
+    }
+    let needle = format!("kern://{kind}/{id}");
+    let mut stmt = conn.prepare(
+        "SELECT id, title, content, project_id, updated_at FROM notes
+         WHERE deleted_at IS NULL AND id != ?2 AND instr(content, ?1) > 0 ORDER BY updated_at DESC LIMIT 100",
+    )?;
+    let rows = stmt.query_map(params![needle, id], |r| {
+        let content: String = r.get(2)?;
+        let context = content.lines().find(|l| l.contains(&needle)).map(plain_line).unwrap_or_default();
+        Ok(Backlink { id: r.get(0)?, title: r.get(1)?, project_id: r.get(3)?, context, updated_at: r.get(4)? })
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+#[tauri::command]
+pub fn note_backlinks(state: State<AppState>, kind: String, id: String) -> AppResult<Vec<Backlink>> {
+    state.with(|c| backlinks(c, &kind, &id))
+}
+
 #[tauri::command]
 pub fn notes_delete(state: State<AppState>, ids: Vec<String>) -> AppResult<()> {
     state.with(|c| {
@@ -361,6 +418,22 @@ pub fn inbox_convert(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn backlinks_find_linking_notes() {
+        let c = crate::db::open_memory();
+        let target = create_note(&c, "Roadmap", "", None).unwrap();
+        create_note(&c, "Monday", &format!("# Standup
+
+- Discussed [Roadmap](kern://note/{}) and **more**
+- Other", target.id), None).unwrap();
+        create_note(&c, "Unrelated", "nothing here", None).unwrap();
+        let b = backlinks(&c, "note", &target.id).unwrap();
+        assert_eq!(b.len(), 1);
+        assert_eq!((b[0].title.as_str(), b[0].context.as_str()), ("Monday", "Discussed Roadmap and more"));
+        assert!(backlinks(&c, "file", "x").is_err());
+    }
+
     use super::*;
 
     #[test]

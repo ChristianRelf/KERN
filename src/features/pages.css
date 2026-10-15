@@ -3050,3 +3050,54 @@
   animation: none !important;
   stroke-dashoffset: 0 !important;
 }
+
+/* Estimate vs tracked time (task details). */
+.estimate-badge {
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.estimate-badge[data-state="over"] {
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+  color: var(--warning);
+}
+.estimate-badge[data-state="under"] {
+  background: color-mix(in srgb, var(--hue-3) 18%, transparent);
+}
+
+/* Notes that link here. */
+.backlink {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 8px;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+}
+.backlink:hover {
+  background: var(--hover);
+}
+.backlink__title {
+  font-size: var(--fs-sm);
+  font-weight: 550;
+}
+.backlink__when {
+  font-size: var(--fs-2xs);
+}
+.backlink__context {
+  grid-column: 1 / -1;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-backlinks {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}

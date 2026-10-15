@@ -4,13 +4,15 @@
 import { create } from "zustand";
 import type { ProjectTab } from "@/lib/types";
 
-export type TasksView = "list" | "today" | "upcoming" | "calendar" | "board";
+export type TasksView = "list" | "today" | "upcoming" | "calendar" | "board" | "plan";
 export type SettingsSection =
   | "general"
   | "cloud"
   | "appearance"
   | "dashboard"
   | "tasks"
+  | "calendars"
+  | "templates"
   | "projects"
   | "whiteboards"
   | "notifications"
@@ -48,7 +50,10 @@ export type Route =
   | { name: "sessions"; projectId?: string }
   | { name: "rundown"; day?: string; mode?: "morning" | "evening" }
   | { name: "task"; id: string }
-  | { name: "streams"; id?: string; tab?: StreamTab };
+  | { name: "streams"; id?: string; tab?: StreamTab }
+  | { name: "habits" }
+  /** The weekly review; `week` is its first day (YYYY-MM-DD). */
+  | { name: "review"; week?: string };
 
 /** Sections of a stream's page. */
 export type StreamTab = "overview" | "destination" | "fields" | "security" | "github" | "responses" | "deliveries";

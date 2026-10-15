@@ -54,6 +54,8 @@ pub const DEVICE_TABLES: &[&str] = &[
     "file_index_roots",
     "file_index",
     "file_fts",
+    "calendar_feeds",
+    "calendar_events",
 ];
 const PARKED: &str = "_device_";
 

@@ -51,6 +51,10 @@ export interface Task {
   resolution?: TaskResolution | null;
   /** Open tasks that block this one. */
   blockedBy?: number;
+  /** Time block: the day it's planned for and, optionally, when (HH:MM). Its length is the estimate. */
+  planDate?: string | null;
+  planTime?: string | null;
+  commentCount?: number;
 }
 
 /** A relation from one task's point of view. */
@@ -97,6 +101,9 @@ export interface TaskQuery {
   pinned?: boolean;
   milestoneIds?: string[];
   noMilestone?: boolean;
+  /** Time-blocked within [plannedFrom, plannedTo]. */
+  plannedFrom?: string;
+  plannedTo?: string;
   limit?: number;
   order?: TaskOrder;
 }
@@ -122,6 +129,8 @@ export interface TaskInput {
   sortOrder?: number;
   boardOrder?: number;
   milestoneId?: string | null;
+  planDate?: string | null;
+  planTime?: string | null;
 }
 
 export interface TaskPatch {
@@ -148,6 +157,8 @@ export interface TaskPatch {
   addTrackedSeconds?: number;
   milestoneId?: string | null;
   resolution?: TaskResolution | null;
+  planDate?: string | null;
+  planTime?: string | null;
 }
 
 export interface TaskUpdateResult {
@@ -1964,6 +1975,8 @@ export interface StreamConfig {
   };
   responses: { successMessage: string; redirectUrl: string | null; returnIds: boolean };
   notify: { app: boolean; email: "off" | "each" | "failures"; emailTo: "creator" | "admins" };
+  /** Email to this stream: <alias>@<domain>. The server picks the alias. */
+  email?: { enabled: boolean; alias: string | null; allowedSenders: string[] };
   log: { storePayloads: boolean; retentionDays: number };
 }
 
@@ -1979,6 +1992,8 @@ export interface Stream {
   previousSecretExpiresAt: string | null;
   github: { tokenSet: boolean; tokenHint: string | null; checkedAt: string | null };
   turnstile: { secretSet: boolean };
+  /** The stream's email address (when email is on and the server accepts mail). */
+  email?: { available: boolean; address: string | null };
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
@@ -2051,4 +2066,294 @@ export interface GithubRepoCheck {
   private: boolean;
   hasIssues: boolean;
   htmlUrl: string;
+}
+
+// ------------------------------------------------------------ comments
+
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  authorId: string | null;
+  authorName: string;
+  /** Plain text; mentions are written as @[Name](user-id). */
+  body: string;
+  mentions: string[];
+  createdAt: number;
+  updatedAt: number;
+  editedAt: number | null;
+  /** Written by whoever is using Kern here (always true offline). */
+  mine: boolean;
+}
+
+export interface Mention {
+  commentId: string;
+  taskId: string;
+  taskTitle: string;
+  authorName: string;
+  excerpt: string;
+  createdAt: number;
+}
+
+// ------------------------------------------------------------ templates
+
+export type TemplateKind = "project" | "note" | "task";
+
+export interface TemplateMeta {
+  id: string;
+  kind: TemplateKind;
+  name: string;
+  description: string;
+  icon: string | null;
+  builtin: boolean;
+  summary: string;
+  updatedAt: number;
+}
+
+export interface Template extends TemplateMeta {
+  data: Record<string, unknown>;
+}
+
+// ------------------------------------------------------------ habits
+
+export interface Habit {
+  id: string;
+  name: string;
+  icon: string | null;
+  color: string | null;
+  cadence: "daily" | "weekly";
+  target: number;
+  /** ISO weekdays (1 = Monday) a daily habit is due on. */
+  weekdays: number[];
+  sortOrder: number;
+  archivedAt: number | null;
+  createdAt: number;
+  /** Day (YYYY-MM-DD) → times done, in the requested range. */
+  checks: Record<string, number>;
+  streak: number;
+  bestStreak: number;
+  /** Done today (daily) or this week (weekly). */
+  progress: number;
+  done: boolean;
+  dueToday: boolean;
+  /** Share of due periods met in the last 30 days. */
+  rate: number;
+}
+
+export interface HabitInput {
+  name: string;
+  icon?: string | null;
+  color?: string | null;
+  cadence?: "daily" | "weekly";
+  target?: number;
+  weekdays?: number[];
+}
+
+export interface HabitPatch extends Partial<HabitInput> {
+  archived?: boolean;
+}
+
+// ------------------------------------------------------------ calendars
+
+export interface CalendarFeed {
+  id: string;
+  name: string;
+  url: string;
+  color: string | null;
+  enabled: boolean;
+  lastFetchedAt: number | null;
+  lastError: string | null;
+  eventCount: number;
+}
+
+export interface CalEvent {
+  feedId: string;
+  feedName: string;
+  color: string | null;
+  uid: string;
+  /** 'YYYY-MM-DD' (all day) or 'YYYY-MM-DDTHH:MM', local time. */
+  start: string;
+  /** Inclusive last day (all day) or end time. */
+  end: string;
+  allDay: boolean;
+  title: string;
+  location: string | null;
+}
+
+export interface IcsExportOptions {
+  projectIds?: string[] | null;
+  includeCompleted?: boolean;
+  includeMilestones?: boolean;
+  includePlanned?: boolean;
+}
+
+/** A Kern Cloud calendar address for the open space. */
+export interface CloudCalendarFeed {
+  url: string;
+  options: { includeMilestones?: boolean; projectIds?: string[] | null };
+  createdAt: string;
+  lastFetchedAt: string | null;
+}
+
+// ------------------------------------------------------------ review & estimates
+
+export interface EstimateRow {
+  taskId: string;
+  title: string;
+  projectId: string | null;
+  estimateMinutes: number;
+  actualMinutes: number;
+  ratio: number;
+  completedAt: number | null;
+}
+
+export interface EstimateStats {
+  count: number;
+  totalEstimateMinutes: number;
+  totalActualMinutes: number;
+  medianRatio: number | null;
+  onTarget: number;
+  over: number;
+  under: number;
+  untracked: number;
+  misses: EstimateRow[];
+}
+
+export interface WeekReview {
+  weekStart: string;
+  weekEnd: string;
+  completed: Task[];
+  cancelled: number;
+  created: number;
+  slipped: Task[];
+  olderOverdue: number;
+  stale: Task[];
+  inboxItems: { id: string; content: string; createdAt: number }[];
+  inboxTasks: Task[];
+  nextWeek: Task[];
+  milestones: Milestone[];
+  trackedMs: number;
+  byProject: SessionBucket[];
+  byDay: SessionBucket[];
+  focusMinutes: number;
+  habits: { id: string; name: string; icon: string | null; met: number; due: number; streak: number }[];
+  estimates: EstimateStats;
+}
+
+/** What the weekly review keeps (a "weekly" snapshot of the week's first day). */
+export interface WeekReflection {
+  wins: string;
+  lessons: string;
+  focus: string;
+  /** Tasks picked to focus on next week. */
+  focusTaskIds: string[];
+  summary?: string | null;
+  completedCount?: number;
+  slippedCount?: number;
+  doneAt?: number | null;
+}
+
+// ------------------------------------------------------------ AI actions
+
+export type AssistAction = "breakdown" | "extract" | "weekly" | "ask";
+
+export interface AssistInput {
+  action: AssistAction;
+  taskId?: string;
+  noteId?: string;
+  projectId?: string;
+  question?: string;
+  weekStart?: string;
+  today?: string;
+  tzOffsetMinutes?: number;
+}
+
+export interface AssistPreview {
+  allowed: boolean;
+  blockedReason: string | null;
+  system: string;
+  prompt: string;
+  chars: number;
+  approxTokens: number;
+}
+
+export interface AssistSuggestion {
+  title: string;
+  detail: string | null;
+  estimateMinutes: number | null;
+  dueDate: string | null;
+}
+
+export interface AssistResult {
+  suggestions: AssistSuggestion[];
+  text: string | null;
+  sources: { id: string; kind: string; refId: string; title: string }[];
+  dropped: number;
+  model: string | null;
+  accountName: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  estimatedCost: number | null;
+}
+
+// ------------------------------------------------------------ imports, links, shares
+
+export interface ImportTask {
+  projectKey?: string | null;
+  column?: string | null;
+  title: string;
+  description?: string;
+  status?: TaskStatus | null;
+  priority?: number;
+  dueDate?: string | null;
+  dueTime?: string | null;
+  estimateMinutes?: number | null;
+  labels?: string[];
+  completedAt?: number | null;
+  createdAt?: number | null;
+  subtasks?: ImportTask[];
+}
+
+export interface ImportProject {
+  key: string;
+  name: string;
+  description?: string;
+  columns?: { name: string; status: TaskStatus | null }[] | null;
+  notes?: { title: string; content: string }[];
+}
+
+export interface ImportBundle {
+  source: string;
+  projects: ImportProject[];
+  tasks: ImportTask[];
+}
+
+export interface ImportResult {
+  projects: number;
+  tasks: number;
+  notes: number;
+  labels: number;
+  projectIds: string[];
+}
+
+export interface Backlink {
+  id: string;
+  title: string;
+  projectId: string | null;
+  context: string;
+  updatedAt: number;
+}
+
+export type ShareKind = "note" | "whiteboard" | "project";
+
+export interface ShareLink {
+  id: string;
+  url: string;
+  kind: ShareKind;
+  refId: string;
+  title: string;
+  views: number;
+  hasImage: boolean;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string | null;
 }

@@ -44,6 +44,10 @@ export function inversePatch(prev: Task, patch: TaskPatch, spawned: boolean): Ta
   if (patch.archived !== undefined) inv.archived = prev.archivedAt !== null;
   if (patch.labelIds !== undefined || patch.addLabelIds !== undefined || patch.removeLabelIds !== undefined)
     inv.labelIds = prev.labelIds;
+  if (patch.planDate !== undefined || patch.planTime !== undefined) {
+    inv.planDate = prev.planDate ?? null;
+    inv.planTime = prev.planTime ?? null;
+  }
   return inv;
 }
 

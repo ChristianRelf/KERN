@@ -557,7 +557,7 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
       {
         title: "Lists",
         rows: [
-          { label: "Default view", control: <SSelect k="tasks.defaultView" options={[{ value: "list", label: "List" }, { value: "today", label: "Today" }, { value: "upcoming", label: "Upcoming" }, { value: "calendar", label: "Calendar" }, { value: "board", label: "Board" }]} /> },
+          { label: "Default view", control: <SSelect k="tasks.defaultView" options={[{ value: "list", label: "List" }, { value: "today", label: "Today" }, { value: "upcoming", label: "Upcoming" }, { value: "plan", label: "Day planner" }, { value: "calendar", label: "Calendar" }, { value: "board", label: "Board" }]} /> },
           { label: "Default sort", control: <SSelect k="tasks.defaultSort" options={[{ value: "manual", label: "Manual" }, { value: "due", label: "Due date" }, { value: "priority", label: "Priority" }, { value: "created", label: "Newest first" }, { value: "title", label: "Title" }]} /> },
           { label: "Show completed tasks", control: <SToggle k="tasks.showCompleted" /> },
           { label: "Archive completed tasks after", hint: "0 keeps them until you archive manually.", control: <SNumber k="tasks.autoArchiveDays" min={0} max={365} suffix="days" /> },

@@ -1,0 +1,23 @@
+.template-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  width: 100%;
+}
+.template-option:hover,
+.template-option:focus-visible {
+  background: var(--hover);
+}
+.template-pick {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.template-pick__summary {
+  flex-basis: 100%;
+  font-size: var(--fs-xs);
+  padding-left: 23px;
+}

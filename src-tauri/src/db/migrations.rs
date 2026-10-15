@@ -3,7 +3,7 @@
 //! interrupted migration rolls back cleanly; additionally a full database
 //! copy is taken before migrating an existing database (see `db::open`).
 
-pub const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5];
+pub const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6];
 
 const MIGRATION_1: &str = r#"
 CREATE TABLE settings (
@@ -825,4 +825,92 @@ CREATE TABLE task_relations (
   PRIMARY KEY (task_id, related_id)
 );
 CREATE INDEX idx_task_relations_related ON task_relations(related_id);
+"#;
+
+/// Comments, time blocking, templates, habits and calendar subscriptions.
+/// Purely additive.
+const MIGRATION_6: &str = r#"
+-- Comments on tasks. author_id is the Kern Cloud user who wrote it (NULL
+-- offline); mentions is a JSON array of mentioned user ids.
+CREATE TABLE task_comments (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  author_id TEXT,
+  author_name TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL,
+  mentions TEXT NOT NULL DEFAULT '[]',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  edited_at INTEGER
+);
+CREATE INDEX idx_comments_task ON task_comments(task_id, created_at);
+
+-- Time blocking: the day (and optionally the time) a task is planned for.
+-- Its length is the task's estimate.
+ALTER TABLE tasks ADD COLUMN plan_date TEXT;
+ALTER TABLE tasks ADD COLUMN plan_time TEXT;
+CREATE INDEX idx_tasks_plan ON tasks(plan_date) WHERE plan_date IS NOT NULL;
+
+-- Reusable projects, notes and tasks (data is a JSON document per kind).
+CREATE TABLE templates (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('project', 'note', 'task')),
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  icon TEXT,
+  data TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX idx_templates_kind ON templates(kind, name);
+
+-- Habits: something to do on certain days (daily) or a number of times a
+-- week (weekly). A check records how many times it was done on a day.
+CREATE TABLE habits (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  icon TEXT,
+  color TEXT,
+  cadence TEXT NOT NULL DEFAULT 'daily' CHECK (cadence IN ('daily', 'weekly')),
+  target INTEGER NOT NULL DEFAULT 1,
+  weekdays TEXT NOT NULL DEFAULT '[1,2,3,4,5,6,7]',
+  sort_order REAL NOT NULL DEFAULT 0,
+  archived_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE habit_checks (
+  habit_id TEXT NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+  day TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (habit_id, day)
+);
+
+-- Read-only calendar subscriptions (ICS addresses) and their events,
+-- expanded into occurrences on each refresh. Per computer.
+CREATE TABLE calendar_feeds (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  url TEXT NOT NULL,
+  color TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  last_fetched_at INTEGER,
+  last_error TEXT,
+  event_count INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE calendar_events (
+  feed_id TEXT NOT NULL REFERENCES calendar_feeds(id) ON DELETE CASCADE,
+  uid TEXT NOT NULL,
+  -- Local wall-clock start/end: 'YYYY-MM-DD' (all day) or 'YYYY-MM-DDTHH:MM'.
+  start TEXT NOT NULL,
+  end TEXT NOT NULL,
+  all_day INTEGER NOT NULL DEFAULT 0,
+  title TEXT NOT NULL DEFAULT '',
+  location TEXT,
+  PRIMARY KEY (feed_id, uid, start)
+);
+CREATE INDEX idx_calendar_events_start ON calendar_events(start);
 "#;

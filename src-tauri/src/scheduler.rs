@@ -6,7 +6,7 @@
 use crate::domain::{activity, ai, archive, attachments, notify, settings, trash};
 use crate::state::AppState;
 use crate::util::now_ms;
-use chrono::{Local, NaiveTime, Timelike};
+use chrono::{Datelike, Local, NaiveTime, Timelike};
 use rusqlite::params;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
@@ -88,6 +88,20 @@ fn tick(app: &AppHandle, launched_recently: bool) {
             }
         }
 
+        // Weekly review (once a week, on the chosen day and time).
+        let review_on: bool = settings::get_or(c, "review.enabled", true);
+        let review_day: u32 = settings::get_or(c, "review.day", 5);
+        let rat = parse_time(&settings::get_or(c, "review.time", "16:00".to_string()), "16:00");
+        if review_on && now.weekday().num_days_from_sunday() == review_day % 7 && time >= rat {
+            let week = now.format("%G-W%V").to_string();
+            if notify::first_time(c, &format!("review:{week}")) {
+                events.push(("kern://review-due", today.clone()));
+                if !launched_recently && notify::category_enabled(c, "review.notify") {
+                    notes.push(("Weekly review".into(), "Look back on the week and plan the next one.".into()));
+                }
+            }
+        }
+
         // Due-time reminders.
         if notify::category_enabled(c, "notifications.dueReminders") {
             let lead: i64 = settings::get_or(c, "notifications.dueLeadMinutes", 15);
@@ -136,6 +150,8 @@ fn tick(app: &AppHandle, launched_recently: bool) {
     for (title, body) in notes {
         notify::send(app, &title, &body);
     }
+    // Today's tasks in the tray menu (rebuilt only when they change).
+    crate::window::refresh_tray(app);
 }
 
 fn maintenance(app: &AppHandle, at_startup: bool) {
@@ -182,4 +198,10 @@ fn maintenance(app: &AppHandle, at_startup: bool) {
     if changed {
         let _ = app.emit("kern://data-changed", ());
     }
+    // Calendar subscriptions (network, outside the database lock) and the
+    // always-current export file.
+    if crate::domain::calendar::refresh_due(app) {
+        let _ = app.emit("kern://calendar-updated", ());
+    }
+    crate::domain::calendar::write_auto_export(app);
 }

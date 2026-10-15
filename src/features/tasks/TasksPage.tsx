@@ -1,4 +1,4 @@
-import { CalendarDays, Columns3, List, ListFilter, Plus, Save, SquareCheckBig, Sun, CalendarRange } from "lucide-react";
+import { CalendarClock, CalendarDays, Columns3, List, ListFilter, Plus, Save, SquareCheckBig, Sun, CalendarRange } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import type { Milestone, Task, TaskFilters } from "@/lib/types";
@@ -21,11 +21,13 @@ import { resolveBindings } from "@/lib/shortcuts";
 import { openNewTask } from "./creation";
 
 const CalendarView = lazy(() => import("./CalendarView"));
+const PlannerView = lazy(() => import("@/features/planner/PlannerView"));
 const StatusBoard = lazy(() => import("@/features/boards/StatusBoard"));
 
 const VIEWS: { value: TasksView; label: string; icon: typeof List }[] = [
   { value: "list", label: "List", icon: List },
   { value: "today", label: "Today", icon: Sun },
+  { value: "plan", label: "Plan", icon: CalendarClock },
   { value: "upcoming", label: "Upcoming", icon: CalendarRange },
   { value: "calendar", label: "Calendar", icon: CalendarDays },
   { value: "board", label: "Board", icon: Columns3 },
@@ -101,9 +103,9 @@ export function TasksPage({ viewId }: { viewId?: string }) {
       {view === "list" && <ListView filters={filters} />}
       {view === "today" && <TodayView />}
       {view === "upcoming" && <UpcomingView />}
-      {(view === "calendar" || view === "board") && (
+      {(view === "calendar" || view === "board" || view === "plan") && (
         <Suspense fallback={<div className="page-loading" />}>
-          {view === "calendar" ? <CalendarView /> : <StatusBoard />}
+          {view === "calendar" ? <CalendarView /> : view === "plan" ? <PlannerView /> : <StatusBoard />}
         </Suspense>
       )}
     </div>

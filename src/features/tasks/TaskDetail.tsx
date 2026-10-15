@@ -24,7 +24,13 @@ import {
   Globe,
   Flag as FlagIcon,
   Play,
+  Sparkles,
+  CalendarClock,
+  LayoutTemplate,
 } from "lucide-react";
+import { Comments } from "@/features/comments/Comments";
+import { Backlinks } from "@/features/notes/Backlinks";
+import { openAssist } from "@/features/assist/open";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
@@ -42,7 +48,7 @@ import { formatBytes, formatDue, formatDuration, relativeTime, todayStr } from "
 import { ProjectGlyph } from "@/features/projects/ProjectGlyph";
 import { api, describeError } from "@/lib/ipc";
 import { invalidate } from "@/lib/query";
-import { toastError } from "@/stores/toast";
+import { toast, toastError } from "@/stores/toast";
 import { getSetting, useSetting } from "@/stores/settings";
 import { openTask, startFocusOn } from "./menu";
 import { onBeforeNavigate } from "@/stores/router";
@@ -307,6 +313,23 @@ function TaskDetailBody({ task }: { task: Task }) {
         </div>
 
         <span className="props__label">
+          <CalendarClock /> Planned
+        </span>
+        <div className="row" style={{ gap: 0 }}>
+          <DuePopover
+            date={task.planDate ?? null}
+            time={task.planTime ?? null}
+            onChange={(d, t) => patch({ planDate: d, planTime: d ? t : null }, d ? `Planned for ${formatDue(d, t)}` : "Removed from plan")}
+            trigger={
+              <button type="button" className="prop-btn" data-empty={!task.planDate} title="When you'll work on it (shown in the day planner)">
+                {task.planDate ? formatDue(task.planDate, task.planTime) : "Not planned"}
+              </button>
+            }
+          />
+          {task.planDate && <IconButton icon={X} label="Remove from plan" size="sm" onClick={() => patch({ planDate: null, planTime: null }, "Removed from plan")} />}
+        </div>
+
+        <span className="props__label">
           <Repeat /> Repeat
         </span>
         <div>
@@ -356,6 +379,7 @@ function TaskDetailBody({ task }: { task: Task }) {
             <button type="button" className="prop-btn" data-empty={!task.estimateMinutes}>
               {task.estimateMinutes ? formatDuration(task.estimateMinutes * 60) : "None"}
               {task.trackedSeconds > 0 && <span className="faint">· {formatDuration(task.trackedSeconds)} tracked</span>}
+              {task.trackedSeconds >= 60 && !!task.estimateMinutes && <EstimateBadge estimate={task.estimateMinutes} trackedSeconds={task.trackedSeconds} done={done} />}
             </button>
           </Dropdown>
         </div>
@@ -402,6 +426,8 @@ function TaskDetailBody({ task }: { task: Task }) {
       <Relations task={task} />
       <Attachments task={task} />
       <TaskDevSection task={task} />
+      <Comments task={task} />
+      <Backlinks kind="task" id={task.id} title="Mentioned in notes" />
 
       <div className="detail-meta">
         <span>Created {relativeTime(task.createdAt)}</span>
@@ -423,6 +449,9 @@ function TaskDetailBody({ task }: { task: Task }) {
         <Button size="sm" icon={CopyPlus} onClick={() => void duplicateTask(task.id)}>
           Duplicate
         </Button>
+        <Button size="sm" icon={LayoutTemplate} onClick={() => void saveTaskTemplate(task)} title="Reuse this task and its checklist later">
+          Save as template
+        </Button>
         <Button
           size="sm"
           icon={task.archivedAt ? ArchiveRestore : Archive}
@@ -436,6 +465,44 @@ function TaskDetailBody({ task }: { task: Task }) {
       </div>
     </div>
   );
+}
+
+/** Actual time against the estimate: "on target", "+40%", "−30%". */
+function EstimateBadge({ estimate, trackedSeconds, done }: { estimate: number; trackedSeconds: number; done: boolean }) {
+  const ratio = trackedSeconds / 60 / estimate;
+  const pct = Math.round((ratio - 1) * 100);
+  const state = ratio > 1.25 ? "over" : ratio < 0.75 && done ? "under" : "ok";
+  const text = state === "ok" ? (ratio > 1 ? `+${pct}%` : done ? "on target" : `${Math.round(ratio * 100)}% used`) : pct > 0 ? `+${pct}%` : `${pct}%`;
+  return (
+    <span className="estimate-badge" data-state={state} title={`${formatDuration(trackedSeconds)} tracked against ${formatDuration(estimate * 60)} estimated`}>
+      {text}
+    </span>
+  );
+}
+
+function suggestSteps(task: Task) {
+  openAssist({
+    input: { action: "breakdown", taskId: task.id, today: todayStr() },
+    title: "Suggest steps",
+    intro: `AI suggests a short checklist for “${task.title}”, using its title, notes, project and existing subtasks.`,
+    applyLabel: "Add subtasks",
+    onApply: async (items) => {
+      for (const s of items) await createTask({ title: s.title, parentId: task.id, status: "todo", estimateMinutes: s.estimateMinutes ?? null }, { quiet: true });
+      invalidate("tasks", "task");
+    },
+  });
+}
+
+async function saveTaskTemplate(task: Task) {
+  const name = await prompt({ title: "Save as template", initial: task.title, placeholder: "Template name", confirmLabel: "Save" });
+  if (!name) return;
+  try {
+    await api.templates.saveTask(task.id, name);
+    invalidate("templates");
+    toast(`Saved “${name}” - find it under New task from template`);
+  } catch (e) {
+    toastError(describeError(e, "Couldn't save the template."));
+  }
 }
 
 // ---------------------------------------------------------------- subtasks
@@ -477,6 +544,11 @@ function Subtasks({ task, depth }: { task: Task; depth: number }) {
             <span className="count">
               {done}/{list.length}
             </span>
+          )}
+          {task.status !== "completed" && (
+            <Button size="sm" variant="ghost" icon={Sparkles} style={{ marginLeft: "auto", height: 22 }} onClick={() => suggestSteps(task)} title="Ask AI to break this task into steps">
+              Suggest steps
+            </Button>
           )}
         </div>
       )}

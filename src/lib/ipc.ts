@@ -73,6 +73,59 @@ export const api = {
       call<void>("task_relation_set", { taskId, otherId, kind }),
     remove: (taskId: string, otherId: string) => call<void>("task_relation_remove", { taskId, otherId }),
   },
+  comments: {
+    list: (taskId: string) => call<T.TaskComment[]>("comments_list", { taskId }),
+    add: (taskId: string, body: string) => call<T.TaskComment>("comment_add", { taskId, body }),
+    edit: (id: string, body: string) => call<T.TaskComment>("comment_edit", { id, body }),
+    delete: (id: string) => call<void>("comment_delete", { id }),
+    /** Comments by others that mention you (Kern Cloud spaces). */
+    mentions: (limit?: number) => call<T.Mention[]>("comment_mentions", { limit: limit ?? null }),
+  },
+  templates: {
+    list: (kind?: T.TemplateKind) => call<T.TemplateMeta[]>("templates_list", { kind: kind ?? null }),
+    get: (id: string) => call<T.Template>("template_get", { id }),
+    saveProject: (projectId: string, name: string, description: string, includeTasks: boolean, includeNotes: boolean) =>
+      call<T.Template>("template_save_project", { projectId, name, description, includeTasks, includeNotes }),
+    saveNote: (noteId: string, name: string) => call<T.Template>("template_save_note", { noteId, name }),
+    saveTask: (taskId: string, name: string) => call<T.Template>("template_save_task", { taskId, name }),
+    update: (id: string, patch: { name?: string; description?: string; icon?: string }) => call<T.Template>("template_update", { id, patch }),
+    delete: (id: string) => call<void>("template_delete", { id }),
+    useProject: (id: string, input: { name: string; startDate?: string | null; groupId?: string | null; includeTasks?: boolean; includeNotes?: boolean }) =>
+      call<T.Project>("template_use_project", { id, input }),
+    useNote: (id: string, projectId?: string | null) => call<T.Note>("template_use_note", { id, projectId: projectId ?? null }),
+    useTask: (id: string, projectId?: string | null, dueDate?: string | null) => call<T.Task>("template_use_task", { id, projectId: projectId ?? null, dueDate: dueDate ?? null }),
+    export: (id: string, path: string) => call<void>("template_export", { id, path }),
+    import: (path: string) => call<T.Template>("template_import", { path }),
+  },
+  habits: {
+    list: (today: string, days?: number, includeArchived = false) => call<T.Habit[]>("habits_list", { today, days: days ?? null, includeArchived }),
+    create: (input: T.HabitInput, today: string) => call<T.Habit>("habit_create", { input, today }),
+    update: (id: string, patch: T.HabitPatch, today: string) => call<T.Habit>("habit_update", { id, patch, today }),
+    delete: (id: string) => call<void>("habit_delete", { id }),
+    /** Adds `delta` to a day's count (never below zero). */
+    check: (id: string, day: string, delta: number, today: string) => call<T.Habit>("habit_check", { id, day, delta, today }),
+    reorder: (ids: string[]) => call<void>("habits_reorder", { ids }),
+  },
+  calendar: {
+    feeds: () => call<T.CalendarFeed[]>("calendar_feeds_list"),
+    /** Adds a subscription and fetches it straight away (fails if the address doesn't work). */
+    addFeed: (name: string, url: string, color?: string | null) => call<T.CalendarFeed>("calendar_feed_add", { name, url, color: color ?? null }),
+    updateFeed: (id: string, patch: { name?: string; color?: string; enabled?: boolean }) => call<T.CalendarFeed>("calendar_feed_update", { id, patch }),
+    deleteFeed: (id: string) => call<void>("calendar_feed_delete", { id }),
+    refresh: (id?: string | null) => call<T.CalendarFeed[]>("calendar_feed_refresh", { id: id ?? null }),
+    events: (from: string, to: string) => call<T.CalEvent[]>("calendar_events", { from, to }),
+    exportIcs: (path: string, options: T.IcsExportOptions) => call<number>("calendar_export_ics", { path, options }),
+  },
+  review: {
+    week: (weekStart: string, today: string) => call<T.WeekReview>("weekly_review", { weekStart, today, tzOffsetMinutes: -new Date().getTimezoneOffset() }),
+    estimates: (from: number, to: number, projectId?: string | null) => call<T.EstimateStats>("estimate_accuracy", { from, to, projectId: projectId ?? null }),
+  },
+  /** AI actions (preview shows exactly what would be sent). */
+  assist: {
+    preview: (input: T.AssistInput) => call<T.AssistPreview>("assist_preview", { input }),
+    run: (input: T.AssistInput, requestId: string) => call<T.AssistResult>("assist_run", { input, requestId }),
+  },
+  importBundle: (bundle: T.ImportBundle) => call<T.ImportResult>("import_bundle", { bundle }),
   labels: {
     list: () => call<T.Label[]>("labels_list"),
     create: (name: string, color?: string | null) => call<T.Label>("label_create", { name, color: color ?? null }),
@@ -406,6 +459,8 @@ export const api = {
     ) => call<T.Note>("note_update", { id, patch }),
     delete: (ids: string[]) => call<void>("notes_delete", { ids }),
     restore: (ids: string[]) => call<void>("notes_restore", { ids }),
+    /** Notes that link to a note, task or project. */
+    backlinks: (kind: "note" | "task" | "project", id: string) => call<T.Backlink[]>("note_backlinks", { kind, id }),
   },
   inbox: {
     list: () => call<T.InboxItem[]>("inbox_list"),
@@ -559,5 +614,7 @@ export const api = {
     mode: () => call<{ mode: "kern" | "lite"; ask: boolean }>("app_mode_get"),
     setMode: (mode: "kern" | "lite") => call<void>("app_mode_set", { mode }),
     pinLite: (on: boolean) => call<void>("app_lite_pin", { on }),
+    /** Rebuilds the tray's Today list. */
+    trayRefresh: () => call<void>("tray_refresh"),
   },
 };

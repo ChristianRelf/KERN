@@ -1,7 +1,10 @@
 import {
   ArrowDown,
   ArrowUp,
+  CalendarClock,
   ChevronDown,
+  ClipboardCheck,
+  Repeat2,
   CircleArrowDown,
   Coffee,
   EyeOff,
@@ -112,6 +115,9 @@ export const NAV: Record<NavItemId, { label: string; icon: LucideIcon; route: Ro
   focus: { label: "Focus", icon: Timer, route: { name: "focus" }, shortcut: "focusMode" },
   rundown: { label: "Daily Rundown", icon: Sunrise, route: { name: "rundown" }, shortcut: "rundown" },
   ai: { label: "AI Accounts", icon: KeyRound, route: { name: "api", tab: "accounts" } },
+  planner: { label: "Day Planner", icon: CalendarClock, route: { name: "tasks", view: "plan" } },
+  habits: { label: "Habits", icon: Repeat2, route: { name: "habits" } },
+  review: { label: "Weekly Review", icon: ClipboardCheck, route: { name: "review" } },
 };
 
 function isActive(item: NavItemId, r: Route): boolean {
@@ -120,6 +126,10 @@ function isActive(item: NavItemId, r: Route): boolean {
       return r.name === "whiteboards" || r.name === "whiteboard";
     case "ai":
       return r.name === "api";
+    case "planner":
+      return r.name === "tasks" && r.view === "plan";
+    case "tasks":
+      return r.name === "tasks" && r.view !== "plan";
     default:
       return r.name === item;
   }

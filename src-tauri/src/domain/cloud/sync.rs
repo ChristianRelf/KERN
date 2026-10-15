@@ -10,7 +10,7 @@
 //! other field takes the server's value. Deletions leave tombstone shadows so
 //! a stale copy can never bring a record back.
 //!
-//! Columns that are personal or device-specific (pins, last-opened times,
+//! Columns that are personal or device-specific (pins, time blocks, last-opened times,
 //! whiteboard viewports, links to local repositories) are never sent and
 //! never overwritten.
 
@@ -36,7 +36,7 @@ pub const TABLES: &[SyncTable] = &[
     SyncTable { name: "boards", pk: &["id"], local: &[] },
     SyncTable { name: "board_columns", pk: &["id"], local: &["collapsed"] },
     SyncTable { name: "milestones", pk: &["id"], local: &["repository_id"] },
-    SyncTable { name: "tasks", pk: &["id"], local: &["pinned"] },
+    SyncTable { name: "tasks", pk: &["id"], local: &["pinned", "plan_date", "plan_time"] },
     SyncTable { name: "task_labels", pk: &["task_id", "label_id"], local: &[] },
     SyncTable { name: "task_relations", pk: &["task_id", "related_id"], local: &[] },
     SyncTable { name: "milestone_deps", pk: &["milestone_id", "depends_on"], local: &[] },
@@ -48,6 +48,10 @@ pub const TABLES: &[SyncTable] = &[
     SyncTable { name: "wb_edges", pk: &["id"], local: &[] },
     SyncTable { name: "project_repos", pk: &["project_id"], local: &["last_synced_at", "last_sync_error"] },
     SyncTable { name: "task_issue_links", pk: &["repo", "issue_number"], local: &[] },
+    SyncTable { name: "task_comments", pk: &["id"], local: &[] },
+    SyncTable { name: "templates", pk: &["id"], local: &[] },
+    SyncTable { name: "habits", pk: &["id"], local: &[] },
+    SyncTable { name: "habit_checks", pk: &["habit_id", "day"], local: &[] },
 ];
 
 pub fn table(name: &str) -> Option<&'static SyncTable> {
@@ -591,6 +595,7 @@ fn import_inner(conn: &mut Connection, project_ids: Option<&[String]>) -> AppRes
             "board_columns" => format!("board_id IN (SELECT id FROM local.boards WHERE project_id IN {p})"),
             "task_labels" => format!("task_id IN (SELECT id FROM local.tasks WHERE project_id IN {p})"),
             "milestone_deps" => format!("milestone_id IN (SELECT id FROM local.milestones WHERE project_id IN {p})"),
+            "task_comments" => format!("task_id IN (SELECT id FROM local.tasks WHERE project_id IN {p})"),
             "release_links" => format!("milestone_id IN (SELECT id FROM local.milestones WHERE project_id IN {p})"),
             "wb_nodes" | "wb_edges" => format!("whiteboard_id IN (SELECT id FROM local.whiteboards WHERE project_id IN {p})"),
             _ => "0".to_string(),

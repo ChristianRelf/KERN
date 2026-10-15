@@ -22,6 +22,8 @@ const FocusPage = lazy(() => import("@/features/focus/FocusPage"));
 const RundownPage = lazy(() => import("@/features/daily-briefing/RundownPage"));
 const SessionsPage = lazy(() => import("@/features/sessions/SessionsPage"));
 const StreamsPage = lazy(() => import("@/features/streams/StreamsPage"));
+const HabitsPage = lazy(() => import("@/features/habits/HabitsPage"));
+const ReviewPage = lazy(() => import("@/features/review/ReviewPage"));
 
 export function Routes() {
   const route = useRouter((s) => s.route);
@@ -83,6 +85,12 @@ export function Routes() {
       break;
     case "streams":
       page = <StreamsPage id={route.id} tab={route.tab} />;
+      break;
+    case "habits":
+      page = <HabitsPage />;
+      break;
+    case "review":
+      page = <ReviewPage key={route.week ?? "this"} week={route.week} />;
       break;
   }
   return (

@@ -177,6 +177,11 @@ fn account(conn: &rusqlite::Connection) -> Option<Account> {
     settings::get(conn, "cloud.account")
 }
 
+/// The signed-in Kern Cloud account, if any (cached on this computer).
+pub fn current_account(conn: &rusqlite::Connection) -> Option<Account> {
+    account(conn)
+}
+
 fn account_from(v: &Value) -> Option<Account> {
     Some(Account {
         id: v.get("id")?.as_str()?.to_string(),
@@ -367,6 +372,9 @@ fn on_space<T>(app: &AppHandle, space: &str, f: impl FnOnce(&mut rusqlite::Conne
 fn emit_applied(app: &AppHandle, space: &str, touched: &sync::Touched) {
     if !touched.is_empty() {
         let _ = app.emit("kern://cloud-applied", json!({ "space": space, "tables": touched.tables, "whiteboards": touched.whiteboards }));
+    }
+    if touched.tables.contains("task_comments") {
+        crate::domain::comments::notify_mentions(app, space);
     }
 }
 

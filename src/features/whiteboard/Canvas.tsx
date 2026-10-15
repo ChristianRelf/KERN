@@ -69,6 +69,7 @@ import { MenuContent, type MenuItems } from "@/components/ui/Menu";
 import { EmptyState, Skeleton } from "@/components/ui/Controls";
 import { isTextInput } from "@/lib/shortcuts";
 import { openTask } from "@/features/tasks/menu";
+import { openShare } from "@/features/share/open";
 import { NODE_TYPES, WbContext } from "./nodes";
 import { EDGE_TYPES, withMarkers } from "./edges";
 import { EdgeApiContext } from "./edgeContext";
@@ -1246,7 +1247,43 @@ function Editor({ scene, projectId }: { scene: WhiteboardScene; projectId: strin
   };
 
   // ------------------------------------------------------------ export
-  const exportImage = async (kind: "png" | "svg") => {
+  /** Image options for the whole board (null when it's empty). */
+  const imageOptions = () => {
+    const vpEl = wrapper.current?.querySelector(".react-flow__viewport") as HTMLElement | null;
+    if (!vpEl || !nodesRef.current.length) return null;
+    const bounds = getNodesBounds(nodesRef.current);
+    const pad = 48;
+    const width = Math.ceil(bounds.width + pad * 2);
+    const height = Math.ceil(bounds.height + pad * 2);
+    const vp = getViewportForBounds(bounds, width, height, 0.05, 4, 0);
+    const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || "#111111";
+    return {
+      vpEl,
+      opts: {
+        backgroundColor: bg,
+        width,
+        height,
+        style: { width: `${width}px`, height: `${height}px`, transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.zoom})` },
+        filter: (node: HTMLElement) => !node.classList?.contains("react-flow__resize-control") && !node.classList?.contains("react-flow__handle"),
+      },
+    };
+  };
+
+  /** The board as a PNG for a share link (at most ~2400px wide). */
+  const renderForShare = async () => {
+    const io = imageOptions();
+    if (!io) return null;
+    const ratio = Math.max(0.5, Math.min(2, 2400 / io.opts.width));
+    const url = await toPng(io.vpEl, { ...io.opts, pixelRatio: ratio });
+    return { base64: url.split(",")[1], mime: "image/png", width: Math.round(io.opts.width * ratio), height: Math.round(io.opts.height * ratio), objects: nodesRef.current.length };
+  };
+
+  const exportImage = async (kind: "png" | "svg" | "share") => {
+    if (kind === "share") {
+      flush();
+      openShare({ kind: "whiteboard", refId: scene.whiteboard.id, title: scene.whiteboard.name, render: renderForShare });
+      return;
+    }
     const vpEl = wrapper.current?.querySelector(".react-flow__viewport") as HTMLElement | null;
     if (!vpEl || !nodesRef.current.length) return toast("Nothing to export yet");
     const name = scene.whiteboard.name.replace(/[<>:"/\\|?*]/g, "_");
