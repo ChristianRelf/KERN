@@ -11,10 +11,18 @@
 set -euo pipefail
 
 mkdir -p /build /out
-tar -C /repo --exclude=./node_modules --exclude=./dist --exclude=./release --exclude=./src-tauri/target -cf - . | tar -C /build -xf -
+# .git is excluded as well as the build output: nothing here needs history,
+# and a concurrent commit or push on the host would otherwise change it
+# mid-read and fail the copy.
+tar -C /repo --exclude=./.git --exclude=./node_modules --exclude=./dist --exclude=./release --exclude=./src-tauri/target -cf - . | tar -C /build -xf -
 cd /build
 
 npm ci --no-audit --no-fund
+
+# The target directory is a cache that outlives one build, so bundles from
+# an earlier version are still sitting in it. Clear them, or the copy below
+# picks them up too and a release ends up carrying both versions.
+rm -rf src-tauri/target/release/bundle
 
 # With a signing key in the environment the AppImage also gets its updater
 # signature, so Linux installs can update themselves like the Windows ones.
