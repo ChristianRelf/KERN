@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BarElement, CategoryScale, Chart as ChartJS, LinearScale, Tooltip as ChartTooltip, type ChartOptions } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { format } from "date-fns";
-import type { WorkSession } from "@/lib/types";
+import type { EstimateStats, WorkSession } from "@/lib/types";
 import { api, describeError } from "@/lib/ipc";
 import { invalidate } from "@/lib/query";
 import { useProjects } from "@/hooks/data";
@@ -54,6 +54,10 @@ export default function SessionsPage({ projectId }: { projectId?: string }) {
   const { data: report } = useQuery({
     queryKey: ["sessions", "report", from, to, pid],
     queryFn: () => api.sessions.report(dayStartMs(from), dayStartMs(to), pid),
+  });
+  const { data: estimates } = useQuery({
+    queryKey: ["estimates", from, to, pid],
+    queryFn: () => api.review.estimates(dayStartMs(from), dayStartMs(to), pid),
   });
   const { data: list } = useQuery({
     queryKey: ["sessions", "list", from, to, pid],
@@ -141,6 +145,7 @@ export default function SessionsPage({ projectId }: { projectId?: string }) {
             <Breakdown title="By project" rows={report?.byProject} total={report?.totalMs ?? 0} onOpen={(k) => k && navigate({ name: "project", id: k })} />
             <Breakdown title="By task" rows={report?.byTask} total={report?.totalMs ?? 0} onOpen={(k) => k && openTask(k)} />
           </div>
+          {estimates && (estimates.count > 0 || estimates.untracked > 0) && <Estimates s={estimates} />}
           <div className="col" style={{ gap: 2 }}>
             <div className="section-title">
               Sessions <span className="count">{list?.length ?? 0}</span>
@@ -149,6 +154,51 @@ export default function SessionsPage({ projectId }: { projectId?: string }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** How long finished tasks took against their estimates. */
+function Estimates({ s }: { s: EstimateStats }) {
+  const median = s.medianRatio;
+  const verdict =
+    median === null ? null : median > 1.15 ? `Tasks typically take ${median.toFixed(1)}× your estimate.` : median < 0.85 ? `Tasks typically take ${Math.round(median * 100)}% of your estimate.` : "Your estimates are about right.";
+  return (
+    <div className="panel">
+      <div className="panel__title">Estimates vs. actual</div>
+      {s.count > 0 ? (
+        <>
+          <span style={{ fontSize: "var(--fs-sm)" }}>
+            {s.count} finished task{s.count === 1 ? "" : "s"} took {formatDuration(s.totalActualMinutes * 60)} against {formatDuration(s.totalEstimateMinutes * 60)} estimated. {verdict}
+          </span>
+          <div className="estimate-split" aria-label={`${s.onTarget} on target, ${s.over} over, ${s.under} under`}>
+            {s.onTarget > 0 && <span data-k="ok" style={{ flex: s.onTarget }}>{s.onTarget} on target</span>}
+            {s.over > 0 && <span data-k="over" style={{ flex: s.over }}>{s.over} over</span>}
+            {s.under > 0 && <span data-k="under" style={{ flex: s.under }}>{s.under} under</span>}
+          </div>
+          {s.misses.length > 0 && (
+            <div className="col" style={{ gap: 0, marginTop: 4 }}>
+              <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>Furthest off</span>
+              {s.misses.slice(0, 5).map((m) => (
+                <button key={m.taskId} type="button" className="breakdown-row" onClick={() => openTask(m.taskId)}>
+                  <span className="truncate grow">{m.title}</span>
+                  <span className="faint tabular">
+                    {formatDuration(m.actualMinutes * 60)} / {formatDuration(m.estimateMinutes * 60)}
+                  </span>
+                  <span className="estimate-badge" data-state={m.ratio > 1.25 ? "over" : m.ratio < 0.75 ? "under" : "ok"}>
+                    {m.ratio >= 1 ? `+${Math.round((m.ratio - 1) * 100)}%` : `${Math.round((m.ratio - 1) * 100)}%`}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      ) : null}
+      {s.untracked > 0 && (
+        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+          {s.untracked} finished task{s.untracked === 1 ? " has" : "s have"} an estimate but no tracked time. Start a session or a focus timer on a task to compare.
+        </span>
+      )}
     </div>
   );
 }

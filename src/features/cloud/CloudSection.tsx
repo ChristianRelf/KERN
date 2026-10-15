@@ -38,6 +38,8 @@ interface SessionInfo {
   ipAddress?: string | null;
 }
 
+import { CaptureAnywhere } from "./CaptureAnywhere";
+
 export function CloudSection() {
   const enabled = useSetting("cloud.enabled");
   const network = useSetting("privacy.network");
@@ -168,6 +170,12 @@ export function CloudSection() {
                   </Button>
                 </Row>
               )}
+            </div>
+          </section>
+          <section>
+            <div className="set-group__title">Capture from anywhere</div>
+            <div className="set-group" style={{ padding: "12px 14px" }}>
+              <CaptureAnywhere />
             </div>
           </section>
           <section>

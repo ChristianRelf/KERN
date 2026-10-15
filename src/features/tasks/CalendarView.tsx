@@ -12,10 +12,13 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { format } from "date-fns";
-import type { Task } from "@/lib/types";
+import type { CalEvent, Task } from "@/lib/types";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/ipc";
+import { useSetting } from "@/stores/settings";
 import { useTasks } from "@/hooks/data";
 import { useToday } from "@/hooks/useToday";
-import { addMonthsStr, formatDue, formatTime, monthGrid, monthStartStr, parseDateStr, weekdayLabels } from "@/lib/dates";
+import { addMonthsStr, formatDue, formatTime, monthGrid, monthStartStr, parseDateStr, weekdayLabels, addDaysStr } from "@/lib/dates";
 import { IconButton, Button } from "@/components/ui/Button";
 import { Popover, TaskCheck, TaskTitle, Switch } from "@/components/ui/Controls";
 import { openTask } from "./menu";
@@ -55,11 +58,21 @@ function CalTask({ task, overlay, still }: { task: Task; overlay?: boolean; stil
   );
 }
 
-function DayCell({ day, tasks, month, today, maxVisible }: { day: string; tasks: Task[]; month: number; today: string; maxVisible: number }) {
+function CalEventChip({ e }: { e: CalEvent }) {
+  return (
+    <div className="cal-event" style={{ ["--event" as string]: e.color ?? "var(--hue-3)" }} title={`${e.title}${e.location ? ` · ${e.location}` : ""} (${e.feedName})`}>
+      {!e.allDay && <span className="faint tabular">{formatTime(e.start.slice(11, 16))}</span>}
+      <span className="truncate">{e.title}</span>
+    </div>
+  );
+}
+
+function DayCell({ day, tasks, events, month, today, maxVisible }: { day: string; tasks: Task[]; events: CalEvent[]; month: number; today: string; maxVisible: number }) {
   const { setNodeRef, isOver } = useDroppable({ id: `day:${day}` });
   const d = parseDateStr(day);
-  const visible = tasks.slice(0, maxVisible);
-  const more = tasks.length - visible.length;
+  const shownEvents = events.slice(0, Math.max(1, Math.min(2, maxVisible - tasks.length)));
+  const visible = tasks.slice(0, Math.max(1, maxVisible - shownEvents.length));
+  const more = tasks.length - visible.length + (events.length - shownEvents.length);
   return (
     <div
       ref={setNodeRef}
@@ -73,6 +86,9 @@ function DayCell({ day, tasks, month, today, maxVisible }: { day: string; tasks:
         <b>{d.getDate() === 1 ? format(d, "d MMM") : d.getDate()}</b>
       </div>
       <div className="cal__tasks">
+        {shownEvents.map((e) => (
+          <CalEventChip key={`${e.feedId}:${e.uid}:${e.start}`} e={e} />
+        ))}
         {visible.map((t) => (
           <CalTask key={t.id} task={t} />
         ))}
@@ -82,6 +98,9 @@ function DayCell({ day, tasks, month, today, maxVisible }: { day: string; tasks:
               <div className="section-title" style={{ marginBottom: 4 }}>
                 {formatDue(day, null, today)}
               </div>
+              {events.map((e) => (
+                <CalEventChip key={`${e.feedId}:${e.uid}:${e.start}`} e={e} />
+              ))}
               {tasks.map((t) => (
                 <CalTask key={t.id} task={t} still />
               ))}
@@ -135,6 +154,27 @@ export default function CalendarView() {
     order: "due",
   });
   const { data: undated } = useTasks({ hasDue: false, topLevelOnly: true, limit: 100, order: "priority" }, { enabled: showTray });
+  const showEvents = useSetting("calendar.showEvents");
+  const { data: events } = useQuery({
+    queryKey: ["calendar", "events", days[0], days[days.length - 1]],
+    queryFn: () => api.calendar.events(days[0], days[days.length - 1]),
+    enabled: showEvents,
+    staleTime: 60_000,
+  });
+  const eventsByDay = useMemo(() => {
+    const m = new Map<string, CalEvent[]>();
+    for (const e of events ?? []) {
+      // Multi-day events show on each of their days.
+      let d = e.start.slice(0, 10);
+      const last = e.end.slice(0, 10);
+      for (let i = 0; i < 62 && d <= last; i++) {
+        if (!m.has(d)) m.set(d, []);
+        m.get(d)!.push(e);
+        d = addDaysStr(d, 1);
+      }
+    }
+    return m;
+  }, [events]);
   const byDay = useMemo(() => {
     const m = new Map<string, Task[]>();
     for (const t of tasks ?? []) {
@@ -191,7 +231,7 @@ export default function CalendarView() {
           </div>
           <div className="cal__grid">
             {days.map((d) => (
-              <DayCell key={d} day={d} tasks={byDay.get(d) ?? []} month={monthIdx} today={today} maxVisible={4} />
+              <DayCell key={d} day={d} tasks={byDay.get(d) ?? []} events={eventsByDay.get(d) ?? []} month={monthIdx} today={today} maxVisible={4} />
             ))}
           </div>
         </div>

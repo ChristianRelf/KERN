@@ -3,7 +3,6 @@
 
 import { FileText, LayoutTemplate, ListChecks, Search } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import type { TemplateMeta } from "@/lib/types";
 import { api, describeError } from "@/lib/ipc";
 import { invalidate, invalidateTasks } from "@/lib/query";
@@ -15,10 +14,7 @@ import { EmptyState, Skeleton, Switch } from "@/components/ui/Controls";
 import { openTask } from "@/features/tasks/menu";
 import { newProjectFromTemplate, useTemplateDialogs, type TemplateRequest } from "./open";
 import "./templates.css";
-
-export function useTemplates(kind?: TemplateMeta["kind"]) {
-  return useQuery({ queryKey: ["templates", kind ?? "all"], queryFn: () => api.templates.list(kind), staleTime: 60_000 });
-}
+import { useTemplates } from "./data";
 
 function SaveProject({ req, close }: { req: Extract<TemplateRequest, { mode: "save-project" }>; close: () => void }) {
   const [name, setName] = useState(req.name);

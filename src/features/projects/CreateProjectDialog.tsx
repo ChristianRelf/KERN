@@ -18,7 +18,7 @@ import { invalidate } from "@/lib/query";
 import { navigate } from "@/stores/router";
 import { toastError } from "@/stores/toast";
 import { todayStr } from "@/lib/dates";
-import { useTemplates } from "@/features/templates/TemplateDialogs";
+import { useTemplates } from "@/features/templates/data";
 import { useTemplateDialogs } from "@/features/templates/open";
 import "@/features/templates/templates.css";
 

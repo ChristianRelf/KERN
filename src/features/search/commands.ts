@@ -38,7 +38,16 @@ import {
   Radio,
   type LucideIcon,
   Minimize2,
+  CalendarClock,
+  ClipboardCheck,
+  Repeat2,
+  LayoutTemplate,
+  Upload,
+  Globe,
 } from "lucide-react";
+import { askAboutProject } from "@/features/projects/actions";
+import { openTemplatePicker } from "@/features/templates/open";
+import { openShare } from "@/features/share/open";
 import { switchMode } from "@/app/mode";
 import { navigate, useRouter } from "@/stores/router";
 import { useUi } from "@/stores/ui";
@@ -110,6 +119,15 @@ export function getCommands(): Command[] {
     { id: "toggleTerminal", title: "Toggle terminal", icon: SquareTerminal, section: "Actions", shortcut: "toggleTerminal", keywords: "shell console command line", run: () => void import("@/features/terminal/store").then((m) => m.toggleTerminal(projectId)) },
     projectId && { id: "catchup", title: "Catch up on this project", icon: Sparkles, section: "Actions", keywords: "summary what changed ai", run: () => openCatchup(projectId) },
     projectId && { id: "newMilestone", title: "Create milestone", icon: Flag, section: "Create", keywords: "release goal deadline", run: () => void createMilestone({ projectId }) },
+    projectId && { id: "askProject", title: "Ask about this project", icon: Sparkles, section: "Actions", keywords: "ai question answer what why blocked", run: () => void api.projects.get(projectId).then((p) => askAboutProject(p)) },
+    projectId && { id: "shareProject", title: "Share this project…", icon: Globe, section: "Actions", keywords: "link public roadmap read only", run: () => void api.projects.get(projectId).then((p) => openShare({ kind: "project", refId: p.id, title: p.name })) },
+    { id: "newTaskTemplate", title: "Create task from template…", icon: LayoutTemplate, section: "Create", keywords: "checklist template", run: () => openTemplatePicker("task", projectId) },
+    { id: "newNoteTemplate", title: "Create note from template…", icon: LayoutTemplate, section: "Create", keywords: "meeting notes template weekly plan", run: () => openTemplatePicker("note", projectId) },
+    { id: "goPlanner", title: "Open day planner", icon: CalendarClock, section: "Go to", keywords: "time blocking schedule plan my day calendar", run: () => navigate({ name: "tasks", view: "plan" }) },
+    { id: "goHabits", title: "Open habits", icon: Repeat2, section: "Go to", keywords: "streak routine daily", run: () => navigate({ name: "habits" }) },
+    { id: "goReview", title: "Open weekly review", icon: ClipboardCheck, section: "Go to", keywords: "reflect week plan retrospective", run: () => navigate({ name: "review" }) },
+    { id: "goCalendars", title: "Calendar subscriptions", icon: CalendarDays, section: "Go to", keywords: "google outlook ics ical", hidden: true, run: () => navigate({ name: "settings", section: "calendars" }) },
+    { id: "importApps", title: "Import from Todoist, Trello, Linear or Notion", icon: Upload, section: "Actions", keywords: "migrate csv import", hidden: true, run: () => navigate({ name: "settings", section: "data" }) },
     { id: "newTask", title: "Create task", icon: Plus, section: "Create", shortcut: "newTask", keywords: "add new todo", run: () => openNewTask() },
     { id: "newNote", title: "Create note", icon: NotebookPen, section: "Create", shortcut: "newNote", keywords: "write", run: () => void createNote() },
     { id: "newProject", title: "Create project", icon: FolderPlus, section: "Create", shortcut: "newProject", run: () => ui.set({ createProjectOpen: true }) },

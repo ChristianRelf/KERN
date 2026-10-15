@@ -26,7 +26,13 @@ import {
   SquareTerminal,
   Cloud,
   Minimize2,
+  CalendarDays,
+  LayoutTemplate,
+  Upload,
 } from "lucide-react";
+import { useCalendarGroups } from "@/features/calendar/CalendarSettings";
+import { templateGroups } from "@/features/templates/TemplatesSettings";
+import { ImportDialog } from "@/features/import/ImportDialog";
 import { CloudSection } from "@/features/cloud/CloudSection";
 import { IntegrationsSection } from "@/features/github/IntegrationsSection";
 import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
@@ -68,6 +74,8 @@ const SECTIONS: { id: SettingsSection; label: string; icon: typeof Settings }[] 
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "dashboard", label: "Dashboard", icon: LayoutGrid },
   { id: "tasks", label: "Tasks", icon: ListTodo },
+  { id: "calendars", label: "Calendars", icon: CalendarDays },
+  { id: "templates", label: "Templates", icon: LayoutTemplate },
   { id: "projects", label: "Projects & Boards", icon: FolderKanban },
   { id: "whiteboards", label: "Whiteboards", icon: Presentation },
   { id: "notifications", label: "Notifications", icon: Bell },
@@ -86,8 +94,20 @@ const SECTIONS: { id: SettingsSection; label: string; icon: typeof Settings }[] 
 
 // ------------------------------------------------------------ small editors
 
-function GlobalShortcutPicker() {
-  const value = useSetting("general.globalCaptureShortcut");
+function ImportButton() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button size="sm" icon={Upload} onClick={() => setOpen(true)}>
+        Import…
+      </Button>
+      <ImportDialog open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+function GlobalShortcutPicker({ k = "general.globalCaptureShortcut" }: { k?: "general.globalCaptureShortcut" | "general.globalLiteShortcut" }) {
+  const value = useSetting(k);
   const [recording, setRecording] = useState(false);
   return (
     <div className="row" style={{ gap: 6 }}>
@@ -107,7 +127,7 @@ function GlobalShortcutPicker() {
               toastError("Use at least Ctrl or Alt with another key.");
               return;
             }
-            void setSetting("general.globalCaptureShortcut", combo);
+            void setSetting(k, combo);
             setRecording(false);
           }}
         >
@@ -118,7 +138,7 @@ function GlobalShortcutPicker() {
           {value ? <Kbd combo={value} /> : <span className="faint">Off</span>}
         </button>
       )}
-      {value && <IconButton icon={X} label="Turn off" size="sm" onClick={() => void setSetting("general.globalCaptureShortcut", null)} />}
+      {value && <IconButton icon={X} label="Turn off" size="sm" onClick={() => void setSetting(k, null)} />}
     </div>
   );
 }
@@ -364,7 +384,12 @@ async function resetProjectOrder() {
 // ------------------------------------------------------------ sections
 
 function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | ReactNode> {
-  const data = [...useStorageGroups(), ...useDataGroups()];
+  const data = [
+    { title: "Import", rows: [{ label: "Import from another app", hint: "Projects and tasks from Todoist, Trello, Linear, Notion or any CSV.", keywords: "todoist trello linear notion csv migrate switch", control: <ImportButton /> }] },
+    ...useStorageGroups(),
+    ...useDataGroups(),
+  ];
+  const calendars = useCalendarGroups();
   const { data: dashboards } = useDashboards();
   const notificationsOn = useSetting("notifications.enabled");
   const quiet = useSetting("notifications.quietHours");
@@ -413,6 +438,8 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
           { label: "Keep on top", hint: "Keep the Kern Lite window above other windows.", keywords: "always on top pin float", control: <SToggle k="lite.alwaysOnTop" /> },
           { label: "Show tasks done today", control: <SToggle k="lite.showDone" /> },
           { label: "Celebrate a cleared list", hint: "A little confetti when you finish the last task in a list.", keywords: "confetti animation", control: <SToggle k="lite.celebrate" /> },
+          { label: "System-wide shortcut", hint: "Opens Kern Lite from any app.", keywords: "global hotkey lite", control: <GlobalShortcutPicker k="general.globalLiteShortcut" /> },
+          { label: "Today's tasks in the tray menu", hint: "Tick off what's due today from the tray icon without opening Kern.", keywords: "tray menu complete quick", control: <SToggle k="general.trayTasks" /> },
         ],
       },
       {
@@ -663,6 +690,8 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
           { label: "Focus timer finished", control: <SToggle k="notifications.focus" /> },
           { label: "Morning rundown", control: <SToggle k="rundown.notify" /> },
           { label: "Evening review", control: <SToggle k="rundown.eveningNotify" /> },
+          { label: "Weekly review", control: <SToggle k="review.notify" /> },
+          { label: "Someone mentions me", hint: "When a workspace member @mentions you in a task comment.", keywords: "comments mention", control: <SToggle k="notifications.mentions" /> },
           {
             label: "Quiet hours",
             hint: "No notifications during this period.",
@@ -681,6 +710,15 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
       },
     ],
     rundown: [
+      {
+        title: "Weekly review",
+        rows: [
+          { label: "Weekly review reminder", hint: "A nudge once a week to look back and plan the next one.", keywords: "weekly review reflect plan", control: <SToggle k="review.enabled" /> },
+          { label: "Day", control: <SSelect k="review.day" options={["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((d, i) => ({ value: String(i), label: d }))} /> },
+          { label: "Time", control: <STime k="review.time" /> },
+          { label: "Open the weekly review", control: <Button size="sm" onClick={() => navigate({ name: "review" })}>Open</Button> },
+        ],
+      },
       {
         title: "Morning briefing",
         rows: [
@@ -778,6 +816,8 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
       },
     ],
     about: <AboutSection />,
+    calendars,
+    templates: templateGroups(),
   };
 }
 

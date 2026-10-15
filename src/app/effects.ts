@@ -20,6 +20,7 @@ import { setSetting } from "@/stores/settings";
 import { openNewTask } from "@/features/tasks/creation";
 import { useSessions } from "@/features/sessions/store";
 import { confirm } from "@/components/ui/Dialog";
+import { openTask } from "@/features/tasks/menu";
 
 const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const prefersDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -68,6 +69,7 @@ export function useOsIntegration() {
   const launchAtLogin = useSettings((s) => s.values["general.launchAtLogin"]);
   const showTray = useSettings((s) => s.values["general.showTray"]);
   const globalCapture = useSettings((s) => s.values["general.globalCaptureShortcut"]);
+  const globalLite = useSettings((s) => s.values["general.globalLiteShortcut"]);
   const loaded = useSettings((s) => s.loaded);
 
   useEffect(() => {
@@ -102,6 +104,27 @@ export function useOsIntegration() {
       if (registered) void unregister(accel).catch(() => undefined);
     };
   }, [globalCapture, loaded]);
+
+  // System-wide shortcut for Kern Lite.
+  useEffect(() => {
+    if (!loaded || !isTauri || !globalLite || globalLite === globalCapture) return;
+    const accel = globalLite.replace("Mod", "CommandOrControl");
+    let registered = false;
+    void register(accel, (e) => {
+      if (e.state !== "Pressed") return;
+      void api.system.showWindow().then(() => import("./mode").then((m) => m.switchMode("lite")));
+    })
+      .then(() => (registered = true))
+      .catch(() => toastError(`Couldn't register ${globalLite} system-wide - another app may be using it.`));
+    return () => {
+      if (registered) void unregister(accel).catch(() => undefined);
+    };
+  }, [globalLite, globalCapture, loaded]);
+
+  // The tray's Today list starts in step with the data on screen.
+  useEffect(() => {
+    if (loaded && isTauri) void api.app.trayRefresh().catch(() => undefined);
+  }, [loaded]);
 }
 
 async function maybePromptBriefing() {
@@ -141,6 +164,19 @@ export function useBackendEvents() {
         if (ok) void api.system.quit();
       }),
       listen<string>("kern://backup-failed", (e) => toastError(`Automatic backup failed: ${e.payload}`)),
+      listen<{ taskId: string; taskTitle: string; authorName: string; excerpt: string }[]>("kern://mentioned", (e) => {
+        const first = e.payload[0];
+        if (!first) return;
+        void queryClient.invalidateQueries({ queryKey: ["comments"] });
+        const text = e.payload.length > 1 ? `${e.payload.length} new mentions in comments` : `${first.authorName || "Someone"} mentioned you on “${first.taskTitle}”`;
+        toast(text, { action: { label: "Open", run: () => openTask(first.taskId) }, duration: 8000 });
+      }),
+      listen("kern://review-due", () => {
+        if (!useSettings.getState().values["review.enabled"] || useRouter.getState().route.name === "review") return;
+        toast("Time for your weekly review", { action: { label: "Start", run: () => navigate({ name: "review" }) }, duration: 12_000 });
+      }),
+      listen<string>("kern://tray-completed", (e) => toast(`Completed “${e.payload}”`)),
+      listen("kern://calendar-updated", () => void queryClient.invalidateQueries({ queryKey: ["calendar"] })),
       listen<{ from: string; to: string; reason: string }>("kern://ai-switch", (e) => {
         if (!useSettings.getState().values["ai.notifySwitch"]) return;
         const msg = `Switched to ${e.payload.to} - ${e.payload.from} unavailable (${e.payload.reason}).`;
