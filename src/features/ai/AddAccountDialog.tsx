@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { CircleAlert, CircleCheck, KeyRound, LoaderCircle } from "lucide-react";
 import { useState } from "react";
 import type { AiProvider, AiValidation } from "@/lib/types";

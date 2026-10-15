@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 /** Joins a base directory and a relative path using the base's separator. */

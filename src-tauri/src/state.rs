@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 use crate::error::{AppError, AppResult};
 use rusqlite::Connection;
 use std::path::PathBuf;

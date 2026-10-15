@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { describe, expect, it } from "vitest";
 import { SYNTAXES, GRAMMAR_META } from "./catalog";
 import { suggestSyntaxes, syntaxForFile } from "./syntax";

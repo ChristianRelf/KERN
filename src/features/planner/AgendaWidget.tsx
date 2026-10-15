@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // Today's agenda for the dashboard: calendar events and time-blocked tasks
 // in time order, with what's on now highlighted.
 

@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Versioned schema migrations. `PRAGMA user_version` tracks the applied
 //! version. Each migration runs inside its own transaction, so an
 //! interrupted migration rolls back cleanly; additionally a full database

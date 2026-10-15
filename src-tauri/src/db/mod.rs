@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Database bootstrap: connection configuration, migrations and the
 //! pre-migration safety copy.
 

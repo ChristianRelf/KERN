@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-13
+
 //! HTTP client for the Kern Cloud API (api.relf.cloud/kern/v1).
 //!
 //! The session token lives in the OS credential store and is only ever used

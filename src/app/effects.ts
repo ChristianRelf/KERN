@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // App-wide side effects: appearance attributes, OS integration sync,
 // backend events, briefing prompts and global keyboard shortcuts.
 

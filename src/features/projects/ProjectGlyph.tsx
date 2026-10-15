@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // A project's (or workspace's) mark: a Lucide icon, an emoji or its first
 // letter, in a preset or custom colour. Stored as plain strings, so new
 // icons and colours never need a migration:

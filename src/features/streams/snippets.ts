@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // Copy-and-paste code for sending to a stream, generated from its settings:
 // an HTML form and a fetch() call for public streams, and cURL, Node and
 // Python for token and signature streams. Also builds a sample submission

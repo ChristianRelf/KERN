@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // The full task composer: a compact modal with a roomy title, an optional
 // description and metadata chips. Rarely used properties stay behind "+".
 // Mounted only while open; Enter in the title creates, Mod+Enter creates

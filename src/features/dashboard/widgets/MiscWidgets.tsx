@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { Bookmark, FileText, FolderKanban, History, Pencil, Plus, Presentation, Trash } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { WidgetProps } from "../types";

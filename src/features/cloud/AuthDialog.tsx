@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // The Kern Cloud sign-in modal: sign in, create an account, confirm the
 // email with a code, sign in with a code, and recover a forgotten password.
 

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // Kern Cloud actions: turning collaboration on, switching between offline
 // data and cloud spaces, invitations, deep links and applying the effects
 // of remote changes to the interface.

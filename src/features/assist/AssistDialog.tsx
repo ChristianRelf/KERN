@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // One dialog for every AI action. It first shows exactly what would be sent
 // (the instructions and the content, with its size) and why it can't be
 // sent when it can't; nothing leaves the computer until "Send" is pressed.

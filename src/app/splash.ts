@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 /** Fades out and removes the startup splash painted by index.html. */
 export function hideSplash() {
   const el = document.getElementById("splash");

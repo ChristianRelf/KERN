@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // App-wide undo for reversible actions (completion, moves, reorders,
 // rescheduling, deletion to trash). Each entry knows how to revert itself;
 // the toast offers an Undo button and Ctrl+Z pops the latest entry.

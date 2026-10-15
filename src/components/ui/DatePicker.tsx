@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { ChevronLeft, ChevronRight, CalendarX, Sun, Sunrise, CalendarClock, Sofa } from "lucide-react";
 import { useMemo, useState } from "react";
 import {

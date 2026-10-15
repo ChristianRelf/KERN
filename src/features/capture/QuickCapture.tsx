@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { Dialog as D } from "radix-ui";
 import { CalendarDays, FolderKanban, Lightbulb, NotebookPen, SquareCheckBig } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";

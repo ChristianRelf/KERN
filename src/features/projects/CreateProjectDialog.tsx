@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { useMemo, useState } from "react";
 import { LayoutTemplate } from "lucide-react";
 import { Dialog } from "@/components/ui/Dialog";

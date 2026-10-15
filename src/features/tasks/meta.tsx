@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import type { Task, TaskPatch, TaskResolution, TaskStatus } from "@/lib/types";
 
 export const PRIORITY_LABELS = ["No priority", "Low", "Medium", "High", "Urgent"] as const;

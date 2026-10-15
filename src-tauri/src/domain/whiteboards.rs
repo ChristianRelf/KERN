@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Whiteboards: metadata plus objects (nodes) and connections (edges).
 //! The client saves the full scene (debounced); the backend diffs it
 //! against stored rows in one transaction, touching only changed objects.

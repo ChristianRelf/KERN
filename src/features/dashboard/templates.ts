@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Dashboard layout templates. "Daily" is the default home.
 
 import type { GridItem, GridLayouts, WidgetInstance } from "@/lib/types";

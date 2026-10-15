@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Domain types mirroring the Rust command payloads (camelCase).
 
 export type TaskStatus = "inbox" | "todo" | "in_progress" | "blocked" | "completed";

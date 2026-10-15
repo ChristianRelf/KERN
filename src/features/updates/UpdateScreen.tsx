@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // The whole window while an update runs: just the mark, what's happening
 // and a progress bar, in the middle of a blank screen.
 

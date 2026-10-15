@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Dependency explorer: what a project depends on, read from manifests and
 //! lockfiles (npm, pnpm, Yarn, Cargo, Python, Go, Maven/Gradle, .NET).
 //!

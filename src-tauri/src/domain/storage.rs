@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Storage analytics: how much disk space Kern uses and what it consists of.
 //!
 //! Only Kern-owned locations are measured (the data folder, the WebView data

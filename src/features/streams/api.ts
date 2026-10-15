@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // Streams in Kern Cloud: requests for the open space's streams, query keys,
 // and small helpers shared by the Streams page.
 

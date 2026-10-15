@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Settings → Integrations: GitHub sign-in, sync behaviour and git.
 
 import { CircleAlert, CircleCheck, RefreshCw } from "lucide-react";

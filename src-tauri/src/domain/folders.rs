@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Project folders on disk, workspace trust and the project file browser.
 //!
 //! A Kern project and a folder are separate things: a project may be linked

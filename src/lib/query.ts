@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { QueryClient } from "@tanstack/react-query";
 import { api, isTauri } from "./ipc";
 import type { BoardData, Task, TaskPatch } from "./types";

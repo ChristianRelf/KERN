@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Kern - a local-first personal productivity workspace.
 //!
 //! The backend owns persistence (SQLite), file management, notifications,

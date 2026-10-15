@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! AI API account profiles: non-sensitive metadata in SQLite, keys in the
 //! OS credential store (see vault.rs). "Account" here always means an API
 //! credential profile, never a subscription login.

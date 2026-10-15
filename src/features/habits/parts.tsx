@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // Small habit controls shared by the Habits page and the dashboard widget.
 
 import type { Habit } from "@/lib/types";

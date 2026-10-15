@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Structured application errors. Raw database / IO errors are mapped to a
 //! stable `code` plus a human-readable message so the UI can present
 //! actionable feedback instead of leaking internals.

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { Pencil, Tag, Trash } from "lucide-react";
 import { useLabels, useTasks } from "@/hooks/data";
 import { TaskList } from "./TaskList";

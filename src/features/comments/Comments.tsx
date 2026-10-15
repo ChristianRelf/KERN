@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // Comments on a task. In a Kern Cloud workspace they're shared with members
 // and "@" mentions a member (who's notified); offline they're notes to
 // yourself. Mentions are stored as @[Name](user-id) and shown as chips.

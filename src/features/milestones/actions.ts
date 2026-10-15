@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import type { Milestone, MilestoneInput, MilestonePatch } from "@/lib/types";
 import { api, describeError } from "@/lib/ipc";
 import { invalidate } from "@/lib/query";

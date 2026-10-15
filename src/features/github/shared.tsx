@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // GitHub & git: shared hooks, the repository picker and the connect /
 // clone / import flows. Kern never clones without asking, and a cloned
 // folder goes through the normal trust prompt like any other folder.

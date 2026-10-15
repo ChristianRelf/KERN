@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { createContext, useContext } from "react";
 import type { Project, ProjectCapabilities } from "@/lib/types";
 

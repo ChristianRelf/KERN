@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Attachments and managed files.
 //!
 //! Managed files are copied into `<data>/attachments/` and referenced by a

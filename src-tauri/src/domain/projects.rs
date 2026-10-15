@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Projects and project groups.
 
 use crate::domain::{activity, boards, recent};

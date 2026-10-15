@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { ArrowRight, CircleAlert, CircleCheck, Plus, Send, Square, X } from "lucide-react";
 import { useState } from "react";
 import type { AiRouteOutcome } from "@/lib/types";

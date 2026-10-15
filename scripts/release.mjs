@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // Builds signed Windows installers and the updater manifest (latest.json),
 // and optionally publishes them as the GitHub release for the current
 // version.

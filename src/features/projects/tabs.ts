@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // A project's sections, in display order.
 
 import { Activity, File, Flag, GitBranch, LayoutDashboard, ListTodo, Presentation, SquareKanban, StickyNote } from "lucide-react";

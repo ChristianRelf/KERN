@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // Label colours: stored like project accents (a preset key or #rrggbb) and
 // shown as a dot on label chips.
 

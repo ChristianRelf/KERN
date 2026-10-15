@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import type { Edge, Node } from "@xyflow/react";
 import type { WbEdgeRecord, WbNodeRecord } from "@/lib/types";
 import { getSetting } from "@/stores/settings";

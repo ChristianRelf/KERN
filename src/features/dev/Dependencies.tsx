@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Dependency explorer: packages from manifests and lockfiles, with the
 // declared range and - only when a lockfile says so - the resolved
 // version. A virtualised list is the default; the graph shows one

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Focus (Pomodoro-style) timer. Timestamp-based: remaining time is always
 // computed from `endsAt`, so it stays accurate when the window is
 // minimised or throttled. The completion notification is scheduled on a

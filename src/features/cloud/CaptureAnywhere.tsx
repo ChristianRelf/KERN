@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // "Capture from anywhere": send notes to your personal Inbox from your phone
 // (a private page you add to the home screen) or by email (a private
 // address). Both are streams in the personal space, set up here in one click.

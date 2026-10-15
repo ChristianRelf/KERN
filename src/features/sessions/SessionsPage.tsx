@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Time reports: time per day, per project and per task, and the session
 // history with edit and delete. Lazy-loaded (Chart.js ships only here).
 

@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Daily rundown support: a scoped data fetch for the deterministic rundown
 //! (computed on the client so the scoring is transparent and adjustable),
 //! plus persisted daily snapshots for history.

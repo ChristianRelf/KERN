@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Settings → Data & Storage: what Kern stores, where, and safe cleanup.
 
 import { ClipboardCopy, FolderOpen, Info, RefreshCw, X } from "lucide-react";

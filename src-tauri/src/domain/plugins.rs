@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Syntax plugins: TextMate grammars for the file viewer's highlighting.
 //!
 //! Grammars are plain JSON data, never code. They come from the pinned

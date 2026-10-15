@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { CalendarRange, SquareCheckBig, ListFilter } from "lucide-react";
 import { useMemo } from "react";
 import type { WidgetProps } from "../types";

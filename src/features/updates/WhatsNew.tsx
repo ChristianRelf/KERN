@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // "What's new" after an update: the release's notes, read from its GitHub
 // page (or, offline, from the update's own manifest), shown once on the
 // first start of a new version. It can also be opened from Settings → About.

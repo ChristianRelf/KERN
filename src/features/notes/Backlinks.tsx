@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // Notes that link here (with [[ links in the note editor).
 
 import { Link2 } from "lucide-react";

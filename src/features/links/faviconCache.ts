@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Session cache of favicon image URLs per site, shared by the note editor's
 // link icons. Kept free of editor imports so other screens (e.g. storage
 // cleanup) can reset it without loading the editor bundle.

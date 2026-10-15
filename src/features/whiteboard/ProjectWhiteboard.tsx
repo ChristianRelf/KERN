@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { ChevronDown, Maximize2, Plus, Presentation } from "lucide-react";
 import { useWhiteboards, useProjects } from "@/hooks/data";
 import { navigate } from "@/stores/router";

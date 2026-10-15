@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { RotateCcw, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useSetting, setSetting } from "@/stores/settings";

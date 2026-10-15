@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // The startup choice between full Kern and Kern Lite ("Ask each time").
 
 import { useEffect, useState } from "react";

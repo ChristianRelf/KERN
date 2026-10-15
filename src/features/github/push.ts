@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Pushes a GitHub-linked task's edits to its issue shortly after they
 // happen (debounced, so a burst of edits makes one request). Kept free of
 // feature imports so task actions can use it without import cycles.

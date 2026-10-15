@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Project health: a compact state chip (On track / Needs attention /
 // Blocked / No recent data) with an actionable breakdown, and the rules
 // that decide it. No scores.

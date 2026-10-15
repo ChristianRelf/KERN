@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 use serde::{Deserialize, Deserializer};
 
 /// Time-ordered unique identifier (UUIDv7).

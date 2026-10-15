@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Dependency graph: one package at a time, with what depends on it (left)
 // and what it depends on (right). Showing a neighbourhood keeps the graph
 // readable and fast even for lockfiles with thousands of packages.

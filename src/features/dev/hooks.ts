@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Query hooks for phase-3 project resources: repositories, worktrees,
 // milestones, commands, environment profiles, services, health and the
 // capability summary that decides which tools a project shows.

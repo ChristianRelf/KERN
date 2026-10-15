@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { Component, type ReactNode } from "react";
 import { TriangleAlert } from "lucide-react";
 

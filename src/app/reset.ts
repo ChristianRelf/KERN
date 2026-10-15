@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // Rebuilding the interface after the data underneath it was swapped (a
 // different cloud space, signing out, or signing in as another account).
 // Everything cached or on screen from the old data is thrown away and the

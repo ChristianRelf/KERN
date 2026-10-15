@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Opens a file in Kern's viewer from anywhere (search results, a resumed
 // workspace), for a project's folder or one of its repositories.
 

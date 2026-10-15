@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Opens the "New worktree" dialog from anywhere; the dialog itself (and the
 // worktree manager) load only when it's used.
 

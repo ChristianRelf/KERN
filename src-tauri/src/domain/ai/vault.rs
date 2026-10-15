@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Secret storage for AI API keys.
 //!
 //! Keys live only in the operating system's credential store (Windows

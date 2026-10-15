@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Key/value application settings. Values are JSON; the frontend owns the
 //! typed schema and defaults (src/features/settings/schema.ts). The backend
 //! reads a handful of keys (notifications, backups, window behaviour) with

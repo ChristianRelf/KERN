@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { Checkbox as RCheckbox, Select as RSelect, Slider as RSlider, Switch as RSwitch, Popover as RPopover } from "radix-ui";
 import { Check, ChevronDown, Minus, type LucideIcon } from "lucide-react";
 import type { CSSProperties, ReactElement, ReactNode } from "react";

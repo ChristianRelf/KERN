@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Resume Workspace: per-project UI context (tab, board, whiteboard, open
 // task, open file, selected repository, terminals, panel sizes) saved as a
 // small document, so reopening a project feels like returning to it.

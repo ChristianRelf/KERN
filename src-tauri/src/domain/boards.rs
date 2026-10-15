@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Kanban boards and columns. Tasks reference a column; the project's
 //! default board additionally shows project tasks that have no placement
 //! yet (they are placed by status on the client).

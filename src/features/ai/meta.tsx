@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { Bot } from "lucide-react";
 import { siAnthropic } from "simple-icons";
 import type { AiAccount, AiErrorCategory, AiProvider, AiStatus } from "@/lib/types";

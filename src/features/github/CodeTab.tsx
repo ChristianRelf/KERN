@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Project → Code: the project's repositories. One repository is selected
 // at a time (remembered per project); sections only appear when they apply
 // to it: local tools (changes, history, worktrees) for a trusted local

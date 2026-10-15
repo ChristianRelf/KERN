@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Project environment profiles (Development, Testing, …) for saved commands
 //! and terminals.
 //!

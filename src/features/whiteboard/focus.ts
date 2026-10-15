@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // A one-shot request to centre a whiteboard on one object when it opens
 // (e.g. from a search result).
 

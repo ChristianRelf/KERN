@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Lightweight, conservative natural-language parsing for quick task entry:
 //   "Call Sam tomorrow 3pm #website @phone p1 every week"
 // Only whole, recognised tokens are consumed; everything else stays in the

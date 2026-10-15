@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-14
+
 //! Relations between tasks: blocks / blocked by, related, and duplicate of.
 //! Each pair of tasks has at most one relation, stored in one direction
 //! (`task_id` blocks / duplicates `related_id`; `related` is symmetric).

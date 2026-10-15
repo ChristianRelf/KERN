@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { ArchiveRestore, Circle, FileText, FolderKanban, Presentation, Trash, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { TrashItem } from "@/lib/types";

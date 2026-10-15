@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import type { Label, Milestone, Project, Task, TaskFilters, TaskGrouping, TaskQuery } from "@/lib/types";
 import { addDaysStr, diffDays, formatDayHeading, weekStartStr } from "@/lib/dates";
 import { PRIORITY_LABELS, STATUS_LABELS, STATUS_ORDER } from "./meta";

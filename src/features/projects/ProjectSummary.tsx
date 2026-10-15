@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { ArrowUpRight, Presentation, SquareKanban } from "lucide-react";
 import { useProject } from "@/hooks/data";
 import { Button } from "@/components/ui/Button";

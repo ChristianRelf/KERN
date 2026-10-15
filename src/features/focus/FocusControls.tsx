@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { Coffee, Pause, Play, RotateCcw, SkipForward, Square, Timer } from "lucide-react";
 import { useFocus, remainingOf, KIND_LABEL, type FocusKind } from "./store";
 import { useNow } from "@/hooks/useToday";

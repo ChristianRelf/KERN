@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! GitHub integration: connect a project to a repository, keep its issues
 //! and Kern tasks in sync in both directions, and show pull requests.
 //!

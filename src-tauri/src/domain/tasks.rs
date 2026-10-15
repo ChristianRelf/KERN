@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Task service: querying, creation, updates (with status/board-column
 //! synchronisation and recurrence), bulk operations, duplication and
 //! soft deletion into the trash.

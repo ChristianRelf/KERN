@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // Template dialogs: saving a project as a template, and picking a note or
 // task template to start from.
 

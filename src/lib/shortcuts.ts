@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Keyboard shortcut registry: defaults, user overrides, matching,
 // formatting and conflict detection. "Mod" is Ctrl on Windows/Linux and
 // Cmd on macOS.

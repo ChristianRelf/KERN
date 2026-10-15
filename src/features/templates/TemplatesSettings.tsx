@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // Settings → Templates: your saved templates (rename, share as a file,
 // delete), importing a template file, and the built-in ones.
 

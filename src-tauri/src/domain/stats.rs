@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Aggregate statistics computed with scoped SQL (no full-table loads).
 
 use crate::error::AppResult;

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // Settings → About: what Kern is, your year in it (a completion heatmap with
 // streaks), and the technical details for bug reports.
 

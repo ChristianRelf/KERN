@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { Ellipsis, Presentation } from "lucide-react";
 import { useState } from "react";
 import { useProjectMap, useProjects, useWhiteboards } from "@/hooks/data";

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // One menu description renders as either a dropdown or a context menu, so
 // every object's actions are defined once and stay consistent.
 

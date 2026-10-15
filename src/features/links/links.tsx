@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Rich links: favicon + readable URL, with consistent actions everywhere a
 // link appears (task descriptions and attachments, notes, whiteboard cards,
 // project resources, bookmarks, inbox).

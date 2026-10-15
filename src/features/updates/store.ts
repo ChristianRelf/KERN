@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // In-app updates. Starting one swaps the whole window for a minimal update
 // screen, downloads the signed installer listed in the release's
 // latest.json (up to three attempts), then installs it: on Windows the

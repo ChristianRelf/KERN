@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Task mutations used across the app (lists, boards, dashboard, palette,
 // keyboard). Each applies an optimistic update, persists through the
 // typed API, offers undo where reversible and reports failures with a

@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Global search backed by SQLite FTS5 (kept in sync by triggers), plus
 //! labels, saved views, saved commands, workspace snapshots, GitHub issues
 //! linked to tasks and cached pull requests by name. Linked-folder files and

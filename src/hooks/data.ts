@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Query hooks for persisted data. Keys start with a domain name so
 // mutations can invalidate whole domains (see lib/query.ts).
 

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { BaseEdge, EdgeLabelRenderer, MarkerType, getBezierPath, getSmoothStepPath, getStraightPath, type EdgeProps } from "@xyflow/react";
 import { memo, useContext, useEffect, useState } from "react";
 import { colorVar, type WbEdge } from "./model";

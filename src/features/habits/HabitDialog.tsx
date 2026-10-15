@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 import { useEffect, useState } from "react";
 import type { Habit, HabitInput } from "@/lib/types";
 import { api, describeError } from "@/lib/ipc";

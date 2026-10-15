@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-15
+
 //! Templates: reusable projects (boards, milestones, tasks with checklists,
 //! notes), notes and tasks. A template is a JSON document; dates are stored
 //! as day offsets from the template's start, so a project template keeps its

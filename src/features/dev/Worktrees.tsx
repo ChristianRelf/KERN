@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Git worktrees: the list comes from git (including worktrees made outside
 // Kern), creation in a compact dialog, and removal only after showing what
 // would be affected. Kern never removes a dirty worktree without explicit

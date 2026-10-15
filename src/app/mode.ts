@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // Full Kern or Kern Lite. Both run over the same data in the same window;
 // the backend resizes the window and remembers each mode's geometry.
 

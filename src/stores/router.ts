@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Minimal in-app router with back/forward history. A desktop app has no
 // URL bar, so routes are plain typed objects.
 

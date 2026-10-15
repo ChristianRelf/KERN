@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { CalendarClock, History, Moon, Pin, RotateCcw, Sunrise, Sunset, X, Archive, CircleCheck, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { ArrowUpRight, HardDrive, RefreshCw } from "lucide-react";
 import { lazy, Suspense } from "react";
 import type { WidgetProps } from "@/features/dashboard/types";

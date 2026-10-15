@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // Collaborative editing support for the whiteboard.
 //
 // The editor keeps a baseline: each object and connection as last saved (or

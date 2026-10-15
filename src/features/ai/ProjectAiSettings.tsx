@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { Sparkles } from "lucide-react";
 import type { Project, ProjectAiPrefs } from "@/lib/types";
 import { Popover, Select, Switch } from "@/components/ui/Controls";

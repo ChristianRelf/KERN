@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Links between tasks and development resources (repositories, branches,
 //! worktrees, pull requests, commits), and the development context shown in
 //! the task inspector.

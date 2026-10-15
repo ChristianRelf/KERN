@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Freehand ink geometry: stroke smoothing, hit-testing and node construction.
 
 import { newNodeId, type WbColor, type WbNode } from "./model";

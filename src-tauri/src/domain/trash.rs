@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Recoverable trash. Deleting moves items here (soft delete); they can be
 //! restored or permanently removed. Items older than the retention period
 //! are purged automatically.

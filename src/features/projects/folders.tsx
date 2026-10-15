@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Linked project folders: the trust prompt, folder picking, the compact
 // folder element shown in project overviews and the Files tab browser.
 // All filesystem access goes through Kern's Rust commands (api.folders),

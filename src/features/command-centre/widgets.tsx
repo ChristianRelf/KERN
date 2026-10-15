@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Project Command Centre widgets. Productivity widgets are part of every
 // project; development widgets are separate (and lazy) so a personal
 // project never loads or shows them unless the user adds them.

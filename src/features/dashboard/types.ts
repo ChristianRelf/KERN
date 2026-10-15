@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import type { LucideIcon } from "lucide-react";
 import type { FC } from "react";
 

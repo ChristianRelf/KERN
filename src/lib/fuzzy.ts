@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Small fuzzy matcher for commands and navigation: subsequence matching
 // with bonuses for word starts, consecutive runs and prefix matches.
 

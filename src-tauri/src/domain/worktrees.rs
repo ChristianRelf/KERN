@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Git worktrees for a repository. The list always comes from git itself
 //! (`git worktree list`), including worktrees Kern didn't create; Kern only
 //! keeps an alias and associations (task, agent label) alongside.

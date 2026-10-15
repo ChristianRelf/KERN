@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 import { describe, expect, it } from "vitest";
 import type { WbNodeRecord } from "@/lib/types";
 import { baselineOf, commit, diff, isEmpty, merge, stable } from "./collab";

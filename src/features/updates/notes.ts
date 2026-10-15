@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // Release notes as shown inside Kern after updating.
 
 /** Compares dotted versions ("0.1.10" > "0.1.9"); a pre-release sorts before its release. */

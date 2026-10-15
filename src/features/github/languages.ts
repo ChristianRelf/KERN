@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Language colours for the repository language bar: GitHub's own (from
 // linguist) so they read familiar, softened in CSS. Unknown languages fall
 // back to the muted series hues.

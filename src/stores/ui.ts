@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Transient UI state (not persisted).
 
 import { create } from "zustand";

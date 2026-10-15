@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Local services: endpoints the user configured (a dev server, an API, a
 // database). They're checked only while the project is open, on each
 // service's interval. "Running" means it answered; "healthy" only when a

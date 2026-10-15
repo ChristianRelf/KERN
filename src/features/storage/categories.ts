@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import type { StorageCategory, StorageCategoryId } from "@/lib/types";
 
 export const CATEGORY_LABEL: Record<StorageCategoryId | "logsOther", string> = {

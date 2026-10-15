@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-15
+
 //! Comments on tasks. Offline they're notes to yourself; in a Kern Cloud
 //! workspace they sync like any other record and can @mention members.
 //! A mention is stored twice: inline in the body as `@[Name](user-id)` (so

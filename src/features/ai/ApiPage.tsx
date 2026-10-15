@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Settings → API (internal route /api/accounts, /api/routing, …): AI API
 // credential profiles, routing and failover, usage, and security. This is
 // an account manager for integrations, not a chat interface.

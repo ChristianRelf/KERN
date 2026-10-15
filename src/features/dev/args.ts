@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Argument lists for saved commands. Commands run without a shell, so
 // these only split on whitespace and honour quotes; operators like && are
 // passed through as plain arguments.

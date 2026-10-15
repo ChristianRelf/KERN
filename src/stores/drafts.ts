@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Text edits whose save failed. Kept in memory (not persisted) so closing a
 // panel or a failed write never silently discards what the user typed; the
 // editor restores the draft and offers to retry.

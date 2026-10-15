@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { ArrowUpDown, Ellipsis, FolderKanban, LayoutGrid, List, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Project, ProjectGroup } from "@/lib/types";

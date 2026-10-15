@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // Mounts Kern Cloud's dialogs and keeps the interface in step with the
 // backend: account and sync status, remote changes, the realtime socket,
 // deep links (kern://invite/…) and where this user is (presence).

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Shared drag-and-drop behaviour for compact vertical lists (sidebar
 // destinations, projects, groups, views, AI account priority). One feel
 // everywhere: the item follows the pointer vertically, neighbours glide into

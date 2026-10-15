@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Generated from tm-grammars@1.32.22 by scripts/gen-syntax-catalog.py; do not edit by hand.
 //! (grammar name, SHA-256 of the published file, size in bytes)
 

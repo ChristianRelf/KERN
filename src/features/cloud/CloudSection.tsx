@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // Settings → Account & Cloud: online collaboration, the account, sync and
 // what is (and isn't) shared.
 

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Branch naming for tasks: a safe, readable slug with a conventional
 // prefix ("feature/reactor-cooling-controls", or "fix/124-reactor-cooling"
 // when an issue is linked). Names are checked with git before use and a

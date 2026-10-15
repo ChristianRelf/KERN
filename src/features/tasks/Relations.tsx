@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // Task relations in the detail panel: blocked by / blocking, related, and
 // duplicates. Closing a task's last blocker reopens it if it was marked
 // Blocked (handled by the backend).

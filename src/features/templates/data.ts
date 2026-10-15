@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 import { useQuery } from "@tanstack/react-query";
 import type { TemplateMeta } from "@/lib/types";
 import { api } from "@/lib/ipc";

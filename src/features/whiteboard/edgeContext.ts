@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { createContext } from "react";
 import type { WbEdgeData } from "./model";
 

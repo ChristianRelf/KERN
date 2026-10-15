@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Recurrence rules for repeating tasks.
 //!
 //! Model: a recurring series is a chain of task rows sharing `series_id`.

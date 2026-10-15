@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Provider routing: which credential serves a request, and what happens
 //! when it fails.
 //!

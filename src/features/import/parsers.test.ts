@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 import { describe, expect, it } from "vitest";
 import { countTasks, detect, nameFromFile, parseCsv, parseExport, parseLooseDate } from "./parsers";
 

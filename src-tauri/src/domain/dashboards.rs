@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Named dashboard layouts. Widget definitions and grid layouts are JSON
 //! documents owned by the client's widget registry.
 

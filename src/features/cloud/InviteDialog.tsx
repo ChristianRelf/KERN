@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // An invitation opened from a link (kern://invite/<id>) or the pending
 // list: shows the workspace, then signs in (if needed) and joins.
 

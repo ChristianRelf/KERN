@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Project catch-up. The local digest is deterministic and needs no AI; the
 // optional AI summary is built from the same numbered sources, shown first
 // as a preview (what's included, roughly how big), and every line keeps

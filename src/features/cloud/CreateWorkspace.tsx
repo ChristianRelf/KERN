@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // "Create workspace": a short guided flow. Basics → about the team → GitHub
 // organisation (optional) → invite people (optional) → review. Creating
 // switches to the new workspace and imports the chosen repositories.

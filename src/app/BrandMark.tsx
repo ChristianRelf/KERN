@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // The Kern logo, straight from assets/icon.svg (the same file the app icons
 // are generated from), so every mark in the interface matches.
 import iconUrl from "../../assets/icon.svg";

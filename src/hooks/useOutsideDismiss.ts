@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { useEffect, useRef, type RefObject } from "react";
 
 /** Elements rendered in portals that belong to whatever opened them. */

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Typed client for the Rust command layer. All persistence goes through
 // here; the UI never builds SQL.
 

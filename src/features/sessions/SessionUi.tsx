@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Work session interface: the compact sidebar pill and its panel, the gap
 // prompt shown after sleep or a restart, and the start-session helper used
 // from tasks, projects, the dashboard, the focus timer and the palette.

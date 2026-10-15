@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { FolderOpen, FolderX, ShieldCheck, ShieldHalf, Trash } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api, describeError } from "@/lib/ipc";

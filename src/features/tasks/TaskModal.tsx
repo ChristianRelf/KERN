@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { useUi } from "@/stores/ui";
 import { Dialog } from "@/components/ui/Dialog";
 import { TaskDetail } from "./TaskDetail";

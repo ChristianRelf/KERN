@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Optional dashboard widgets for time, milestones and resuming work. None
 // of them are on the default layouts; users add them if they want them.
 

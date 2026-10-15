@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Generic Kanban: sortable columns and cards across columns, with optimistic
 // local ordering, a drag overlay that tracks the pointer exactly, keyboard
 // dragging, collapsible/resizable columns, WIP limits and inline adding.

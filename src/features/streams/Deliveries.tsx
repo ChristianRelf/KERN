@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // A stream's delivery log: every submission that reached it, with what
 // happened. Entries open to show the submitted data, and can be redelivered
 // (with the stream's current settings) or used to block their sender.

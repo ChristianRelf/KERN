@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Environment profiles: named sets of variables given to commands and
 // terminals Kern starts (never to the system). Secret values live in the
 // OS credential store, show masked, and are only revealed on request.

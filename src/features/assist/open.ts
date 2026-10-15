@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // Opens the AI action dialog (its code loads on first use).
 
 import { create } from "zustand";

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
 import { createContext, memo, useContext, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { assetUrl } from "@/lib/platform";

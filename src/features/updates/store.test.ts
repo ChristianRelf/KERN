@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const check = vi.fn();

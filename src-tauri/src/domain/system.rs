@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! System integration commands: app info, opening links/files, file
 //! read/write for exports chosen through native dialogs, link metadata.
 

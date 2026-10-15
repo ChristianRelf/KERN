@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Search index for linked folders and repositories: every file name, plus
 //! the text of small, non-sensitive text files (code search).
 //!

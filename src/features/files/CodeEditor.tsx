@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // A small code editor for quick edits: a transparent textarea over a
 // highlighted copy of the text, both in one grid cell so they scroll and
 // size together. Highlighting runs deferred; a line whose text changed since

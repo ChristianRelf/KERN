@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Project catch-up: what happened in a project over a period, and what
 //! needs doing next.
 //!

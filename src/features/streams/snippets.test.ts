@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 import { describe, expect, it } from "vitest";
 import type { Stream, StreamConfig, StreamField } from "@/lib/types";
 import { samplePayload, snippet, snippetKinds } from "./snippets";

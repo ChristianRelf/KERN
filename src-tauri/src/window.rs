@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Main window behaviour: state persistence (position, size, maximised),
 //! start maximised / minimised, close & minimise to tray, and the tray icon.
 //!

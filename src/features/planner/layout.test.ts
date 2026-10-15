@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 import { describe, expect, it } from "vitest";
 import { autoPlan, eventSpan, freeGaps, fromMin, layoutColumns, snap, toMin } from "./layout";
 import type { CalEvent } from "@/lib/types";

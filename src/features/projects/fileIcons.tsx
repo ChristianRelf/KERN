@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // File-type icons for the project file browser. Recognisable development
 // technologies use their Simple Icons mark (monochrome); everything else
 // uses a generic Lucide glyph. Lookup order: exact file name, name pattern

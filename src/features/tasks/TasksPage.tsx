@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { CalendarClock, CalendarDays, Columns3, List, ListFilter, Plus, Save, SquareCheckBig, Sun, CalendarRange } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";

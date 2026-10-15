@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Work sessions: time spent on a project or task, for any kind of project.
 //! Development context (repository, branch, worktree) is optional.
 //!

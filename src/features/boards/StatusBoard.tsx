@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // "Board" view in My Tasks: all tasks arranged in status columns.
 
 import { useMemo } from "react";

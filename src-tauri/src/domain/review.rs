@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-15
+
 //! The weekly review (what got done, what slipped, what's stale, what's
 //! next) and estimate accuracy (how long tasks took against their
 //! estimates). Everything is computed locally from existing data; the

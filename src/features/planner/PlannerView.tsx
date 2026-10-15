@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // Day planner: time blocking. Tasks to do (due, overdue, in progress or
 // pinned) sit in a tray; drag them onto the day to plan when you'll do them,
 // drag blocks to move them and their lower edge to change how long they

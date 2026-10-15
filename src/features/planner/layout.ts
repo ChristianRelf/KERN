@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // Day-planner geometry: minutes of the day, overlapping items side by side,
 // free time between busy blocks, and filling free time with tasks.
 

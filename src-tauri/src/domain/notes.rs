@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Notes (Markdown content) and the Inbox of unorganised captures.
 
 use crate::domain::{activity, recent, tasks};

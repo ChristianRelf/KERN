@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Local-calendar date helpers. Due dates are stored as local "YYYY-MM-DD"
 // strings and times as "HH:MM", so they never shift with timezone or DST
 // changes. Instants (created/completed) are UTC epoch milliseconds.

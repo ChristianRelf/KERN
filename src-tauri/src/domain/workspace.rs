@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Per-project workspace context ("resume where you left off"), named
 //! workspace snapshots and the Project Command Centre layout.
 //!

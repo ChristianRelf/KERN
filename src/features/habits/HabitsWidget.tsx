@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 import { Flame, Repeat2 } from "lucide-react";
 import type { WidgetProps } from "@/features/dashboard/types";
 import { EmptyState } from "@/components/ui/Controls";

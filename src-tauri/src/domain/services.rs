@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Local services a project depends on (a dev server, an API, a database),
 //! configured explicitly by the user. Kern only checks what's configured,
 //! only when asked (the client polls while the project is open), and never

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // Sidebar switcher between offline data, the personal cloud space and
 // workspaces, with sync status and who's online.
 

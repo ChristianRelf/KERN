@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { Copy, Download, FolderInput, Pencil, Pin, PinOff, Presentation, Trash } from "lucide-react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import type { Project, Whiteboard } from "@/lib/types";

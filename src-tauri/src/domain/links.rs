@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Link enrichment: website favicons and page titles, fetched directly from
 //! the linked site (no third-party proxy) and cached locally.
 //!

@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-15
+
 //! Habits. A daily habit is due on chosen weekdays; a weekly one a number
 //! of times each week. Checks record how many times it was done on a day.
 //! Streaks count consecutive due days (or weeks) that met the target; the

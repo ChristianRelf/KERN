@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Suggests syntax plugins for the languages a linked project folder uses,
 // e.g. "This project uses TypeScript" when it's full of .ts files. Asks once
 // per project per session; "Don't ask again" remembers the languages.

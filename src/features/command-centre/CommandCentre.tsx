@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Project Command Centre: the project's overview. An editable widget grid
 // (same engine as the dashboard) that starts from a preset matching what
 // the project has - General for any project, Hybrid once code is linked -

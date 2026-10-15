@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Lightweight local activity history. Only meaningful events are recorded
 //! (completion, moves, rescheduling, creation of notes, archiving...), and
 //! old entries are pruned according to the retention setting.

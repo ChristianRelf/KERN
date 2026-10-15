@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { Check, Copy, LayoutGrid, Ellipsis, Pencil, Plus, RotateCcw, Star, Trash, History } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { format } from "date-fns";

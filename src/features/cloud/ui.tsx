@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // Small shared pieces for Kern Cloud: avatars, workspace logos, the code
 // input and logo processing.
 

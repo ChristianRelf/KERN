@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { memo, type CSSProperties } from "react";
 import { Ban, CalendarDays, ClockAlert, Ellipsis, GripVertical, ListChecks, Paperclip, Pin, Repeat, Timer } from "lucide-react";
 import type { Label, Project, Task } from "@/lib/types";

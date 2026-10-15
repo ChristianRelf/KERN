@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Application services. Each module holds pure service functions that take
 //! a `&Connection` (unit-testable) and thin `#[tauri::command]` wrappers.
 

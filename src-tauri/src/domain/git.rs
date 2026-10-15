@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Git tools for a project's repositories.
 //!
 //! Commands run the system `git` with an argument list (never a shell), no

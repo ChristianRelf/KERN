@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-13
+
 //! Kern Cloud: an optional account, a synced personal space and shared
 //! workspaces.
 //!

@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Provider adapters and the HTTP transport.
 //!
 //! Each provider has its own request format, response parser and error

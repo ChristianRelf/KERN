@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // Required (security) updates: started by Kern itself as soon as one is
 // seen, in any mode. If one doesn't finish, Kern stays usable on the
 // running version with a notice that it's required, and tries again by

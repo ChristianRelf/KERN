@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Deterministic daily rundown. No AI, no network: a transparent score built
 // from priority, due date, overdue duration, pinning, status and carry-over,
 // with every contributing factor reported as a human-readable reason.

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Generated from tm-grammars@1.32.22 metadata by scripts/gen-syntax-catalog.py;
 // do not edit by hand. The
 // backend (src-tauri/src/domain/plugins.rs) downloads each grammar and

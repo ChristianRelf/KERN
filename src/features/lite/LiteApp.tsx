@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // Kern Lite: a tiny task tracker over the same data as Kern. A rail that
 // expands to show projects, one list of tasks with the basics (title, due
 // date, priority, project), and nothing else. Everything is the same task

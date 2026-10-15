@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Markdown → safe HTML for read-only views (repository READMEs). Raw HTML
 // in the source is allowed, as GitHub allows it, then cleaned against an
 // allow-list: no scripts, styles, frames, forms or event handlers, and links

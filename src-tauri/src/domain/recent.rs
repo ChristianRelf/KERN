@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Recently opened projects, notes and whiteboards.
 
 use crate::error::AppResult;

@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! AI API account management and provider routing.
 //!
 //! Optional: nothing else in Kern depends on it, and no network traffic

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Milestone details (inspector): status, target date, progress, its tasks,
 // dependencies and, when it's a release, version, repository, linked pull
 // requests and issues, notes and a changelog draft. Publishing a release is

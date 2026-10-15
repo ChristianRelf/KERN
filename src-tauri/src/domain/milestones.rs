@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Milestones for any project (a renovation, an assignment, a launch), which
 //! may optionally represent a software release with a version, repository,
 //! linked pull requests and issues, and release notes.

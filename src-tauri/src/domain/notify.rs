@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Native notifications with global enable, per-category toggles, quiet
 //! hours and duplicate suppression.
 

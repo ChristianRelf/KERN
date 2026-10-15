@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! A single low-frequency background thread for time-based features:
 //! morning briefing / evening review prompts, due-date and overdue
 //! reminders, automatic backups and housekeeping. No busy loops; the tick

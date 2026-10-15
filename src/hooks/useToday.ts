@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { todayStr } from "@/lib/dates";
 

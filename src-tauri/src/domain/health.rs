@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Project health: a short, actionable list of what needs attention,
 //! summarised as On track / Needs attention / Blocked / No recent data.
 //! There is no score.

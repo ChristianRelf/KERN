@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Small bound controls for the settings screen. Each reads and writes one
 // setting key; changes apply immediately and persist.
 

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Doughnut of Kern's storage by category. Lazy-loaded: Chart.js only ships
 // to the page when storage is shown.
 //

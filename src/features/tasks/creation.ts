@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Task creation logic shared by the full composer, quick capture, inline
 // quick-add and board columns. Each surface is only a presentation; how a
 // task's properties are resolved from context, typed tokens and explicit

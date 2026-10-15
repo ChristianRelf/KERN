@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // In-app file viewing for the project file browser: text files open in a
 // small editor (saving needs a trusted folder), images in a lightbox, and
 // image rows show a low-resolution preview on hover.

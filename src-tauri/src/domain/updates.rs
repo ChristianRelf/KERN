@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Update check: reads the newest release's `latest.json` (the updater
 //! manifest the release script publishes) and compares it with the running
 //! version. Downloading and installing is done by the updater plugin, from

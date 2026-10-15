@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // Icon, emoji and colour picker for projects (and workspace marks): a
 // searchable icon grid, a curated emoji set (or any emoji you paste), preset
 // colours and a custom colour.

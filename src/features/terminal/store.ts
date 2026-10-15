@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Integrated terminal state. Each tab is a real pseudoterminal in the Rust
 // backend; its xterm.js renderer is created when the tab is (so output is
 // never lost while the panel is closed) and xterm itself is only loaded the

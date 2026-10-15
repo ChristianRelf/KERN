@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Start Work on a task. In any project it starts a work session. When the
 // project has a trusted local repository it also offers to work on the
 // current branch, create a branch, create a worktree, or reuse an existing

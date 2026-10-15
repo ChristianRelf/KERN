@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { CalendarDays, Clock, Flag, FolderKanban, Plus, Repeat, Tag } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import type { Label, TaskInput } from "@/lib/types";

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Monochrome marks for detected technologies (Simple Icons where one
 // exists, a Lucide glyph otherwise). Kept small and greyscale on purpose.
 

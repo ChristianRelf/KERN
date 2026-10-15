@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Startup: load settings and the window mode, then show full Kern, Kern
 // Lite, or the choice between them. Each mode's code loads on demand.
 

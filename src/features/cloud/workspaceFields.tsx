@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // Workspace detail fields shared by creation and management: logo, name,
 // ID, description, purpose, industry, team size, website, time zone and
 // colour; plus the email invite editor and the GitHub organisation picker.

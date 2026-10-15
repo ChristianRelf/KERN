@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Bottom terminal drawer: tabs, new terminal in a project folder,
 // repository or the default location, shell choice, search, copy/paste,
 // clear, stop, resize and maximise within Kern. Lazy-loaded.

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // "Copy offline data here": brings offline projects, tasks, boards, notes
 // and whiteboards into the open cloud space. Files are never uploaded; links
 // to folders and local repositories are copied as links on this computer.

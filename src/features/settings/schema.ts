@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // The single source of truth for user settings: keys, types and defaults.
 // Settings persist in SQLite (settings table); the Rust side reads a few of
 // these keys (notifications, backups, window behaviour) with identical

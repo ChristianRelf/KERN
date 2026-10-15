@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-15
+
 //! AI actions that reuse the AI account routing: break a task into steps,
 //! pull tasks out of a note, write a weekly review summary, and answer a
 //! question about a project from its own data.

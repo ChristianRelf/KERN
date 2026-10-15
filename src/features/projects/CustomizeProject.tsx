@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // "Customize project": everything about how a project looks and opens in one
 // place - name, description, icon or emoji, colour, which sections show and
 // which one opens first, and where it sits in the sidebar. Changes apply as

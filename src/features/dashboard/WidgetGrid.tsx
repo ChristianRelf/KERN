@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // The editable widget grid shared by dashboards and the Project Command
 // Centre: layout state with debounced persistence, the responsive grid, the
 // widget frame and the "Add widget" catalogue.

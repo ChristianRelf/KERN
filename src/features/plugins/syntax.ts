@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Syntax plugins on the frontend: which grammar a file uses, which are
 // installed, and a Shiki highlighter that loads installed grammars on demand.
 // Grammars are JSON data fetched from the backend (verified there); they are

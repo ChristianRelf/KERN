@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Settings → Plugins: install and remove syntax highlighting for the file
 // viewer, and control the per-project suggestions.
 

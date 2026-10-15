@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // Live presence: collaborators' cursors and selections on a whiteboard, and
 // avatar stacks showing who is looking at the same thing.
 

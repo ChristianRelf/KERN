@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // A few small secrets. None of them touch data; all of them respect reduced
 // motion (you still get the message, just not the movement).
 //

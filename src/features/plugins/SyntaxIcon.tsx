@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Language marks for syntax plugins: the Simple Icons logo where one exists,
 // a generic Lucide glyph for the few languages Simple Icons doesn't cover.
 

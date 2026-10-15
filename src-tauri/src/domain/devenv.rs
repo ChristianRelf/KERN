@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Development environment detection and saved project commands.
 //!
 //! Detection is passive: it reads configuration files (package.json,

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // The weekly review: look back (what got done, what slipped, how time was
 // spent, habits, estimates), tidy up (reschedule or drop slipped work, deal
 // with the inbox and tasks that have gone quiet) and look ahead (pick what

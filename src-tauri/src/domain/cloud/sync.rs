@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-13
+
 //! Sync engine for cloud space replicas.
 //!
 //! A space replica has the same schema as the offline database. Triggers on

@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Focus sessions. The timer itself is timestamp-based on the client; the
 //! backend records finished sessions and fires the completion notification
 //! from a native thread so it's on time even when the webview is throttled

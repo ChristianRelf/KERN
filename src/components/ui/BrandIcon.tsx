@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Renders a Simple Icons brand mark as a monochrome SVG that inherits the
 // surrounding text colour, so brand marks sit in the greyscale UI rather
 // than adding their own colours.

@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Repositories linked to a project: zero, one or several. Each link has a
 //! local clone, a GitHub repository, or both. Links are Kern records only:
 //! unlinking never touches the repository on disk or on GitHub.

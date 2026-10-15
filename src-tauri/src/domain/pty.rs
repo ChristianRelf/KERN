@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-12
+
 //! Integrated terminal: real pseudoterminals (ConPTY on Windows, a pty on
 //! macOS/Linux) streamed to the xterm.js renderer.
 //!

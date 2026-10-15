@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // Sharing whiteboard images in a cloud space. The original stays on this
 // computer; collaborators get a heavily compressed copy (WebP, at most
 // 1600 px and usually well under 400 KB) uploaded to Kern Cloud.

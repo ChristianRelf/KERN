@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { ExternalLink, FolderInput, Inbox, Lightbulb, NotebookPen, Pencil, SquareCheckBig, Trash } from "lucide-react";
 import type { InboxItem } from "@/lib/types";
 import { useInbox, useTasks } from "@/hooks/data";

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // Tasks completed per day as a heatmap (newest week on the right), with
 // optional totals and streaks. Used by Settings → About, Account & Cloud and
 // the dashboard's Activity Heatmap widget.

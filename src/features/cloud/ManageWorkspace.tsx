@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // Workspace management: details, members and roles, invitations, GitHub
 // organisation, activity, and leaving or deleting.
 

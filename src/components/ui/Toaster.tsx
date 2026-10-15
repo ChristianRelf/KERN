@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { CircleAlert, Check, Info } from "lucide-react";
 import { useToasts } from "@/stores/toast";
 

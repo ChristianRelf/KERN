@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 import { describe, expect, it } from "vitest";
 import type { Label, Task } from "@/lib/types";
 import { groupSections, groupTasks } from "./grouping";

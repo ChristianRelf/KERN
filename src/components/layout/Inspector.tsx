@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { Maximize2, PanelRightClose, Pin, PinOff } from "lucide-react";
 import { lazy, Suspense, useRef, useState, type CSSProperties } from "react";
 import { Skeleton } from "@/components/ui/Controls";

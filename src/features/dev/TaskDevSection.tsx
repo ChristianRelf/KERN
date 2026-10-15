@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Task inspector → Development (collapsible, only when relevant): linked
 // repositories, branches, worktrees, pull requests and commits, the linked
 // GitHub issue and time worked. Pull requests matched by branch name are

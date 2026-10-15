@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { create } from "zustand";
 import { api } from "@/lib/ipc";
 import { dateConfig } from "@/lib/dates";

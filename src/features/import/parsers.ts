@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // Readers for other apps' exports. Each turns a file into one neutral bundle
 // (projects with board columns, tasks with subtasks and labels), which the
 // backend writes in a single transaction.

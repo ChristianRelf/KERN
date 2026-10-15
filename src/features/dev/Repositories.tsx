@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Repositories linked to a project (zero, one or many): link a local clone
 // or a GitHub repository, choose the primary one, rename, trust, reveal and
 // unlink. Unlinking only removes Kern's record; nothing on disk or on

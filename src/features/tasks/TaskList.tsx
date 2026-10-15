@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // The main task list: sections, quick add, keyboard navigation,
 // multi-selection, drag reordering and (for large lists) virtualisation.
 

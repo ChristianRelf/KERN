@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { describe, expect, it } from "vitest";
 import { buildRundown, inDays, scoreTask, summarize } from "./engine";
 import type { Project, RundownData, Task } from "@/lib/types";

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Development widgets for the Project Command Centre. Loaded only when a
 // project's layout includes them; everything shown comes from local git or
 // data Kern already fetched, plus an explicit refresh.

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Project activity: Kern's own activity log, optionally merged with
 // development events Kern already fetched (pull requests, workflow runs,
 // commits) into one stream. Nothing here touches the network.

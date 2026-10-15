@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Run: the detected stack (from configuration files only - nothing runs
 // during detection), whether its tools are installed, the scripts it
 // defines, the user's saved commands, environment profiles and local

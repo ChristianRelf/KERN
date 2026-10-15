@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // Kern Cloud state: the account, spaces, the open space, sync status,
 // presence, and which cloud dialog is showing.
 

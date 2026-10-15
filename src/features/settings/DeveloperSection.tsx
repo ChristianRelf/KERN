@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Settings → Developer tools: terminal, external editor, linked-folder
 // search index, local services and work-session prompts. Everything here is
 // optional; none of it affects projects without code.

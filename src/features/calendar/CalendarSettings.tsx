@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // Settings → Calendars: subscriptions (read-only ICS addresses), exporting
 // tasks as an ICS file (once, or kept up to date), and the private Kern
 // Cloud address calendar apps can subscribe to.

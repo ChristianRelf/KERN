@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-15
+
 //! Importing from other apps. The interface reads an export (Todoist,
 //! Trello, Notion, Linear, CSV) into one neutral bundle; this writes the
 //! whole bundle in a single transaction, so an import either lands

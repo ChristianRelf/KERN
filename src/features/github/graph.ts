@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Lane layout for the commit graph. Commits arrive newest first in
 // topological order; each row gets the lane its node sits in plus the line
 // segments to draw above (into the node) and below (out to its parents).

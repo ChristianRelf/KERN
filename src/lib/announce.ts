@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Polite screen-reader announcements for actions that change layout without
 // moving focus (keyboard reordering, background account switches).
 

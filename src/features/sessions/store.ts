@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Work sessions. The backend is the source of truth (timestamps); this
 // store mirrors the active session for display and sends a heartbeat once a
 // minute while it runs. A long silence before a heartbeat (sleep, crash, the

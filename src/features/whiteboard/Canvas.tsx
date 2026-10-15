@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // The whiteboard editor: React Flow with custom nodes/edges, tools,
 // undo/redo, clipboard, grouping into areas, alignment guides, file drops,
 // debounced persistence with explicit flushes, and export. In a cloud space

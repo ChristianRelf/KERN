@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // Shows each link's site icon just before it in the note editor. The icon
 // is a view-only widget (never part of the note's content or its Markdown).
 

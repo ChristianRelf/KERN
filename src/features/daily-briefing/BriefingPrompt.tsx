@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { Sunrise, Sunset, X } from "lucide-react";
 import { useUi } from "@/stores/ui";
 import { navigate } from "@/stores/router";

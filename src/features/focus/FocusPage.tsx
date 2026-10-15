@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 import { Timer, Minus, Plus } from "lucide-react";
 import { useSessions } from "@/features/sessions/store";
 import { startSession } from "@/features/sessions/SessionUi";

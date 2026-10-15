@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // Share links: publish a read-only copy of a note, whiteboard or project to
 // a private link (Kern Cloud). The link shows a snapshot; publishing again
 // updates it, and it can be turned off at any time. Nothing is shared until

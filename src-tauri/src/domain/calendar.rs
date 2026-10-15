@@ -1,3 +1,6 @@
+// @Author Christian Relf
+// @Date 2026-10-15
+
 //! Calendars: read-only subscriptions to ICS addresses (Google, Outlook,
 //! iCloud, …) shown next to tasks, and exporting tasks as an ICS file.
 //!

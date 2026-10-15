@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // One stream's settings. Edits collect in a draft and are saved together
 // (the save bar appears once something changed); pausing, secrets, tokens
 // and the delivery log act immediately.

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-12
+ */
+
 // GitHub Actions for a repository: the latest run of each workflow and the
 // recent runs. Fetched on open and on refresh; while something is running
 // it re-checks every 30 seconds (only while the section is visible).

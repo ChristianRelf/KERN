@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-14
+ */
+
 // Full Kern: the sidebar, pages, panels and every dialog host.
 
 import { Fragment, lazy, Suspense, useEffect } from "react";

@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-15
+ */
+
 // Habits: queries and the check-off action (optimistic, with undo).
 
 import { useQuery } from "@tanstack/react-query";

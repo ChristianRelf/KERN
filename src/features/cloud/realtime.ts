@@ -1,3 +1,8 @@
+/**
+ * @Author Christian Relf
+ * @Date 2026-10-13
+ */
+
 // The realtime socket to Kern Cloud. One connection per app, subscribed to
 // the open space. It carries:
 //   - "changes": records other people saved (handed to the backend to apply),
