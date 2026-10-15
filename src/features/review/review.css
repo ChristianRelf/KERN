@@ -1,0 +1,111 @@
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.review-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.review-summary p {
+  margin: 0;
+  flex: 1;
+  line-height: 1.6;
+  font-size: var(--fs-sm);
+}
+.review-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.review-section__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  color: var(--text-2);
+}
+.review-section__head h2 {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text);
+}
+.review-section__head .count {
+  color: var(--text-4);
+  font-variant-numeric: tabular-nums;
+}
+.review-task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+}
+.review-task:hover {
+  background: var(--hover);
+}
+.review-task__title {
+  text-align: left;
+  min-width: 0;
+  flex: 1;
+}
+.review-task__project {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.review-task__when {
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.review-task__actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0.6;
+}
+.review-task:hover .review-task__actions,
+.review-task:focus-within .review-task__actions {
+  opacity: 1;
+}
+.review-more {
+  align-self: flex-start;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  padding: 4px 6px;
+}
+.review-more:hover {
+  color: var(--text);
+}
+.review-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.review-cols .panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.review-cols .panel__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.review-reflect {
+  display: grid;
+  gap: 12px;
+}
+.review-reflect .textarea {
+  resize: vertical;
+}

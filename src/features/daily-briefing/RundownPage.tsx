@@ -32,6 +32,8 @@ export default function RundownPage({ day, mode }: { day?: string; mode?: "morni
   const days = useMemo(() => {
     const m = new Map<string, { morning: boolean; evening: boolean }>();
     for (const s of history ?? []) {
+      // Weekly reviews have their own page.
+      if (s.kind === "weekly") continue;
       const e = m.get(s.day) ?? { morning: false, evening: false };
       e[s.kind] = true;
       m.set(s.day, e);

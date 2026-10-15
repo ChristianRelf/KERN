@@ -530,11 +530,11 @@ export const api = {
       tomorrowStart: number;
       projectIds?: string[] | null;
     }) => call<T.RundownData>("rundown_data", { ...args, projectIds: args.projectIds ?? null }),
-    getSnapshot: <D>(day: string, kind: "morning" | "evening") =>
+    getSnapshot: <D>(day: string, kind: T.SnapshotKind) =>
       call<T.Snapshot<D> | null>("snapshot_get", { day, kind }),
-    saveSnapshot: (day: string, kind: "morning" | "evening", data: unknown, replace = false) =>
+    saveSnapshot: (day: string, kind: T.SnapshotKind, data: unknown, replace = false) =>
       call<void>("snapshot_save", { day, kind, data, replace }),
-    markViewed: (day: string, kind: "morning" | "evening") => call<void>("snapshot_mark_viewed", { day, kind }),
+    markViewed: (day: string, kind: T.SnapshotKind) => call<void>("snapshot_mark_viewed", { day, kind }),
     listSnapshots: (limit?: number) => call<T.SnapshotMeta[]>("snapshots_list", { limit: limit ?? null }),
   },
   focus: {

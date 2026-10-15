@@ -11,7 +11,18 @@ import {
   Plus,
   Search,
   Trash,
+  Sparkles,
+  Globe,
+  LayoutTemplate,
+  ChevronDown,
 } from "lucide-react";
+import { openAssist } from "@/features/assist/open";
+import { openShare } from "@/features/share/open";
+import { openTemplatePicker } from "@/features/templates/open";
+import { createTask } from "@/features/tasks/actions";
+import { prompt } from "@/components/ui/Dialog";
+import { todayStr } from "@/lib/dates";
+import { Backlinks } from "./Backlinks";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import type { Editor } from "@tiptap/react";
@@ -69,8 +80,42 @@ async function exportNote(id: string) {
   toast("Note exported");
 }
 
+/** AI finds action items in the note; the ones you keep become tasks in its project. */
+function findTasks(n: Pick<NoteMeta, "id" | "title" | "projectId">) {
+  openAssist({
+    input: { action: "extract", noteId: n.id, today: todayStr() },
+    title: "Find tasks in this note",
+    intro: "AI reads the note and lists things it says need doing. Every task quotes the words it comes from, and anything that isn't in the note is left out.",
+    applyLabel: "Create tasks",
+    onApply: async (items) => {
+      let made = 0;
+      for (const s of items) {
+        const t = await createTask({ title: s.title, projectId: n.projectId, status: n.projectId ? "todo" : "inbox", dueDate: s.dueDate, description: s.detail ? `From “${n.title || "Untitled"}”: ${s.detail}` : "" }, { quiet: true });
+        if (t) made++;
+      }
+      if (made) toast(`Created ${made} task${made === 1 ? "" : "s"}${n.projectId ? "" : " in the Inbox"}`);
+    },
+  });
+}
+
+async function saveNoteTemplate(n: Pick<NoteMeta, "id" | "title">) {
+  const name = await prompt({ title: "Save as template", initial: n.title || "Note template", placeholder: "Template name", confirmLabel: "Save" });
+  if (!name) return;
+  try {
+    await api.templates.saveNote(n.id, name);
+    invalidate("templates");
+    toast(`Saved “${name}” - use it from New note → From a template`);
+  } catch (e) {
+    toastError(describeError(e, "Couldn't save the template."));
+  }
+}
+
 function noteMenu(n: NoteMeta, projects: { id: string; name: string }[], onDeleted?: () => void): MenuItems {
   return [
+    { label: "Find tasks with AI…", icon: Sparkles, onSelect: () => findTasks(n) },
+    { label: "Share link…", icon: Globe, onSelect: () => openShare({ kind: "note", refId: n.id, title: n.title || "Untitled" }) },
+    { label: "Save as template…", icon: LayoutTemplate, onSelect: () => void saveNoteTemplate(n) },
+    { type: "separator" },
     { label: n.pinned ? "Unpin" : "Pin", icon: n.pinned ? PinOff : Pin, onSelect: () => void patchNote(n.id, { pinned: !n.pinned }) },
     {
       type: "submenu",
@@ -129,6 +174,7 @@ export default function NotesPage({ noteId, projectId, embedded }: { noteId?: st
             <NotebookPen /> Notes
           </h1>
           <div className="page-header__actions">
+            <IconButton icon={LayoutTemplate} label="New note from a template" onClick={() => openTemplatePicker("note", projectId ?? null)} />
             <IconButton icon={Plus} label="New note" shortcut="Mod+Alt+N" onClick={() => void create()} />
           </div>
         </header>
@@ -140,7 +186,17 @@ export default function NotesPage({ noteId, projectId, embedded }: { noteId?: st
               <Search />
               <input className="input" style={{ height: "var(--control-h-sm)" }} placeholder="Search notes" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search notes" />
             </div>
-            {embedded && <IconButton icon={Plus} label="New note" size="sm" onClick={() => void create()} />}
+            {embedded && (
+              <Dropdown
+                align="end"
+                items={[
+                  { label: "Blank note", icon: Plus, onSelect: () => void create() },
+                  { label: "From a template…", icon: LayoutTemplate, onSelect: () => openTemplatePicker("note", projectId ?? null) },
+                ]}
+              >
+                <IconButton icon={ChevronDown} label="New note" size="sm" noTooltip />
+              </Dropdown>
+            )}
             <IconButton icon={Archive} label={showArchived ? "Hide archived" : "Show archived"} size="sm" active={showArchived} onClick={() => setShowArchived(!showArchived)} />
           </div>
           <div className="notes__list-items" role="listbox" aria-label="Notes">
@@ -275,6 +331,9 @@ function NoteView({ id, onDeleted }: { id: string; onDeleted: () => void }) {
             aria-label="Note title"
           />
           <NoteEditor initial={note.content} onChange={(md) => queue({ content: md })} onFlush={flush} onEditor={setEditor} />
+          <div className="note-backlinks">
+            <Backlinks kind="note" id={note.id} />
+          </div>
         </div>
       </div>
     </>

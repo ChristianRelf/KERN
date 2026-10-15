@@ -516,9 +516,12 @@ export interface RundownData {
   projects: Project[];
 }
 
+/** Rundown snapshots, plus the weekly review (stored on the week's first day). */
+export type SnapshotKind = "morning" | "evening" | "weekly";
+
 export interface Snapshot<T = unknown> {
   day: string;
-  kind: "morning" | "evening";
+  kind: SnapshotKind;
   data: T;
   createdAt: number;
   viewedAt: number | null;
@@ -526,7 +529,7 @@ export interface Snapshot<T = unknown> {
 
 export interface SnapshotMeta {
   day: string;
-  kind: "morning" | "evening";
+  kind: SnapshotKind;
   createdAt: number;
   viewedAt: number | null;
 }
