@@ -19,7 +19,7 @@
 
 use crate::domain::ai::router::{self, RouteRequest};
 use crate::domain::ai::vault::redact;
-use crate::domain::{git, repos, sessions, settings};
+use crate::domain::{git, passkeys, repos, sessions, settings};
 use crate::error::{invalid, AppError, AppResult};
 use crate::state::AppState;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -343,7 +343,11 @@ pub fn build(state: &AppState, project_id: &str, from: i64, to: i64, inc: &Inclu
         return invalid("Choose a period that ends after it starts.");
     }
     let name: String = state
-        .with(|c| Ok(c.query_row("SELECT name FROM projects WHERE id = ?1", [project_id], |r| r.get(0)).optional()?))?
+        .with(|c| {
+            // A digest is the project's content, retold.
+            passkeys::ensure_readable(c, project_id)?;
+            Ok(c.query_row("SELECT name FROM projects WHERE id = ?1", [project_id], |r| r.get(0)).optional()?)
+        })?
         .ok_or_else(|| AppError::NotFound("Project".into()))?;
     let mut b = B { d: Digest { project_id: project_id.into(), project_name: name, from, to, ..Default::default() } };
     state.with(|c| local_part(c, &mut b, project_id, from, to, inc))?;

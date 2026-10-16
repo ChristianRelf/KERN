@@ -59,6 +59,28 @@ export function useAppearance() {
     };
   }, [v]);
 
+  // Privacy: blur everything while another app has focus.
+  const blurOnUnfocus = v["privacy.blurOnUnfocus"];
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!blurOnUnfocus) {
+      delete root.dataset.unfocused;
+      return;
+    }
+    const sync = () => {
+      if (document.hasFocus()) delete root.dataset.unfocused;
+      else root.dataset.unfocused = "";
+    };
+    sync();
+    window.addEventListener("focus", sync);
+    window.addEventListener("blur", sync);
+    return () => {
+      window.removeEventListener("focus", sync);
+      window.removeEventListener("blur", sync);
+      delete root.dataset.unfocused;
+    };
+  }, [blurOnUnfocus]);
+
   // Query cache lifetime (Performance settings).
   const cacheMinutes = v["performance.cacheMinutes"];
   useEffect(() => {

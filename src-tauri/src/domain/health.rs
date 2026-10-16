@@ -12,7 +12,7 @@
 //! fetched; computing health never touches the network. Not opening a
 //! project is never held against it.
 
-use crate::domain::milestones;
+use crate::domain::{milestones, passkeys};
 use crate::error::AppResult;
 use crate::state::AppState;
 use crate::util::now_ms;
@@ -269,7 +269,10 @@ pub fn compute(conn: &Connection, project_id: &str) -> AppResult<Health> {
 
 #[tauri::command]
 pub fn project_health(state: State<AppState>, project_id: String) -> AppResult<Health> {
-    state.with(|c| compute(c, &project_id))
+    state.with(|c| {
+        passkeys::ensure_readable(c, &project_id)?;
+        compute(c, &project_id)
+    })
 }
 
 #[tauri::command]

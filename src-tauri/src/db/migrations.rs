@@ -6,7 +6,7 @@
 //! interrupted migration rolls back cleanly; additionally a full database
 //! copy is taken before migrating an existing database (see `db::open`).
 
-pub const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6];
+pub const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6, MIGRATION_7];
 
 const MIGRATION_1: &str = r#"
 CREATE TABLE settings (
@@ -916,4 +916,25 @@ CREATE TABLE calendar_events (
   PRIMARY KEY (feed_id, uid, start)
 );
 CREATE INDEX idx_calendar_events_start ON calendar_events(start);
+"#;
+
+const MIGRATION_7: &str = r#"
+-- Passkeys registered on this computer: Windows Hello, or a security key.
+-- Per computer, because a credential id means nothing to another machine's
+-- authenticator; `locked_at` on a project syncs, so the lock itself follows
+-- the project and each computer needs its own passkey to open it.
+CREATE TABLE passkeys (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  -- base64url of the raw credential id the authenticator issued.
+  credential_id TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL DEFAULT 'platform' CHECK (kind IN ('platform', 'securityKey')),
+  created_at INTEGER NOT NULL,
+  last_used_at INTEGER
+);
+
+-- "Require a passkey to open this project": the backend returns neither the
+-- project nor its tasks, notes, whiteboards or search hits until a passkey
+-- has been used for it in this session.
+ALTER TABLE projects ADD COLUMN locked_at INTEGER;
 "#;

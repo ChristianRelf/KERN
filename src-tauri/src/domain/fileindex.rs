@@ -13,6 +13,7 @@
 
 use crate::domain::folders::{self, is_sensitive};
 use crate::domain::git::{blocking, SKIP_DIRS};
+use crate::domain::passkeys;
 use crate::domain::search::to_fts_query;
 use crate::error::AppResult;
 use crate::state::AppState;
@@ -250,6 +251,11 @@ pub fn roots(conn: &Connection, project_ids: Option<&[String]>) -> AppResult<Vec
     for row in stmt.query_map([], |r| Ok(RootRef { key: r.get(0)?, path: r.get(1)?, project_id: r.get(2)?, repository_id: r.get(3)? }))? {
         let r = row?;
         if project_ids.is_some_and(|ids| !ids.contains(&r.project_id)) {
+            continue;
+        }
+        // Neither indexed nor searched while the project is locked; file
+        // names and code snippets are its content too.
+        if !passkeys::readable(conn, &r.project_id) {
             continue;
         }
         // The same folder linked as both the project folder and a repository: index once.

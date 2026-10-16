@@ -207,6 +207,83 @@ opt-in two-replica test against a running server (see KERNWEB's README).
   - AI requests and connection tests, only when you make them (no polling);
   - GitHub issue sync and pull requests, only for projects you connect;
   - Kern Cloud, only after turning on online collaboration and signing in.
+- Settings → Privacy & Security also covers what Kern shows and keeps locally:
+  - **Blur contents when Kern isn't focused** (`privacy.blurOnUnfocus`) sets
+    `data-unfocused` on the root element from `src/app/effects.ts`; `base.css`
+    blurs `#root`, with no transition so nothing is readable mid-fade.
+  - **Show details in notifications** (`privacy.notificationDetails`): off means
+    reminders, mentions and focus alerts carry no task titles, comment text or
+    names. Call `notify::details_allowed(conn)` with the connection in hand and
+    choose a neutral line — `notify::send` runs with the database lock released.
+  - **Trust expires after** (`privacy.trustExpiryDays`, 0 = never): `trust_of`
+    reads an expired decision as restricted immediately, and
+    `apply_trust_retention` writes the downgrade back at the next launch.
+  - **Record recently opened items** (`privacy.recordRecents`): off makes
+    `recent::touch` a no-op, and `recent_list` clears the table, so turning it
+    off also forgets what was already recorded.
+  - **Allow plugin and syntax downloads** (`privacy.pluginDownloads`) gates
+    `syntax_install` on top of the network switch.
+- Files that commonly hold secrets (`.env`, `*.pem`, `*.key`, `id_rsa`, anything
+  named `credentials` or `secret` — `folders::is_sensitive`) are never offered to
+  AI features, trusted folder or not. That isn't a setting.
+
+### Passkeys and locked projects
+
+`domain/passkeys/` holds both. A passkey is a credential in the OS
+authenticator — Windows Hello, or a security key over USB. WebAuthn does not
+work inside the webview ([tauri#7926](https://github.com/tauri-apps/tauri/issues/7926),
+[WebView2Feedback#5663](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5663)),
+so registration and assertion run in Rust through `webauthn.dll`
+(`platform_windows.rs`) and the front end never sees key material. macOS and
+Linux fall to `platform_other.rs`, which reports that passkeys aren't available
+there; implementing one of them means writing those three functions and nothing
+above them changes.
+
+Details that aren't obvious from the code:
+
+- **It is a gate, not encryption.** `kern.db` holds the same rows either way,
+  so the lock guards the running app, not the data at rest. Say so when
+  describing the feature; don't let it read as "encrypted projects".
+- **Signatures aren't re-verified.** Kern is its own relying party on the same
+  machine as the authenticator, so the gate checks that the OS returned an
+  assertion for a credential registered here with its user-verified flag set.
+  A verifying key would live inside the process being protected.
+- **Locks only bite while this computer has a passkey** (`enforced`), and
+  `passkeys_reset` clears every passkey and lock without asking for one. Both
+  exist so a synced lock or a reset Hello container can't strand a project
+  forever; neither gives up anything that reading the database wouldn't.
+- **Credentials are per computer** (`passkeys` is in `DEVICE_TABLES`) while
+  `projects.locked_at` syncs, so the lock follows the project and each
+  computer registers its own passkey. Sync picks the new column up on its own
+  — `sync::columns` reads `pragma_table_info`.
+- **Where the gate sits.** Every way into a project's content is covered, in
+  one of three ways. Adding a new read path means picking one of them.
+
+  | Kind | How | Covers |
+  | --- | --- | --- |
+  | SQL predicate | `readable_sql(conn, col)` spliced into the query | `tasks::query_tasks`, `notes_list`, `whiteboards_list`, `activity_list`, `milestones::upcoming`, `comments::mentions_of`, the `stats` counts, `archive::tasks_csv` and `notes_to_dir` |
+  | Hard refusal | `ensure_readable(conn, project_id)` (or `_opt`) | `get_task`, `get_note`, `whiteboards::get`, `boards::get_board`, `milestones::list`/`get`, `comments::list`, `attachments::list`, `envvars::profiles` and `env_var_reveal`, `health`, `catchup::build`, `devenv::commands_list`/`devenv_cached`, `repos_list`, and the two file roots |
+  | Post-filter | drop rows from a finished list | `search`, `recent_list`, `trash_list`, `task_relations` |
+
+  Two resolvers do most of the work: `folders::root_of`/`target_root` and
+  `repos::local_root` are where every file, terminal, git, deps, devenv and
+  file-index path resolves a directory, so gating those three covers the dev
+  tools without touching them. `projects::hide_content` keeps a locked
+  project's name and blanks its counts, which is what lets the sidebar and the
+  unlock screen work. `cargo test passkeys` walks each surface.
+- **Deliberately not gated**, all three for a reason:
+  - **Writes.** Nothing can reach them while the UI shows the lock screen, and
+    they reveal nothing. Gating them would mostly add ways to fail.
+  - **Whole-database backups and `export_all`.** They copy the file, which is
+    data at rest and the documented way back from a lost authenticator; the
+    scheduler depends on them, so a locked project must not stop them. The
+    targeted exports (CSV, Markdown, per-project JSON) *do* respect the gate
+    — the JSON one refuses by name rather than quietly leaving content out.
+  - **`trash::list` itself.** `trash_purge_older_than` works through it and
+    must not skip a locked project; the filter is in the `trash_list` command.
+- Session state (which projects are open, and until when) is a process-wide
+  `static` in that module, because the read paths only have a `&Connection`.
+  `privacy.passkeyRelockMinutes` sets the lapse; 0 means until Kern quits.
 - AI API keys and the GitHub token live in the OS credential store (Windows
   Credential Manager / macOS Keychain / Secret Service), never in SQLite, logs or
   backups. Only the backend uses them. GitHub can also use the GitHub CLI's login.

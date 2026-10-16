@@ -29,6 +29,9 @@ pub enum AppError {
     /// Kern Cloud needs the account's email confirmed first.
     #[error("{0}")]
     Unverified(String),
+    /// A project behind a passkey, not opened with one yet this session.
+    #[error("{0}")]
+    Locked(String),
     #[error("{0}")]
     Other(String),
 }
@@ -57,6 +60,7 @@ impl AppError {
             AppError::Network(_) => "network",
             AppError::Auth(_) => "auth",
             AppError::Unverified(_) => "unverified",
+            AppError::Locked(_) => "locked",
             AppError::Other(_) => "other",
         }
     }
@@ -76,4 +80,8 @@ pub type AppResult<T> = Result<T, AppError>;
 
 pub fn invalid<T>(msg: impl Into<String>) -> AppResult<T> {
     Err(AppError::Invalid(msg.into()))
+}
+
+pub fn locked<T>(msg: impl Into<String>) -> AppResult<T> {
+    Err(AppError::Locked(msg.into()))
 }

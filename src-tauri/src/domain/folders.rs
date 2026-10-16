@@ -17,7 +17,7 @@
 //! renaming, duplicating and deleting items (deletes go to the
 //! Recycle Bin) require trust. Nothing ever runs automatically.
 
-use crate::domain::settings;
+use crate::domain::{passkeys, settings};
 use crate::error::{invalid, AppError, AppResult};
 use crate::state::AppState;
 use crate::util::now_ms;
@@ -155,11 +155,25 @@ impl Trust {
     }
 }
 
+/// Milliseconds a trust decision stays good for, from
+/// "Trust expires after"; `None` means it never expires.
+fn trust_lifetime(conn: &Connection) -> Option<i64> {
+    let days: i64 = settings::get_or(conn, "privacy.trustExpiryDays", 0);
+    (days > 0).then(|| days * 86_400_000)
+}
+
 pub fn trust_of(conn: &Connection, key: &str) -> AppResult<Option<Trust>> {
-    Ok(conn
-        .query_row("SELECT trust FROM trusted_workspaces WHERE folder_key = ?1", [key], |r| r.get::<_, String>(0))
-        .optional()?
-        .map(|s| Trust::parse(&s)))
+    let row: Option<(String, i64)> = conn
+        .query_row("SELECT trust, decided_at FROM trusted_workspaces WHERE folder_key = ?1", [key], |r| Ok((r.get(0)?, r.get(1)?)))
+        .optional()?;
+    let Some((trust, decided_at)) = row else { return Ok(None) };
+    let trust = Trust::parse(&trust);
+    // An expired decision reads as restricted even before the next launch
+    // sweeps it away, so trust never outlives the window the user chose.
+    if trust == Trust::Trusted && trust_lifetime(conn).is_some_and(|ms| now_ms() - decided_at >= ms) {
+        return Ok(Some(Trust::Restricted));
+    }
+    Ok(Some(trust))
 }
 
 pub fn set_trust(conn: &Connection, canonical: &Path, trust: Trust) -> AppResult<()> {
@@ -172,10 +186,18 @@ pub fn set_trust(conn: &Connection, canonical: &Path, trust: Trust) -> AppResult
 }
 
 /// With "Remember trusted folders" off, trust lasts one session: every
-/// trusted folder starts the next launch restricted.
+/// trusted folder starts the next launch restricted. Otherwise decisions
+/// older than "Trust expires after" are dropped.
 pub fn apply_trust_retention(conn: &Connection) -> AppResult<()> {
     if !settings::get_or(conn, "projects.rememberTrust", true) {
         conn.execute("UPDATE trusted_workspaces SET trust = 'restricted' WHERE trust = 'trusted'", [])?;
+        return Ok(());
+    }
+    if let Some(ms) = trust_lifetime(conn) {
+        conn.execute(
+            "UPDATE trusted_workspaces SET trust = 'restricted' WHERE trust = 'trusted' AND decided_at <= ?1",
+            [now_ms() - ms],
+        )?;
     }
     Ok(())
 }
@@ -271,6 +293,7 @@ pub fn ai_file_access(conn: &Connection, project_id: &str, trust: Trust) -> (boo
 }
 
 pub fn project_folder(conn: &Connection, project_id: &str) -> AppResult<Option<ProjectFolder>> {
+    passkeys::ensure_readable(conn, project_id)?;
     let Some((path, key, linked_at)) = link_row(conn, project_id)? else { return Ok(None) };
     let p = PathBuf::from(&path);
     let status = match std::fs::metadata(&p) {
@@ -330,6 +353,9 @@ pub fn unlink(conn: &Connection, project_id: &str) -> AppResult<()> {
 
 /// The canonical root of a project's folder, re-verified on every call.
 pub fn root_of(conn: &Connection, project_id: &str) -> AppResult<(PathBuf, Trust)> {
+    // The gate for every file, terminal, git and dev-tool path: they all
+    // resolve a root here or in `target_root` first.
+    passkeys::ensure_readable(conn, project_id)?;
     let Some((path, key, _)) = link_row(conn, project_id)? else {
         return invalid("This project isn't linked to a folder.");
     };
@@ -343,6 +369,7 @@ pub fn root_of(conn: &Connection, project_id: &str) -> AppResult<(PathBuf, Trust
 /// The root for a file operation: the project's linked folder, or one of the
 /// project's linked repositories (verified to belong to it).
 pub fn target_root(conn: &Connection, project_id: &str, repository_id: Option<&str>) -> AppResult<(PathBuf, Trust)> {
+    passkeys::ensure_readable(conn, project_id)?;
     match repository_id {
         Some(r) => {
             let owner: Option<String> = conn.query_row("SELECT project_id FROM project_repositories WHERE id = ?1", [r], |x| x.get(0)).optional()?;
@@ -946,6 +973,31 @@ mod tests {
         apply_trust_retention(&c).unwrap();
         let key = folder_key(&canonical(dir.path()).unwrap());
         assert_eq!(trust_of(&c, &key).unwrap(), Some(Trust::Restricted));
+    }
+
+    #[test]
+    fn trust_expires_after_the_chosen_window() {
+        let c = open_memory();
+        let dir = tempfile::tempdir().unwrap();
+        let canon = canonical(dir.path()).unwrap();
+        set_trust(&c, &canon, Trust::Trusted).unwrap();
+        let key = folder_key(&canon);
+        settings::set(&c, "privacy.trustExpiryDays", &serde_json::json!(7)).unwrap();
+        assert_eq!(trust_of(&c, &key).unwrap(), Some(Trust::Trusted), "a fresh decision still holds");
+
+        // Backdate the decision past the window.
+        c.execute("UPDATE trusted_workspaces SET decided_at = ?1 WHERE folder_key = ?2", params![now_ms() - 8 * 86_400_000, &key]).unwrap();
+        assert_eq!(trust_of(&c, &key).unwrap(), Some(Trust::Restricted), "expired before the sweep runs");
+        apply_trust_retention(&c).unwrap();
+        let stored: String = c.query_row("SELECT trust FROM trusted_workspaces WHERE folder_key = ?1", [&key], |r| r.get(0)).unwrap();
+        assert_eq!(stored, "restricted", "the sweep writes it back");
+
+        // "Never" leaves an old decision alone.
+        set_trust(&c, &canon, Trust::Trusted).unwrap();
+        c.execute("UPDATE trusted_workspaces SET decided_at = 1 WHERE folder_key = ?1", [&key]).unwrap();
+        settings::set(&c, "privacy.trustExpiryDays", &serde_json::json!(0)).unwrap();
+        apply_trust_retention(&c).unwrap();
+        assert_eq!(trust_of(&c, &key).unwrap(), Some(Trust::Trusted));
     }
 
     #[test]

@@ -315,10 +315,13 @@ pub fn update(conn: &Connection, id: &str, p: &RepoPatch) -> AppResult<Repositor
 
 /// The repository's canonical local root and its trust, re-verified on every call.
 pub fn local_root(conn: &Connection, id: &str) -> AppResult<(PathBuf, Trust)> {
-    let (path, key): (Option<String>, Option<String>) = conn
-        .query_row("SELECT local_path, folder_key FROM project_repositories WHERE id = ?1", [id], |r| Ok((r.get(0)?, r.get(1)?)))
+    let (path, key, project_id): (Option<String>, Option<String>, String) = conn
+        .query_row("SELECT local_path, folder_key, project_id FROM project_repositories WHERE id = ?1", [id], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+        })
         .optional()?
         .ok_or_else(|| AppError::NotFound("Repository".into()))?;
+    crate::domain::passkeys::ensure_readable(conn, &project_id)?;
     let (Some(path), Some(key)) = (path, key) else {
         return invalid("This repository has no local copy on this computer. Clone it or link a local folder first.");
     };
@@ -391,7 +394,13 @@ pub fn summary_of(state: &AppState, id: &str) -> AppResult<RepoSummary> {
 
 #[tauri::command]
 pub async fn repos_list(app: AppHandle, project_id: String) -> AppResult<Vec<Repository>> {
-    blocking(&app, move |s| s.with(|c| list(c, &project_id))).await
+    blocking(&app, move |s| {
+        s.with(|c| {
+            crate::domain::passkeys::ensure_readable(c, &project_id)?;
+            list(c, &project_id)
+        })
+    })
+    .await
 }
 
 #[tauri::command]

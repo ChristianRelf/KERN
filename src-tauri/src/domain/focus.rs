@@ -118,11 +118,14 @@ pub fn focus_schedule(app: AppHandle, state: State<AppState>, end_at: i64, title
         if st.focus_generation.load(Ordering::SeqCst) != generation {
             return;
         }
-        let enabled = st
-            .with(|c| Ok(notify::category_enabled(c, "notifications.focus")))
-            .unwrap_or(true);
-        if enabled {
+        let (enabled, detail) = st
+            .with(|c| Ok((notify::category_enabled(c, "notifications.focus"), notify::details_allowed(c))))
+            .unwrap_or((true, true));
+        if enabled && detail {
             notify::send(&app, &title, &body);
+        } else if enabled {
+            // The title names the task being worked on; keep it off the screen.
+            notify::send(&app, "Focus timer", "Your focus session has finished.");
         }
         let _ = app.emit("kern://focus-ended", end_at);
     });

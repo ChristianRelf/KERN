@@ -5,6 +5,7 @@
 //! (completion, moves, rescheduling, creation of notes, archiving...), and
 //! old entries are pruned according to the retention setting.
 
+use crate::domain::passkeys;
 use crate::error::AppResult;
 use crate::state::AppState;
 use crate::util::now_ms;
@@ -55,11 +56,12 @@ pub fn activity_list(
     state.with(|c| {
         let limit = limit.unwrap_or(50).clamp(1, 500);
         let before = before.unwrap_or(i64::MAX);
-        let mut stmt = c.prepare(
+        let mut stmt = c.prepare(&format!(
             "SELECT id, project_id, entity_type, entity_id, action, summary, created_at FROM activity
-             WHERE (?1 IS NULL OR project_id = ?1) AND created_at < ?2
+             WHERE (?1 IS NULL OR project_id = ?1) AND created_at < ?2 AND {}
              ORDER BY created_at DESC, id DESC LIMIT ?3",
-        )?;
+            passkeys::readable_sql(c, "project_id")
+        ))?;
         let rows = stmt.query_map(params![project_id, before, limit], |r| {
             Ok(Activity {
                 id: r.get(0)?,

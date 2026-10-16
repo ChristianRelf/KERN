@@ -214,6 +214,11 @@ export interface Project {
   githubRepo: string | null;
   /** When the project was opened before the current visit. */
   prevOpenedAt: number | null;
+  /** Set while the project needs a passkey to open. */
+  lockedAt: number | null;
+  /** Opened with a passkey this session. With `lockedAt` set and this false,
+   *  the counts and folder above are blanked and the content is withheld. */
+  unlocked: boolean;
 }
 
 export type Trust = "trusted" | "restricted";
@@ -2364,4 +2369,33 @@ export interface ShareLink {
   createdAt: string;
   updatedAt: string;
   expiresAt: string | null;
+}
+
+// ---------------------------------------------------------------- passkeys
+
+/** Which authenticator a passkey lives in. */
+export type PasskeyKind = "platform" | "securityKey";
+
+export interface Passkey {
+  id: string;
+  label: string;
+  kind: PasskeyKind;
+  createdAt: number;
+  lastUsedAt: number | null;
+}
+
+export interface PasskeySupport {
+  /** Windows Hello (or another built-in verifying authenticator) is set up. */
+  platform: boolean;
+  securityKey: boolean;
+  /** Why one or both are unavailable, ready to show. */
+  reason: string | null;
+}
+
+export interface LockedProject {
+  id: string;
+  name: string;
+  lockedAt: number;
+  /** Opened with a passkey this session. */
+  unlocked: boolean;
 }

@@ -72,6 +72,8 @@ function project(p: Partial<Project>): Project {
     aiPrefs: {},
     githubRepo: null,
     prevOpenedAt: null,
+    lockedAt: null,
+    unlocked: false,
     ...p,
   };
 }

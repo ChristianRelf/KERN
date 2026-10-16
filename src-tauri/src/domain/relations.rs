@@ -5,6 +5,7 @@
 //! Each pair of tasks has at most one relation, stored in one direction
 //! (`task_id` blocks / duplicates `related_id`; `related` is symmetric).
 
+use crate::domain::passkeys;
 use crate::error::{invalid, AppError, AppResult};
 use crate::state::AppState;
 use crate::util::now_ms;
@@ -126,7 +127,17 @@ pub fn remove(conn: &Connection, task_id: &str, other_id: &str) -> AppResult<()>
 
 #[tauri::command]
 pub fn task_relations(state: State<AppState>, task_id: String) -> AppResult<Vec<TaskRelation>> {
-    state.with(|c| list(c, &task_id))
+    state.with(|c| {
+        // Related rows carry the other task's title.
+        let owner: Option<Option<String>> =
+            c.query_row("SELECT project_id FROM tasks WHERE id = ?1", [&task_id], |r| r.get(0)).optional()?;
+        passkeys::ensure_readable_opt(c, owner.flatten().as_deref())?;
+        let mut out = list(c, &task_id)?;
+        if passkeys::filtering(c) {
+            out.retain(|r| passkeys::ensure_readable_opt(c, r.task.project_id.as_deref()).is_ok());
+        }
+        Ok(out)
+    })
 }
 
 #[tauri::command]

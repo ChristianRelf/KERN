@@ -32,6 +32,7 @@ pub mod milestones;
 pub mod links;
 pub mod notes;
 pub mod notify;
+pub mod passkeys;
 pub mod plugins;
 pub mod plugins_catalog;
 pub mod projects;

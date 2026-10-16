@@ -3,7 +3,7 @@
 
 //! Projects and project groups.
 
-use crate::domain::{activity, boards, recent};
+use crate::domain::{activity, boards, passkeys, recent};
 use crate::error::{invalid, AppError, AppResult};
 use crate::state::AppState;
 use crate::util::{new_id, now_ms, some, valid_date};
@@ -46,6 +46,11 @@ pub struct Project {
     pub github_repo: Option<String>,
     /// When the project was opened before the current visit ("since last opened").
     pub prev_opened_at: Option<i64>,
+    /// Set while the project needs a passkey to open (see domain::passkeys).
+    pub locked_at: Option<i64>,
+    /// Opened with a passkey in this session. False with `locked_at` set
+    /// means the lists above are blanked and the content is withheld.
+    pub unlocked: bool,
 }
 
 /// Columns 0..=16 are the project row; 17.. are statistics. `?1` is
@@ -62,7 +67,7 @@ const PROJECT_SELECT: &str = "SELECT p.id, p.name, p.description, p.icon, p.acce
   (SELECT t.trust FROM project_folder_links l JOIN trusted_workspaces t ON t.folder_key = l.folder_key WHERE l.project_id = p.id),
   p.ai_prefs,
   (SELECT r.owner || '/' || r.name FROM project_repos r WHERE r.project_id = p.id),
-  p.prev_opened_at
+  p.prev_opened_at, p.locked_at
 FROM projects p";
 
 fn map_project(r: &Row) -> rusqlite::Result<Project> {
@@ -95,7 +100,27 @@ fn map_project(r: &Row) -> rusqlite::Result<Project> {
         ai_prefs: serde_json::from_str(&r.get::<_, String>(24)?).unwrap_or(Value::Object(Default::default())),
         github_repo: r.get(25)?,
         prev_opened_at: r.get(26)?,
+        locked_at: r.get(27)?,
+        unlocked: false,
     })
+}
+
+/// A locked project still appears - its name is how you get to the unlock
+/// prompt - but nothing counted from its content goes out with it.
+fn hide_content(conn: &Connection, p: &mut Project) {
+    p.unlocked = passkeys::readable(conn, &p.id);
+    if p.locked_at.is_none() || p.unlocked {
+        return;
+    }
+    p.description = String::new();
+    p.task_total = 0;
+    p.task_done = 0;
+    p.task_overdue = 0;
+    p.task_due_soon = 0;
+    p.last_activity_at = None;
+    p.folder_path = None;
+    p.folder_trust = None;
+    p.github_repo = None;
 }
 
 fn today() -> String {
@@ -107,13 +132,16 @@ fn include_archived_in_progress(conn: &Connection) -> i64 {
 }
 
 pub fn get_project(conn: &Connection, id: &str) -> AppResult<Project> {
-    conn.query_row(
-        &format!("{PROJECT_SELECT} WHERE p.id = ?3"),
-        params![today(), include_archived_in_progress(conn), id],
-        map_project,
-    )
-    .optional()?
-    .ok_or_else(|| AppError::NotFound("Project".into()))
+    let mut p = conn
+        .query_row(
+            &format!("{PROJECT_SELECT} WHERE p.id = ?3"),
+            params![today(), include_archived_in_progress(conn), id],
+            map_project,
+        )
+        .optional()?
+        .ok_or_else(|| AppError::NotFound("Project".into()))?;
+    hide_content(conn, &mut p);
+    Ok(p)
 }
 
 pub fn list_projects(conn: &Connection, include_archived: bool) -> AppResult<Vec<Project>> {
@@ -122,7 +150,11 @@ pub fn list_projects(conn: &Connection, include_archived: bool) -> AppResult<Vec
     );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(params![today(), include_archived_in_progress(conn), include_archived as i64], map_project)?;
-    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    let mut out = rows.collect::<Result<Vec<_>, _>>()?;
+    for p in &mut out {
+        hide_content(conn, p);
+    }
+    Ok(out)
 }
 
 #[derive(Deserialize, Debug, Default)]

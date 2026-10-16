@@ -5,7 +5,7 @@
 //! restored or permanently removed. Items older than the retention period
 //! are purged automatically.
 
-use crate::domain::attachments;
+use crate::domain::{attachments, passkeys};
 use crate::error::{invalid, AppResult};
 use crate::state::AppState;
 use crate::util::now_ms;
@@ -91,7 +91,15 @@ pub fn purge_older_than(conn: &Connection, days: i64) -> AppResult<usize> {
 
 #[tauri::command]
 pub fn trash_list(state: State<AppState>) -> AppResult<Vec<TrashItem>> {
-    state.with(|c| list(c))
+    state.with(|c| {
+        let mut items = list(c)?;
+        // Deleted titles are content too. `list` itself stays unfiltered:
+        // the scheduled purge works through it and mustn't skip anything.
+        if passkeys::filtering(c) {
+            items.retain(|i| passkeys::ensure_readable_opt(c, i.project_id.as_deref()).is_ok());
+        }
+        Ok(items)
+    })
 }
 
 #[tauri::command]

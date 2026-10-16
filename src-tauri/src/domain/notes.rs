@@ -3,7 +3,7 @@
 
 //! Notes (Markdown content) and the Inbox of unorganised captures.
 
-use crate::domain::{activity, recent, tasks};
+use crate::domain::{activity, passkeys, recent, tasks};
 use crate::error::{invalid, AppError, AppResult};
 use crate::state::AppState;
 use crate::util::{new_id, now_ms, some};
@@ -57,9 +57,12 @@ const NOTE_SELECT: &str =
     "SELECT id, title, content, project_id, pinned, archived_at, deleted_at, created_at, updated_at FROM notes";
 
 pub fn get_note(conn: &Connection, id: &str) -> AppResult<Note> {
-    conn.query_row(&format!("{NOTE_SELECT} WHERE id = ?1"), [id], map_note)
+    let note = conn
+        .query_row(&format!("{NOTE_SELECT} WHERE id = ?1"), [id], map_note)
         .optional()?
-        .ok_or_else(|| AppError::NotFound("Note".into()))
+        .ok_or_else(|| AppError::NotFound("Note".into()))?;
+    passkeys::ensure_readable_opt(conn, note.project_id.as_deref())?;
+    Ok(note)
 }
 
 /// Plain-text excerpt from Markdown for list previews.
@@ -106,11 +109,13 @@ pub fn notes_list(
     include_archived: Option<bool>,
 ) -> AppResult<Vec<NoteMeta>> {
     state.with(|c| {
-        let mut stmt = c.prepare(
+        let mut stmt = c.prepare(&format!(
             "SELECT id, title, substr(content, 1, 600), project_id, pinned, archived_at, created_at, updated_at FROM notes
              WHERE deleted_at IS NULL AND (?1 IS NULL OR project_id = ?1) AND (?2 = 1 OR archived_at IS NULL)
+               AND {}
              ORDER BY pinned DESC, updated_at DESC",
-        )?;
+            passkeys::readable_sql(c, "project_id")
+        ))?;
         let rows = stmt.query_map(params![project_id, include_archived.unwrap_or(false) as i64], |r| {
             let body: String = r.get(2)?;
             Ok(NoteMeta {

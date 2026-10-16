@@ -40,6 +40,7 @@ export function describeError(e: unknown, fallback = "Couldn't save your changes
       case "network":
       case "auth":
       case "unverified":
+      case "locked":
         return e.message.charAt(0).toUpperCase() + e.message.slice(1);
       case "busy":
         return "The database is busy. Try again in a moment.";
@@ -154,6 +155,25 @@ export const api = {
     restore: (id: string) => call<void>("project_restore", { id }),
     touch: (id: string) => call<void>("project_touch", { id }),
     capabilities: (id: string) => call<T.ProjectCapabilities>("project_capabilities", { id }),
+  },
+  /** Passkeys, and the per-project locks they open. Credentials never cross
+   *  the boundary: the OS prompt is drawn by the back end. */
+  passkeys: {
+    list: () => call<T.Passkey[]>("passkeys_list"),
+    support: () => call<T.PasskeySupport>("passkeys_support"),
+    /** Shows the OS prompt, then records the new passkey. */
+    register: (label: string, kind: T.PasskeyKind) => call<T.Passkey>("passkey_register", { label, kind }),
+    rename: (id: string, label: string) => call<void>("passkey_rename", { id, label }),
+    /** Needs a passkey of its own: the OS prompt comes first. */
+    remove: (id: string) => call<void>("passkey_remove", { id }),
+    /** Forgets every passkey and clears every lock, for a lost authenticator. */
+    reset: () => call<void>("passkeys_reset"),
+    locked: () => call<T.LockedProject[]>("locked_projects_list"),
+    setLocked: (id: string, locked: boolean) => call<void>("project_set_locked", { id, locked }),
+    /** Opens one locked project for this session, via the OS prompt. */
+    unlock: (id: string) => call<void>("project_unlock", { id }),
+    /** "Lock now": one project, or every one when id is omitted. */
+    relock: (id?: string) => call<void>("project_relock", { id: id ?? null }),
   },
   ai: {
     list: () => call<T.AiAccount[]>("ai_accounts_list"),

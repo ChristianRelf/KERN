@@ -3,6 +3,7 @@
 
 //! Aggregate statistics computed with scoped SQL (no full-table loads).
 
+use crate::domain::passkeys;
 use crate::error::AppResult;
 use crate::state::AppState;
 use rusqlite::params;
@@ -24,16 +25,19 @@ pub struct Overview {
 #[tauri::command]
 pub fn stats_overview(state: State<AppState>, today: String, day_start: i64, week_start: i64) -> AppResult<Overview> {
     state.with(|c| {
+        let ok = passkeys::readable_sql(c, "project_id");
         Ok(c.query_row(
-            "SELECT
-               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND archived_at IS NULL AND status != 'completed' AND parent_id IS NULL),
-               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND archived_at IS NULL AND status != 'completed' AND due_date < ?1),
-               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND archived_at IS NULL AND status != 'completed' AND due_date = ?1),
-               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND archived_at IS NULL AND status = 'inbox' AND parent_id IS NULL)
+            &format!(
+                "SELECT
+               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND archived_at IS NULL AND status != 'completed' AND parent_id IS NULL AND {ok}),
+               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND archived_at IS NULL AND status != 'completed' AND due_date < ?1 AND {ok}),
+               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND archived_at IS NULL AND status != 'completed' AND due_date = ?1 AND {ok}),
+               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND archived_at IS NULL AND status = 'inbox' AND parent_id IS NULL AND {ok})
                  + (SELECT count(*) FROM inbox_items),
                (SELECT count(*) FROM projects WHERE deleted_at IS NULL AND archived_at IS NULL),
-               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND resolution IS NULL AND completed_at >= ?2),
-               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND resolution IS NULL AND completed_at >= ?3)",
+               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND resolution IS NULL AND completed_at >= ?2 AND {ok}),
+               (SELECT count(*) FROM tasks WHERE deleted_at IS NULL AND resolution IS NULL AND completed_at >= ?3 AND {ok})"
+            ),
             params![today, day_start, week_start],
             |r| {
                 Ok(Overview {
@@ -54,9 +58,11 @@ pub fn stats_overview(state: State<AppState>, today: String, day_start: i64, wee
 #[tauri::command]
 pub fn stats_completions(state: State<AppState>, from: i64, to: i64) -> AppResult<Vec<i64>> {
     state.with(|c| {
-        let mut stmt = c.prepare(
-            "SELECT completed_at FROM tasks WHERE deleted_at IS NULL AND resolution IS NULL AND completed_at >= ?1 AND completed_at < ?2 ORDER BY completed_at",
-        )?;
+        let mut stmt = c.prepare(&format!(
+            "SELECT completed_at FROM tasks WHERE deleted_at IS NULL AND resolution IS NULL AND completed_at >= ?1 AND completed_at < ?2
+               AND {} ORDER BY completed_at",
+            passkeys::readable_sql(c, "project_id")
+        ))?;
         let rows = stmt.query_map(params![from, to], |r| r.get(0))?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     })
@@ -66,11 +72,13 @@ pub fn stats_completions(state: State<AppState>, from: i64, to: i64) -> AppResul
 #[tauri::command]
 pub fn stats_due_counts(state: State<AppState>, from: String, to: String) -> AppResult<Vec<(String, i64, i64)>> {
     state.with(|c| {
-        let mut stmt = c.prepare(
+        let mut stmt = c.prepare(&format!(
             "SELECT due_date, sum(status != 'completed'), sum(status = 'completed') FROM tasks
              WHERE deleted_at IS NULL AND archived_at IS NULL AND parent_id IS NULL AND due_date >= ?1 AND due_date <= ?2
+               AND {}
              GROUP BY due_date",
-        )?;
+            passkeys::readable_sql(c, "project_id")
+        ))?;
         let rows = stmt.query_map(params![from, to], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     })

@@ -8,7 +8,8 @@
 //! against the SHA-256 recorded in `plugins_catalog.rs` before it is saved
 //! under `<data dir>/plugins/syntax/`. Only names in that catalog can be
 //! requested, so the download address can't be steered anywhere else.
-//! Downloads respect the "External network requests" privacy setting.
+//! Downloads respect the "External network requests" and "Allow plugin and
+//! syntax downloads" privacy settings.
 
 use crate::domain::folders::root_of;
 use crate::domain::git::SKIP_DIRS;
@@ -62,9 +63,13 @@ pub async fn syntax_installed(app: AppHandle) -> AppResult<Vec<String>> {
 #[tauri::command]
 pub async fn syntax_install(app: AppHandle, names: Vec<String>) -> AppResult<Vec<String>> {
     blocking(&app, move |s| {
-        let network: bool = s.with(|c| Ok(settings::get_or(c, "privacy.network", true)))?;
+        let (network, downloads): (bool, bool) =
+            s.with(|c| Ok((settings::get_or(c, "privacy.network", true), settings::get_or(c, "privacy.pluginDownloads", true))))?;
         if !network {
             return invalid("External network requests are turned off in Privacy settings, so syntaxes can't be downloaded.");
+        }
+        if !downloads {
+            return invalid("Plugin and syntax downloads are turned off in Privacy settings.");
         }
         let dir = syntax_dir(s);
         let agent: ureq::Agent = ureq::Agent::config_builder()

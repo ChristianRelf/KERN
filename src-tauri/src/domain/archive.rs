@@ -21,7 +21,7 @@
 //! migrates it if it came from an older version and swaps attachments.
 
 use crate::db::{self, SCHEMA_VERSION};
-use crate::domain::{settings, stats::dir_size, whiteboards};
+use crate::domain::{passkeys, settings, stats::dir_size, whiteboards};
 use crate::error::{invalid, AppError, AppResult};
 use crate::state::{AppState, Paths};
 use crate::util::{new_id, now_ms, safe_file_name};
@@ -525,12 +525,14 @@ pub fn tasks_csv(conn: &Connection) -> AppResult<String> {
     let mut out = String::from(
         "id,title,status,priority,project,parent_id,due_date,due_time,start_date,labels,estimate_minutes,tracked_minutes,created_at,completed_at,archived,description\r\n",
     );
-    let mut stmt = conn.prepare(
+    let mut stmt = conn.prepare(&format!(
         "SELECT t.id, t.title, t.status, t.priority, p.name, t.parent_id, t.due_date, t.due_time, t.start_date,
            (SELECT group_concat(l.name, '; ') FROM task_labels tl JOIN labels l ON l.id = tl.label_id WHERE tl.task_id = t.id),
            t.estimate_minutes, t.tracked_seconds / 60, t.created_at, t.completed_at, t.archived_at IS NOT NULL, t.description
-         FROM tasks t LEFT JOIN projects p ON p.id = t.project_id WHERE t.deleted_at IS NULL ORDER BY p.sort_order, t.sort_order",
-    )?;
+         FROM tasks t LEFT JOIN projects p ON p.id = t.project_id WHERE t.deleted_at IS NULL AND {}
+         ORDER BY p.sort_order, t.sort_order",
+        passkeys::readable_sql(conn, "t.project_id")
+    ))?;
     let prio = ["none", "low", "medium", "high", "urgent"];
     let ts = |v: Option<i64>| {
         v.and_then(chrono::DateTime::from_timestamp_millis)
@@ -566,10 +568,12 @@ pub fn tasks_csv(conn: &Connection) -> AppResult<String> {
 
 pub fn notes_to_dir(conn: &Connection, dir: &Path) -> AppResult<usize> {
     std::fs::create_dir_all(dir)?;
-    let mut stmt = conn.prepare(
+    let mut stmt = conn.prepare(&format!(
         "SELECT n.title, n.content, p.name, n.created_at, n.updated_at FROM notes n
-         LEFT JOIN projects p ON p.id = n.project_id WHERE n.deleted_at IS NULL ORDER BY n.created_at",
-    )?;
+         LEFT JOIN projects p ON p.id = n.project_id WHERE n.deleted_at IS NULL AND {}
+         ORDER BY n.created_at",
+        passkeys::readable_sql(conn, "n.project_id")
+    ))?;
     let notes: Vec<(String, String, Option<String>, i64, i64)> = stmt
         .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?
         .collect::<Result<_, _>>()?;
@@ -593,6 +597,11 @@ pub fn notes_to_dir(conn: &Connection, dir: &Path) -> AppResult<usize> {
 pub fn projects_json(conn: &Connection, ids: Option<Vec<String>>) -> AppResult<Value> {
     let all = crate::domain::projects::list_projects(conn, true)?;
     let selected: Vec<_> = all.into_iter().filter(|p| ids.as_ref().map(|i| i.contains(&p.id)).unwrap_or(true)).collect();
+    // Refuse rather than quietly write an export with a project's content
+    // missing from it.
+    if let Some(shut) = selected.iter().find(|p| !passkeys::readable(conn, &p.id)) {
+        return crate::error::locked(format!("\"{}\" is locked. Open it with a passkey, or leave it out of the export.", shut.name));
+    }
     let labels = dump_table(conn, "labels")?;
     let mut projects = vec![];
     for p in selected {

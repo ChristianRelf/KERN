@@ -23,6 +23,7 @@ export const queryClient = new QueryClient({
 
 export type Domain =
   | "tasks"
+  | "passkeys"
   | "plugins"
   | "task"
   | "board"

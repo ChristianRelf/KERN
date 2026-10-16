@@ -8,9 +8,10 @@
 //!
 //! `scope` narrows results: all | tasks | projects | notes | github | commands.
 
+use crate::domain::passkeys;
 use crate::error::AppResult;
 use crate::state::AppState;
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use tauri::State;
 
@@ -52,6 +53,31 @@ fn scope_kinds(scope: &str) -> Option<&'static [&'static str]> {
         "github" | "commands" | "files" | "code" => Some(&[]),
         _ => None,
     }
+}
+
+/// The project a hit belongs to, for the passkey gate below.
+fn owner_of(conn: &Connection, hit: &SearchHit) -> Option<String> {
+    let one = |sql: &str, id: &str| conn.query_row(sql, [id], |r| r.get::<_, Option<String>>(0)).optional().ok().flatten().flatten();
+    match hit.kind.as_str() {
+        "project" => Some(hit.id.clone()),
+        // Saved commands and snapshots already carry their project.
+        "command" | "snapshot" => hit.parent_id.clone(),
+        "task" | "github" | "pr" => one("SELECT project_id FROM tasks WHERE id = ?1", &hit.id),
+        "note" => one("SELECT project_id FROM notes WHERE id = ?1", &hit.id),
+        "whiteboard" => one("SELECT project_id FROM whiteboards WHERE id = ?1", &hit.id),
+        "wb_node" => hit.parent_id.as_deref().and_then(|p| one("SELECT project_id FROM whiteboards WHERE id = ?1", p)),
+        // Labels and saved views belong to no project.
+        _ => None,
+    }
+}
+
+/// Search crosses every kind of record at once, so locked projects are
+/// filtered out of the finished list rather than in each query.
+fn drop_locked(conn: &Connection, hits: &mut Vec<SearchHit>) {
+    if !passkeys::filtering(conn) {
+        return;
+    }
+    hits.retain(|hit| passkeys::ensure_readable_opt(conn, owner_of(conn, hit).as_deref()).is_ok());
 }
 
 #[tauri::command]
@@ -164,6 +190,7 @@ pub fn search(state: State<AppState>, query: String, limit: Option<i64>, scope: 
                 out.push(SearchHit { kind: "commit".into(), id: url, parent_id: Some(repo.clone()), title: subject, snippet: format!("{repo} · {short}"), meta: None });
             }
         }
+        drop_locked(c, &mut out);
         Ok(out)
     })
 }

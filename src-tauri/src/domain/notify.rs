@@ -2,7 +2,8 @@
 // @Date 2026-10-12
 
 //! Native notifications with global enable, per-category toggles, quiet
-//! hours and duplicate suppression.
+//! hours, duplicate suppression and the privacy switch that keeps item text
+//! out of the notification itself.
 
 use crate::domain::settings;
 use crate::util::now_ms;
@@ -40,6 +41,14 @@ pub fn in_quiet_hours(conn: &Connection) -> bool {
 /// Global switch, category switch and quiet hours.
 pub fn category_enabled(conn: &Connection, key: &str) -> bool {
     settings::get_or(conn, "notifications.enabled", true) && settings::get_or(conn, key, true) && !in_quiet_hours(conn)
+}
+
+/// Whether a notification may carry the item's own words (task titles,
+/// comment text, names). With "Show details in notifications" off, callers
+/// send a neutral line instead, so nothing legible reaches a lock screen.
+/// Takes the connection because `send` runs with the database lock released.
+pub fn details_allowed(conn: &Connection) -> bool {
+    settings::get_or(conn, "privacy.notificationDetails", true)
 }
 
 /// Records `key` and returns true the first time only (duplicate suppression).

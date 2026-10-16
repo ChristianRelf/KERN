@@ -19,6 +19,7 @@ import {
   KeyRound,
   LayoutGrid,
   ListFilter,
+  Lock,
   Minimize2,
   PanelLeftClose,
   PanelLeftOpen,
@@ -1056,6 +1057,8 @@ function ProjectItem({
 }) {
   const progress = p.taskTotal ? p.taskDone / p.taskTotal : 0;
   const open = p.taskTotal - p.taskDone;
+  // Its counts are withheld while it's locked, so show the reason instead.
+  const locked = !!p.lockedAt && !p.unlocked;
   return (
     <ContextMenu items={() => [...extraMenu, ...(extraMenu.length ? [{ type: "separator" as const }] : []), ...projectMenu(p, groups)]}>
       <div>
@@ -1064,9 +1067,15 @@ function ProjectItem({
           glyph={<ProjectGlyph project={p} />}
           active={active}
           onClick={() => navigate({ name: "project", id: p.id })}
-          count={showProgress ? undefined : open || undefined}
+          count={locked ? undefined : showProgress ? undefined : open || undefined}
           actions={
-            showProgress && p.taskTotal > 0 ? (
+            locked ? (
+              <Tooltip content="Locked - open it with a passkey" side="right">
+                <span className="row faint" style={{ marginRight: 6 }}>
+                  <Lock strokeWidth={1.75} size={13} />
+                </span>
+              </Tooltip>
+            ) : showProgress && p.taskTotal > 0 ? (
               <Tooltip content={`${p.taskDone} of ${p.taskTotal} done`} side="right">
                 <span className="row" style={{ marginRight: 6 }}>
                   <Ring value={progress} size={14} stroke={2} />

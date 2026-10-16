@@ -38,6 +38,12 @@ textarea,
   cursor: text;
 }
 
+/* "Blur contents when Kern isn't focused" (Settings -> Privacy & Security).
+   Not animated: content should be hidden the instant focus leaves. */
+:root[data-unfocused] #root {
+  filter: blur(14px);
+}
+
 button,
 input,
 textarea,

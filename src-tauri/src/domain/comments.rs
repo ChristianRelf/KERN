@@ -6,7 +6,7 @@
 //! A mention is stored twice: inline in the body as `@[Name](user-id)` (so
 //! it renders as a chip) and in `mentions` (so it can be looked up).
 
-use crate::domain::{activity, cloud, notify, settings};
+use crate::domain::{activity, cloud, notify, passkeys, settings};
 use crate::error::{invalid, AppError, AppResult};
 use crate::state::AppState;
 use crate::util::{new_id, now_ms};
@@ -88,10 +88,18 @@ pub fn parse_mentions(body: &str) -> Vec<String> {
 }
 
 pub fn list(conn: &Connection, task_id: &str) -> AppResult<Vec<Comment>> {
+    task_project(conn, task_id)?;
     let me = cloud::current_account(conn).map(|a| a.id);
     let mut stmt = conn.prepare(&format!("{SELECT} WHERE task_id = ?1 ORDER BY created_at, id"))?;
     let rows = stmt.query_map([task_id], |r| map(r, me.as_deref()))?;
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+/// Refuses when the comment's task sits in a locked project.
+fn task_project(conn: &Connection, task_id: &str) -> AppResult<()> {
+    let owner: Option<Option<String>> =
+        conn.query_row("SELECT project_id FROM tasks WHERE id = ?1", [task_id], |r| r.get(0)).optional()?;
+    passkeys::ensure_readable_opt(conn, owner.flatten().as_deref())
 }
 
 pub fn get(conn: &Connection, id: &str) -> AppResult<Comment> {
@@ -188,12 +196,14 @@ pub fn plain(body: &str) -> String {
 
 /// Comments by others that mention `user_id`, newest first.
 pub fn mentions_of(conn: &Connection, user_id: &str, since: i64, limit: i64) -> AppResult<Vec<Mention>> {
-    let mut stmt = conn.prepare(
+    let mut stmt = conn.prepare(&format!(
         "SELECT c.id, c.task_id, t.title, c.author_name, c.body, c.created_at FROM task_comments c JOIN tasks t ON t.id = c.task_id
          WHERE t.deleted_at IS NULL AND c.created_at > ?2 AND (c.author_id IS NULL OR c.author_id != ?1)
            AND EXISTS (SELECT 1 FROM json_each(c.mentions) m WHERE m.value = ?1)
+           AND {}
          ORDER BY c.created_at DESC LIMIT ?3",
-    )?;
+        passkeys::readable_sql(conn, "t.project_id")
+    ))?;
     let rows = stmt.query_map(params![user_id, since, limit], |r| {
         let body: String = r.get(4)?;
         let text = plain(&body);
@@ -215,25 +225,28 @@ pub fn notify_mentions(app: &AppHandle, space: &str) {
     let state = app.state::<AppState>();
     let key = format!("internal.mentionsSeen.{space}");
     let found = state.with(|c| {
-        let Some(me) = cloud::current_account(c) else { return Ok(vec![]) };
+        let Some(me) = cloud::current_account(c) else { return Ok((vec![], true)) };
         let seen: Option<i64> = settings::get(c, &key);
         let Some(seen) = seen else {
             // First sync of this space: older mentions aren't news.
             settings::set(c, &key, &Value::from(now_ms()))?;
-            return Ok(vec![]);
+            return Ok((vec![], true));
         };
         let found = mentions_of(c, &me.id, seen, 20)?;
         if let Some(newest) = found.first() {
             settings::set(c, &key, &Value::from(newest.created_at))?;
         }
         let allowed = notify::category_enabled(c, "notifications.mentions");
-        Ok(if allowed { found } else { vec![] })
+        Ok((if allowed { found } else { vec![] }, notify::details_allowed(c)))
     });
-    let Ok(found) = found else { return };
+    let Ok((found, detail)) = found else { return };
     if found.is_empty() {
         return;
     }
-    if found.len() > 3 {
+    if !detail {
+        // Names, task titles and comment text stay inside Kern.
+        notify::send(app, "New mentions", &format!("You were mentioned in {}.", if found.len() == 1 { "a task comment".to_string() } else { format!("{} task comments", found.len()) }));
+    } else if found.len() > 3 {
         notify::send(app, &format!("{} new mentions", found.len()), "You were mentioned in task comments.");
     } else {
         for m in &found {

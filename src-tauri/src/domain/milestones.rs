@@ -11,7 +11,7 @@
 //! changelog is a draft, and a GitHub release is only ever opened in the
 //! browser for the user to review and publish themselves.
 
-use crate::domain::{activity, git, repos};
+use crate::domain::{activity, git, passkeys, repos};
 use crate::error::{invalid, AppError, AppResult};
 use crate::state::AppState;
 use crate::util::{new_id, now_ms, some, valid_date};
@@ -140,11 +140,13 @@ fn decorate(conn: &Connection, list: &mut [Milestone]) -> AppResult<()> {
 
 pub fn get(conn: &Connection, id: &str) -> AppResult<Milestone> {
     let mut m = conn.query_row(&format!("{SELECT} WHERE m.id = ?1"), [id], map).optional()?.ok_or_else(|| AppError::NotFound("Milestone".into()))?;
+    passkeys::ensure_readable(conn, &m.project_id)?;
     decorate(conn, std::slice::from_mut(&mut m))?;
     Ok(m)
 }
 
 pub fn list(conn: &Connection, project_id: &str) -> AppResult<Vec<Milestone>> {
+    passkeys::ensure_readable(conn, project_id)?;
     let mut stmt = conn.prepare(&format!("{SELECT} WHERE m.project_id = ?1 ORDER BY m.sort_order, m.created_at"))?;
     let mut out = stmt.query_map([project_id], map)?.collect::<Result<Vec<_>, _>>()?;
     decorate(conn, &mut out)?;
@@ -156,7 +158,9 @@ pub fn upcoming(conn: &Connection, until: &str, limit: i64) -> AppResult<Vec<Mil
     let mut stmt = conn.prepare(&format!(
         "{SELECT} JOIN projects p ON p.id = m.project_id
          WHERE p.deleted_at IS NULL AND p.archived_at IS NULL AND m.status IN ('planned', 'active') AND m.target_date IS NOT NULL AND m.target_date <= ?1
-         ORDER BY m.target_date LIMIT ?2"
+           AND {}
+         ORDER BY m.target_date LIMIT ?2",
+        passkeys::readable_sql(conn, "m.project_id")
     ))?;
     let mut out = stmt.query_map(params![until, limit.clamp(1, 200)], map)?.collect::<Result<Vec<_>, _>>()?;
     decorate(conn, &mut out)?;

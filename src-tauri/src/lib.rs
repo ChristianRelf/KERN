@@ -206,6 +206,17 @@ pub fn run() {
             plugins::project_file_kinds,
             folders::trusted_folders_list,
             folders::trusted_folder_update,
+            // passkeys & locked projects
+            passkeys::passkeys_list,
+            passkeys::passkeys_support,
+            passkeys::passkey_register,
+            passkeys::passkey_rename,
+            passkeys::passkey_remove,
+            passkeys::passkeys_reset,
+            passkeys::locked_projects_list,
+            passkeys::project_set_locked,
+            passkeys::project_unlock,
+            passkeys::project_relock,
             // AI API accounts & routing
             ai::ai_accounts_list,
             ai::ai_account_create,

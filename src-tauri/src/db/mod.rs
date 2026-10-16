@@ -59,6 +59,8 @@ pub const DEVICE_TABLES: &[&str] = &[
     "file_fts",
     "calendar_feeds",
     "calendar_events",
+    // Credentials are bound to this computer's authenticator.
+    "passkeys",
 ];
 const PARKED: &str = "_device_";
 

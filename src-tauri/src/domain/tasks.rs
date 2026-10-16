@@ -5,7 +5,7 @@
 //! synchronisation and recurrence), bulk operations, duplication and
 //! soft deletion into the trash.
 
-use crate::domain::{activity, recurrence::Recurrence};
+use crate::domain::{activity, passkeys, recurrence::Recurrence};
 use crate::error::{invalid, AppError, AppResult};
 use crate::state::AppState;
 use crate::util::{new_id, now_ms, placeholders, some, valid_date, valid_time};
@@ -170,9 +170,12 @@ fn parse_dev_links(s: &str) -> Vec<DevLinkRef> {
 }
 
 pub fn get_task(conn: &Connection, id: &str) -> AppResult<Task> {
-    conn.query_row(&format!("{TASK_SELECT} WHERE t.id = ?1"), [id], map_task)
+    let task = conn
+        .query_row(&format!("{TASK_SELECT} WHERE t.id = ?1"), [id], map_task)
         .optional()?
-        .ok_or_else(|| AppError::NotFound("Task".into()))
+        .ok_or_else(|| AppError::NotFound("Task".into()))?;
+    passkeys::ensure_readable_opt(conn, task.project_id.as_deref())?;
+    Ok(task)
 }
 
 // ---------------------------------------------------------------- queries
@@ -343,6 +346,8 @@ pub fn query_tasks(conn: &Connection, q: &TaskQuery) -> AppResult<Vec<Task>> {
         Some("completed") => "t.completed_at DESC",
         _ => "t.sort_order, t.created_at",
     };
+    // Tasks of a locked project are in nobody's lists.
+    sql.push_str(&format!(" AND {}", passkeys::readable_sql(conn, "t.project_id")));
     sql.push_str(&format!(" ORDER BY {order}"));
     if let Some(l) = q.limit {
         sql.push_str(" LIMIT ?");

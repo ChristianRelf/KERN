@@ -60,6 +60,10 @@ fn tick(app: &AppHandle, launched_recently: bool) {
     let mut notes: Vec<(String, String)> = vec![];
 
     let _ = state.with(|c| {
+        // With notification details off, every line below is replaced by a
+        // neutral one: counts and task titles stay inside Kern.
+        let detail = notify::details_allowed(c);
+
         // Morning briefing.
         let enabled: bool = settings::get_or(c, "rundown.enabled", true);
         let at = parse_time(&settings::get_or(c, "rundown.time", "09:00".to_string()), "09:00");
@@ -77,7 +81,7 @@ fn tick(app: &AppHandle, launched_recently: bool) {
                 if overdue > 0 {
                     body.push_str(&format!(" · {overdue} overdue"));
                 }
-                notes.push(("Your daily rundown is ready".into(), body));
+                notes.push(("Your daily rundown is ready".into(), if detail { body } else { "Open Kern to see it.".into() }));
             }
         }
 
@@ -127,7 +131,7 @@ fn tick(app: &AppHandle, launched_recently: bool) {
                     && notify::first_time(c, &format!("due:{id}:{today}:{due_time}"))
                 {
                     let when = if minutes_now >= due_min { format!("Due now ({due_time})") } else { format!("Due at {due_time}") };
-                    notes.push((title, when));
+                    notes.push(if detail { (title, when) } else { ("A task is due".into(), "Open Kern to see which one.".into()) });
                 }
             }
         }
@@ -141,7 +145,10 @@ fn tick(app: &AppHandle, launched_recently: bool) {
                 |r| r.get(0),
             )?;
             if n > 0 && notify::first_time(c, &format!("overdue:{today}")) {
-                notes.push(("Overdue tasks".into(), format!("{} past due", plural(n, "task is", "tasks are"))));
+                notes.push((
+                    "Overdue tasks".into(),
+                    if detail { format!("{} past due", plural(n, "task is", "tasks are")) } else { "Open Kern to see them.".into() },
+                ));
             }
         }
         Ok(())

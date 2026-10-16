@@ -11,10 +11,12 @@ import {
   EyeOff,
   File,
   FileWarning,
+  Fingerprint,
   FolderGit2,
   FolderOpen,
   Globe,
   History,
+  Lock,
   Plus,
   Save,
   SquareTerminal,
@@ -29,7 +31,7 @@ import { useSetting } from "@/stores/settings";
 import { navigate } from "@/stores/router";
 import { useUi } from "@/stores/ui";
 import { api, describeError } from "@/lib/ipc";
-import { invalidate } from "@/lib/query";
+import { invalidate, queryClient } from "@/lib/query";
 import { toastError } from "@/stores/toast";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Dropdown, type MenuItems } from "@/components/ui/Menu";
@@ -74,7 +76,41 @@ export function ProjectPage({ id, tab, boardId, whiteboardId, column }: { id: st
         </EmptyState>
       </div>
     );
+  // A locked project shows its name and nothing else until a passkey opens
+  // it; the backend withholds the content either way.
+  if (p.lockedAt && !p.unlocked) return <LockedProject p={p} />;
   return <ProjectView p={p} ws={ws ?? null} tab={tab} boardId={boardId} whiteboardId={whiteboardId} column={column} />;
+}
+
+function LockedProject({ p }: { p: Project }) {
+  const [busy, setBusy] = useState(false);
+  const open = async () => {
+    setBusy(true);
+    try {
+      await api.passkeys.unlock(p.id);
+      // Locked content spans every domain, so clear the lot.
+      void queryClient.invalidateQueries();
+    } catch (e) {
+      toastError(describeError(e, "Couldn't open the project."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="page">
+      <EmptyState
+        icon={Lock}
+        title={p.name}
+        action={
+          <Button variant="primary" icon={Fingerprint} disabled={busy} onClick={() => void open()}>
+            {busy ? "Waiting for the passkey…" : "Open with a passkey"}
+          </Button>
+        }
+      >
+        This project needs a passkey. Its tasks, notes, whiteboards and files stay out of every list until you open it.
+      </EmptyState>
+    </div>
+  );
 }
 
 function ProjectView({ p, ws, tab, boardId, whiteboardId, column }: { p: Project; ws: WorkspaceState | null; tab?: ProjectTab; boardId?: string; whiteboardId?: string; column?: string }) {

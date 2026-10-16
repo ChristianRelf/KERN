@@ -192,11 +192,23 @@ export interface Settings {
   "cloud.sharePresence": boolean;
   "cloud.showCursors": boolean;
   "cloud.streamToasts": boolean;
-  // Privacy
+  // Privacy & security
   "privacy.network": boolean;
   "privacy.favicons": boolean;
   "privacy.aiProjectContent": boolean;
   "privacy.aiLinkedFolders": boolean;
+  /** Allow plugin and syntax downloads (needs network access too). */
+  "privacy.pluginDownloads": boolean;
+  /** Let notifications carry task, note and comment text. Read by the backend. */
+  "privacy.notificationDetails": boolean;
+  /** Blur the window's contents while Kern isn't the focused app. */
+  "privacy.blurOnUnfocus": boolean;
+  /** Days a folder stays trusted after the decision; 0 means indefinitely. Read by the backend. */
+  "privacy.trustExpiryDays": number;
+  /** Keep a list of recently opened projects, notes and whiteboards. Read by the backend. */
+  "privacy.recordRecents": boolean;
+  /** Minutes an unlocked project stays open; 0 means until Kern closes. Read by the backend. */
+  "privacy.passkeyRelockMinutes": number;
   // AI API accounts
   "ai.routingMode": AiRoutingMode;
   "ai.crossProvider": boolean;
@@ -394,6 +406,12 @@ export const DEFAULTS: Settings = {
   "privacy.favicons": true,
   "privacy.aiProjectContent": false,
   "privacy.aiLinkedFolders": false,
+  "privacy.pluginDownloads": true,
+  "privacy.notificationDetails": true,
+  "privacy.blurOnUnfocus": false,
+  "privacy.trustExpiryDays": 0,
+  "privacy.recordRecents": true,
+  "privacy.passkeyRelockMinutes": 0,
 
   "ai.routingMode": "failover",
   "ai.crossProvider": false,

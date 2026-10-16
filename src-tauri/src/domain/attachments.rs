@@ -8,6 +8,7 @@
 //! another machine. External references keep their absolute path and are
 //! checked for availability when displayed.
 
+use crate::domain::passkeys;
 use crate::error::{invalid, AppError, AppResult};
 use crate::state::AppState;
 use crate::util::{new_id, now_ms, safe_file_name};
@@ -134,6 +135,15 @@ pub fn remove_files_for_project(conn: &Connection, project_id: &str) -> AppResul
 }
 
 fn list(conn: &Connection, root: &Path, task_id: Option<&str>, project_id: Option<&str>) -> AppResult<Vec<Attachment>> {
+    match (task_id, project_id) {
+        (Some(t), _) => {
+            let owner: Option<Option<String>> =
+                conn.query_row("SELECT project_id FROM tasks WHERE id = ?1", [t], |r| r.get(0)).optional()?;
+            passkeys::ensure_readable_opt(conn, owner.flatten().as_deref())?;
+        }
+        (None, Some(p)) => passkeys::ensure_readable(conn, p)?,
+        (None, None) => {}
+    }
     let mut stmt = conn.prepare(
         "SELECT id, task_id, project_id, name, path, managed, mime, size, created_at FROM attachments
          WHERE (?1 IS NOT NULL AND task_id = ?1) OR (?1 IS NULL AND ?2 IS NOT NULL AND project_id = ?2)

@@ -5,7 +5,7 @@
 //! default board additionally shows project tasks that have no placement
 //! yet (they are placed by status on the client).
 
-use crate::domain::{activity, settings, tasks};
+use crate::domain::{activity, passkeys, settings, tasks};
 use crate::error::{invalid, AppError, AppResult};
 use crate::state::AppState;
 use crate::util::{new_id, now_ms};
@@ -101,6 +101,7 @@ pub fn create_board(conn: &Connection, project_id: &str, name: &str, columns: &[
 }
 
 pub fn get_board(conn: &Connection, id: &str) -> AppResult<Board> {
+    // board_data and every column command resolve the board here first.
     let (project_id, name, sort_order, settings, created_at, updated_at): (String, String, f64, String, i64, i64) = conn
         .query_row(
             "SELECT project_id, name, sort_order, settings, created_at, updated_at FROM boards WHERE id = ?1",
@@ -109,6 +110,7 @@ pub fn get_board(conn: &Connection, id: &str) -> AppResult<Board> {
         )
         .optional()?
         .ok_or_else(|| AppError::NotFound("Board".into()))?;
+    passkeys::ensure_readable(conn, &project_id)?;
     let default = default_board_id(conn, &project_id)?;
     Ok(Board {
         id: id.to_string(),

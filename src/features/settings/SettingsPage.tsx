@@ -60,6 +60,7 @@ import { useDataGroups, StorageStats } from "./DataSection";
 import { useStorageGroups } from "@/features/storage/StorageSection";
 import { KeyboardSection } from "./KeyboardSection";
 import { TrustedFolders } from "./TrustedFolders";
+import { LockedProjects, PasskeyList, PasskeyRecovery } from "./Passkeys";
 import { NAV } from "@/components/layout/Sidebar";
 import { STATUS_LABELS } from "@/features/tasks/meta";
 import type { NavItemId, Accent } from "./schema";
@@ -88,7 +89,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: typeof Settings }[] 
   { id: "focus", label: "Focus", icon: Timer },
   { id: "keyboard", label: "Keyboard & Mouse", icon: Keyboard },
   { id: "data", label: "Data & Storage", icon: Database },
-  { id: "privacy", label: "Privacy", icon: Shield },
+  { id: "privacy", label: "Privacy & Security", icon: Shield },
   { id: "api", label: "API", icon: KeyRound },
   { id: "integrations", label: "Integrations", icon: Blocks },
   { id: "plugins", label: "Plugins", icon: Puzzle },
@@ -646,8 +647,6 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
           { label: "Open the folder after creating a project", control: <SToggle k="projects.openFolderAfterCreate" /> },
           { label: "Show linked folder in project overview", control: <SToggle k="projects.showFolderInOverview" /> },
           { label: "Show the Files tab", keywords: "project files tab", control: <SToggle k="projects.showFilesTab" /> },
-          { label: "Remember trusted folders", hint: "When off, trusted folders return to restricted mode each time Kern starts.", keywords: "workspace trust", control: <SToggle k="projects.rememberTrust" /> },
-          { label: "Trusted folders", hint: "Trust applies to exactly the folder shown, never to its parents or other folders.", keywords: "manage revoke workspace trust restricted", block: <TrustedFolders /> },
         ],
       },
       {
@@ -795,6 +794,115 @@ function useSections(apiTab?: ApiTab): Record<SettingsSection, GroupDef[] | Reac
             control: <SToggle k="privacy.aiLinkedFolders" />,
           },
           { label: "Keep AI request history for", hint: "Request metadata only (time, model, tokens); never prompts or responses.", keywords: "usage retention", control: <SNumber k="ai.usageRetentionDays" min={1} max={3650} suffix="days" /> },
+          {
+            label: "Files that hold secrets",
+            hint: "Files like .env, *.pem, *.key, id_rsa and anything named “credentials” or “secret” are never read by AI features, even in a trusted folder.",
+            keywords: "env pem key credentials redact exclude",
+            control: <span className="faint" style={{ fontSize: "var(--fs-sm)" }}>Never sent</span>,
+          },
+        ],
+      },
+      {
+        title: "On screen",
+        rows: [
+          {
+            label: "Blur contents when Kern isn't focused",
+            hint: "Hides tasks and notes as soon as you switch to another app, for shared screens and desk-side meetings.",
+            keywords: "privacy screen peek obscure hide shoulder",
+            control: <SToggle k="privacy.blurOnUnfocus" />,
+          },
+          {
+            label: "Show details in notifications",
+            hint: "When off, desktop notifications say only that something needs attention — no task titles, comment text or names, so nothing shows on a lock screen.",
+            keywords: "notifications lock screen titles redact",
+            control: <SToggle k="privacy.notificationDetails" />,
+          },
+        ],
+      },
+      {
+        title: "Passkeys",
+        rows: [
+          {
+            label: "Passkeys on this computer",
+            hint: "Windows draws the prompt and keeps the credential; Kern stores only the name and the dates. A passkey is per computer, so each one you use needs its own.",
+            keywords: "passkey webauthn windows hello security key fido biometric fingerprint face pin",
+            block: <PasskeyList />,
+          },
+          {
+            label: "Keep a project open for",
+            hint: "After this, opening it asks for a passkey again. “Until Kern closes” still re-asks on the next launch.",
+            keywords: "passkey relock timeout lock session",
+            control: (
+              <SSelect
+                k="privacy.passkeyRelockMinutes"
+                options={[
+                  { value: "0", label: "Until Kern closes" },
+                  { value: "5", label: "5 min" },
+                  { value: "15", label: "15 min" },
+                  { value: "60", label: "1 hour" },
+                ]}
+              />
+            ),
+          },
+          {
+            label: "Lost your authenticator?",
+            hint: "A lock is a gate on the running app, not encryption — the database holds the same rows either way — so there is a way back in that doesn't need a passkey.",
+            keywords: "passkey recovery reset lost locked out forget",
+            control: <PasskeyRecovery />,
+          },
+        ],
+      },
+      {
+        title: "Locked projects",
+        rows: [
+          {
+            label: "Require a passkey to open",
+            hint: "A locked project keeps its name in the sidebar and nothing else: its tasks, notes, whiteboards, files and search hits are withheld until a passkey opens it.",
+            keywords: "project lock passkey private hide require",
+            block: <LockedProjects />,
+          },
+        ],
+      },
+      {
+        title: "Folder trust",
+        rows: [
+          { label: "Remember trusted folders", hint: "When off, trusted folders return to restricted mode each time Kern starts.", keywords: "workspace trust", control: <SToggle k="projects.rememberTrust" /> },
+          {
+            label: "Trust expires after",
+            hint: "A folder returns to restricted mode this long after you trusted it, so an old decision doesn't outlive the work.",
+            keywords: "workspace trust expiry revoke forget",
+            control: (
+              <SSelect
+                k="privacy.trustExpiryDays"
+                options={[
+                  { value: "0", label: "Never" },
+                  { value: "1", label: "1 day" },
+                  { value: "7", label: "7 days" },
+                  { value: "30", label: "30 days" },
+                  { value: "90", label: "90 days" },
+                ]}
+              />
+            ),
+          },
+          { label: "Trusted folders", hint: "Trust applies to exactly the folder shown, never to its parents or other folders.", keywords: "manage revoke workspace trust restricted", block: <TrustedFolders /> },
+        ],
+      },
+      {
+        title: "On this computer",
+        rows: [
+          {
+            label: "Record recently opened items",
+            hint: "The Recent list in search and the sidebar. When off, nothing new is recorded and the existing list is cleared.",
+            keywords: "history recent clear",
+            control: <SToggle k="privacy.recordRecents" />,
+          },
+          {
+            label: "Allow plugin and syntax downloads",
+            hint: "Plugins and syntax highlighting grammars are fetched from their source only when you install them.",
+            keywords: "plugins syntax grammars download network",
+            control: <SToggle k="privacy.pluginDownloads" />,
+          },
+          { label: "Secrets", hint: "API keys and tokens live in the OS credential store, never in the database, logs or backups.", keywords: "keys tokens keychain credential manager", control: <span className="faint" style={{ fontSize: "var(--fs-sm)" }}>OS credential store</span> },
         ],
       },
     ],

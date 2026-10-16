@@ -11,6 +11,7 @@
 //! system's own environment is never modified.
 
 use crate::domain::ai::vault::{Secret, SecretStore};
+use crate::domain::passkeys;
 use crate::error::{invalid, AppError, AppResult};
 use crate::state::AppState;
 use crate::util::{new_id, now_ms};
@@ -86,6 +87,7 @@ pub fn profile(conn: &Connection, id: &str) -> AppResult<EnvProfile> {
 }
 
 pub fn profiles(conn: &Connection, project_id: &str) -> AppResult<Vec<EnvProfile>> {
+    passkeys::ensure_readable(conn, project_id)?;
     let mut stmt = conn.prepare("SELECT id FROM env_profiles WHERE project_id = ?1 ORDER BY sort_order, name")?;
     let ids: Vec<String> = stmt.query_map([project_id], |r| r.get(0))?.collect::<Result<_, _>>()?;
     ids.iter().map(|i| profile(conn, i)).collect()
@@ -319,10 +321,15 @@ pub fn env_var_delete(state: State<AppState>, id: String) -> AppResult<()> {
 #[tauri::command]
 pub fn env_var_reveal(state: State<AppState>, id: String) -> AppResult<String> {
     state.with(|c| {
-        let (kind, value, sref): (String, Option<String>, Option<String>) = c
-            .query_row("SELECT kind, value, secret_ref FROM env_variables WHERE id = ?1", [&id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        let (kind, value, sref, project_id): (String, Option<String>, Option<String>, String) = c
+            .query_row(
+                "SELECT v.kind, v.value, v.secret_ref, p.project_id FROM env_variables v JOIN env_profiles p ON p.id = v.profile_id WHERE v.id = ?1",
+                [&id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
             .optional()?
             .ok_or_else(|| AppError::NotFound("Variable".into()))?;
+        passkeys::ensure_readable(c, &project_id)?;
         match kind.as_str() {
             "secret" => sref
                 .and_then(|r| state.ai.vault.get(&r).ok().flatten())

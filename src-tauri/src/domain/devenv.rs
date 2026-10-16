@@ -13,6 +13,7 @@
 //! only when the user starts them, in a trusted folder (see `pty`).
 
 use crate::domain::folders::{self, Trust};
+use crate::domain::passkeys;
 use crate::domain::git::{self, blocking};
 use crate::domain::repos;
 use crate::error::{invalid, AppError, AppResult};
@@ -604,7 +605,10 @@ pub async fn devenv_detect(app: AppHandle, project_id: String, repository_id: Op
 
 #[tauri::command]
 pub fn commands_list(state: State<AppState>, project_id: String) -> AppResult<Vec<SavedCommand>> {
-    state.with(|c| commands(c, &project_id))
+    state.with(|c| {
+        passkeys::ensure_readable(c, &project_id)?;
+        commands(c, &project_id)
+    })
 }
 
 #[tauri::command]
@@ -629,6 +633,7 @@ pub fn which_program(program: String) -> Option<String> {
 #[tauri::command]
 pub fn devenv_cached(state: State<AppState>, project_id: String) -> AppResult<BTreeMap<String, Vec<String>>> {
     state.with(|c| {
+        passkeys::ensure_readable(c, &project_id)?;
         let mut out = BTreeMap::new();
         let mut keys: Vec<(String, String)> = vec![];
         if let Some((_, k)) = c.query_row("SELECT path, folder_key FROM project_folder_links WHERE project_id = ?1", [&project_id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))).optional()? {

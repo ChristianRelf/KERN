@@ -5,7 +5,7 @@
 //! The client saves the full scene (debounced); the backend diffs it
 //! against stored rows in one transaction, touching only changed objects.
 
-use crate::domain::{activity, recent};
+use crate::domain::{activity, passkeys, recent};
 use crate::error::{invalid, AppError, AppResult};
 use crate::state::AppState;
 use crate::util::{new_id, now_ms, some};
@@ -89,9 +89,12 @@ fn map(r: &rusqlite::Row) -> rusqlite::Result<Whiteboard> {
 }
 
 pub fn get(conn: &Connection, id: &str) -> AppResult<Whiteboard> {
-    conn.query_row(&format!("{SELECT} WHERE w.id = ?1"), [id], map)
+    let wb = conn
+        .query_row(&format!("{SELECT} WHERE w.id = ?1"), [id], map)
         .optional()?
-        .ok_or_else(|| AppError::NotFound("Whiteboard".into()))
+        .ok_or_else(|| AppError::NotFound("Whiteboard".into()))?;
+    passkeys::ensure_readable_opt(conn, wb.project_id.as_deref())?;
+    Ok(wb)
 }
 
 pub fn nodes(conn: &Connection, id: &str) -> AppResult<Vec<WbNode>> {
@@ -325,7 +328,9 @@ pub fn whiteboards_list(state: State<AppState>, project_id: Option<String>) -> A
         let mut stmt = c.prepare(&format!(
             "{SELECT} LEFT JOIN projects p ON p.id = w.project_id
              WHERE w.deleted_at IS NULL AND (w.project_id IS NULL OR p.deleted_at IS NULL) AND (?1 IS NULL OR w.project_id = ?1)
-             ORDER BY w.pinned DESC, w.sort_order, w.created_at"
+               AND {}
+             ORDER BY w.pinned DESC, w.sort_order, w.created_at",
+            passkeys::readable_sql(c, "w.project_id")
         ))?;
         let rows = stmt.query_map([project_id], map)?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
