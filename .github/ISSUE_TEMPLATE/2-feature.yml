@@ -1,0 +1,67 @@
+# @Author Christian Relf
+# @Date 2026-10-16
+
+name: Feature request
+description: Suggest something Kern should do.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The problem or the day-to-day friction, rather than the solution.
+      placeholder: I keep a reading list in Notes and there's no way to see which items I finished this month.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like Kern to do?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of Kern?
+      options:
+        - Not sure
+        - Tasks, projects and boards
+        - Planner and calendar
+        - Notes and pages
+        - Whiteboard
+        - Habits and health
+        - Focus and sessions
+        - Daily briefing, catch-up and review
+        - Dashboard and stats
+        - Search and command centre
+        - Inbox and capture
+        - Files, storage and links
+        - Import, export and backups
+        - Kern Lite
+        - Kern Cloud (sync, sharing, comments)
+        - AI and assist
+        - GitHub, dev tools, terminal and code
+        - Settings and appearance
+        - Notifications, tray and window behaviour
+        - Updating and installing
+        - Accessibility
+        - Something new
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: How do you work around it today?
+      description: Including other apps that get this right.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues.
+          required: true
+        - label: I understand Kern is local-first — anything that needs a server is optional by design.

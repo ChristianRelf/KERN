@@ -1,0 +1,27 @@
+# @Author Christian Relf
+# @Date 2026-10-16
+
+name: Question
+description: Ask how something in Kern works.
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The [README](https://github.com/ChristianRelf/KERN#readme) covers how Kern
+        is used and [DEVELOPMENT.md](https://github.com/ChristianRelf/KERN/blob/main/DEVELOPMENT.md)
+        covers how it's built. If neither answers it, ask here.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Kern version
+      description: Settings → About. Leave blank if it isn't relevant.
+      placeholder: "0.2.1"

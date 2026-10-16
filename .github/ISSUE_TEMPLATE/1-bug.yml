@@ -1,0 +1,116 @@
+# @Author Christian Relf
+# @Date 2026-10-16
+
+name: Bug report
+description: Something in Kern doesn't work the way it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. Kern keeps your data on your
+        own machine, so there are no logs on my side — the details below are all
+        I have to go on.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did Kern do instead?
+      placeholder: I ticked off a repeating task and it came back with yesterday's due date.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The shortest sequence that triggers it. "I'm not sure" is a fine answer.
+      value: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where in Kern?
+      options:
+        - Not sure
+        - Tasks, projects and boards
+        - Planner and calendar
+        - Notes and pages
+        - Whiteboard
+        - Habits and health
+        - Focus and sessions
+        - Daily briefing, catch-up and review
+        - Dashboard and stats
+        - Search and command centre
+        - Inbox and capture
+        - Files, storage and links
+        - Import, export and backups
+        - Kern Lite
+        - Kern Cloud (sync, sharing, comments)
+        - AI and assist
+        - GitHub, dev tools, terminal and code
+        - Settings and appearance
+        - Notifications, tray and window behaviour
+        - Updating and installing
+        - Accessibility
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Kern version
+      description: Settings → About shows it.
+      placeholder: "0.2.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: os-detail
+    attributes:
+      label: Distribution and package (Linux only)
+      placeholder: "Ubuntu 24.04, .deb"
+
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Did this work in an earlier version?
+      options:
+        - Not sure
+        - "No — it has always done this"
+        - "Yes — it broke after an update"
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or anything else
+      description: |
+        Drag images in directly. If you paste an error message, check it first —
+        don't include API keys, tokens or anything private.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues.
+          required: true
+        - label: I'm on the latest release, or I've said above which version I'm on.
+          required: true

@@ -1,0 +1,14 @@
+# @Author Christian Relf
+# @Date 2026-10-16
+
+blank_issues_enabled: false
+contact_links:
+  - name: Troubleshooting first
+    url: https://github.com/ChristianRelf/KERN#troubleshooting
+    about: Blank window or missing tray icon on Linux are known cases with fixes in the README.
+  - name: Report a security vulnerability
+    url: https://github.com/ChristianRelf/KERN/security/advisories/new
+    about: Please report security issues privately, not as a public issue.
+  - name: Building Kern from source
+    url: https://github.com/ChristianRelf/KERN/blob/main/DEVELOPMENT.md
+    about: Prerequisites, architecture, sync and the release process.
